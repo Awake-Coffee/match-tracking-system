@@ -1,0 +1,25 @@
+name: awake_ladder
+description: "Awake Coffee chess ladder: internal Elo for the cafe's regulars."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  go_router: ^18.0.2
+  google_fonts: ^9.0.0
+  shared_preferences: ^2.5.5
+  supabase_flutter: ^2.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
