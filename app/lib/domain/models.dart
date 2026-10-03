@@ -20,6 +20,7 @@ class Player {
     required this.id,
     required this.displayName,
     required this.rating,
+    required this.peakRating,
     required this.gamesPlayed,
     required this.wins,
     required this.losses,
@@ -30,6 +31,7 @@ class Player {
     id: row['id'] as String,
     displayName: row['display_name'] as String,
     rating: row['rating'] as int,
+    peakRating: row['peak_rating'] as int,
     gamesPlayed: row['games_played'] as int,
     wins: row['wins'] as int,
     losses: row['losses'] as int,
@@ -39,6 +41,7 @@ class Player {
   final String id;
   final String displayName;
   final int rating;
+  final int peakRating;
   final int gamesPlayed;
   final int wins;
   final int losses;
@@ -47,6 +50,7 @@ class Player {
   Player copyWith({
     String? displayName,
     int? rating,
+    int? peakRating,
     int? gamesPlayed,
     int? wins,
     int? losses,
@@ -55,6 +59,7 @@ class Player {
     id: id,
     displayName: displayName ?? this.displayName,
     rating: rating ?? this.rating,
+    peakRating: peakRating ?? this.peakRating,
     gamesPlayed: gamesPlayed ?? this.gamesPlayed,
     wins: wins ?? this.wins,
     losses: losses ?? this.losses,
@@ -235,7 +240,8 @@ class ChessMatch extends GameReport {
     super.clock,
     required this.whiteRatingBefore,
     required this.blackRatingBefore,
-    required this.ratingDelta,
+    required this.whiteRatingDelta,
+    required this.blackRatingDelta,
     required this.playedAt,
   });
 
@@ -249,20 +255,20 @@ class ChessMatch extends GameReport {
     clock: ClockSetting.fromRow(row),
     whiteRatingBefore: row['white_rating_before'] as int,
     blackRatingBefore: row['black_rating_before'] as int,
-    ratingDelta: row['rating_delta'] as int,
+    whiteRatingDelta: row['white_rating_delta'] as int,
+    blackRatingDelta: row['black_rating_delta'] as int,
     playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
   );
 
   final int id;
   final int whiteRatingBefore;
   final int blackRatingBefore;
-
-  /// Points white gained; black gained the negative.
-  final int ratingDelta;
+  final int whiteRatingDelta;
+  final int blackRatingDelta;
   final DateTime playedAt;
 
   int deltaFor(String playerId) =>
-      playerId == whiteId ? ratingDelta : -ratingDelta;
+      playerId == whiteId ? whiteRatingDelta : blackRatingDelta;
 
   int ratingBeforeFor(String playerId) =>
       playerId == whiteId ? whiteRatingBefore : blackRatingBefore;
@@ -324,14 +330,15 @@ class MatchPreview {
     required this.me,
     required this.opponent,
     required this.outcome,
-  }) : myDelta = eloDelta(me.rating, opponent.rating, outcome.score);
+  }) : myDelta = fideRatingChange(me, opponent, outcome.score),
+       opponentDelta = fideRatingChange(opponent, me, 1 - outcome.score);
 
   final Player me;
   final Player opponent;
   final Outcome outcome;
   final int myDelta;
+  final int opponentDelta;
 
-  int get opponentDelta => -myDelta;
   int get myRatingAfter => me.rating + myDelta;
   int get opponentRatingAfter => opponent.rating + opponentDelta;
 }

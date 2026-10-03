@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,7 +46,6 @@ class _Profile extends StatelessWidget {
     final p = player;
     final oldestFirst = matches.reversed.toList();
     final history = ratingHistory(p.id, oldestFirst);
-    final peak = history.reduce(math.max);
     final section = d.display(22);
 
     return ListView(
@@ -104,7 +101,7 @@ class _Profile extends StatelessWidget {
                     _Stat(label: 'Won', value: '${p.wins}'),
                     _Stat(label: 'Lost', value: '${p.losses}'),
                     _Stat(label: 'Drawn', value: '${p.draws}'),
-                    _Stat(label: 'Peak', value: '$peak'),
+                    _Stat(label: 'Peak', value: '${p.peakRating}'),
                   ],
                 ),
               ],

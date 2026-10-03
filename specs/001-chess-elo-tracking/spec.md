@@ -36,6 +36,13 @@ with Supabase auth. Build 5 designs."
   coffee up to their rating. It becomes the default.
 - Q: Do the other designs earn their keep? → A: No. Roast pawns is the
   only design; the picker and the other five are removed.
+- Q: Which Elo rules? → A: The same as FIDE: the FIDE expected-score
+  table with the 400-point rule, K = 40 for a player's first 30 games,
+  then 20, and 10 for good once a player has reached 2400. Each player's change uses their own K and is
+  rounded half up, so a game is no longer zero-sum. Starting rating stays
+  1000 (FIDE's initial-rating method needs already rated opponents). The
+  junior K = 40 is not applied (no birth dates). Games rated before keep
+  their deltas.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -110,8 +117,8 @@ draws), rating over time, and recent games with the points won or lost.
 - Two games recorded at the same moment involving the same player →
   rows are locked in a consistent order, so both apply sequentially and
   no update is lost.
-- Very lopsided pairings (e.g. 1400 vs 900) → the favorite gains at
-  least 0 and at most 32; deltas are clamped by the formula itself.
+- Very lopsided pairings (e.g. 1400 vs 900) → the difference counts as
+  400 (FIDE rule), so the favorite still gains a few points.
 - Rating going below 0 is mathematically possible only after hundreds of
   losses; no floor is applied.
 
@@ -130,10 +137,10 @@ draws), rating over time, and recent games with the points won or lost.
   the base minutes and, where the method has one, the increment / delay /
   byo-yomi seconds. The opponent MUST confirm it before it is rated.
 - **FR-004**: The system MUST compute the rating change server-side with
-  K = 32 and update both players and the match log atomically.
-- **FR-005**: Rating changes MUST be zero-sum per game.
+  FIDE rules and update both players and the match log atomically.
+- **FR-005**: Each player's change MUST use their own FIDE K-factor.
 - **FR-006**: Each match MUST store both players' pre-game ratings and
-  the applied delta.
+  both applied deltas.
 - **FR-007**: The app MUST show a ladder sorted by rating (ties broken
   by more games played, then name).
 - **FR-008**: The app MUST show a profile per member with rating, W/L/D,
@@ -147,12 +154,12 @@ draws), rating over time, and recent games with the points won or lost.
 
 ### Key Entities
 
-- **Profile**: one per member; display name, rating, games, wins,
-  losses, draws.
+- **Profile**: one per member; display name, rating, peak rating, games,
+  wins, losses, draws.
 - **Match request**: a recorded game awaiting the opponent; white,
   black, result, DGT option, who recorded it and when.
 - **Match**: one rated chess game; white, black, result, DGT option,
-  pre-game ratings, delta, who recorded it and when.
+  pre-game ratings, both deltas, who recorded it and when.
 
 ## Success Criteria *(mandatory)*
 
@@ -160,8 +167,8 @@ draws), rating over time, and recent games with the points won or lost.
   one minute.
 - **SC-002**: Recording a game takes four choices and one confirmation;
   confirming one takes a single tap.
-- **SC-003**: The sum of all ratings always equals 1000 × number of
-  members.
+- **SC-003**: Every rating equals 1000 plus the deltas of that player's
+  games.
 - **SC-004**: Rating previews match the saved result in 100% of games.
 - **SC-005**: The design passes WCAG AA contrast for body text.
 
@@ -169,4 +176,4 @@ draws), rating over time, and recent games with the points won or lost.
 
 - Games other than chess, tournaments, pairings, running a clock in-app.
 - Editing or deleting rated games.
-- Provisional K-factors or rating floors.
+- Rating floors and FIDE's initial-rating calculation.

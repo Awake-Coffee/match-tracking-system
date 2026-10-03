@@ -7,7 +7,9 @@ opponent confirms the result.
 - **App**: Flutter web (`app/`), single "Roast pawns" design.
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
   computed in database functions, so clients can't tamper with them.
-- **Elo**: everyone starts at 1000, K = 32, zero-sum rounding.
+- **Elo**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
+  first 30 games, then 20, 10 for good once 2400 is reached). Everyone
+  starts at 1000.
   Full spec: [`specs/001-chess-elo-tracking/spec.md`](specs/001-chess-elo-tracking/spec.md).
 
 ## Run locally

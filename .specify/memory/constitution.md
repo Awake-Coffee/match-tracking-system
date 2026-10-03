@@ -12,7 +12,7 @@ must produce the same numbers as the database.
 ### II. Every rating point is traceable
 A player's rating is the starting rating (1000) plus the sum of the
 deltas of the matches they played. Each match row stores both players'
-ratings before the game and the delta applied, so any rating can be
+ratings before the game and the delta applied to each, so any rating can be
 audited and the full history replayed.
 
 ### III. Secure by default (RLS everywhere)
@@ -22,7 +22,7 @@ profile. Writes to ratings and matches happen exclusively through
 audited RPCs.
 
 ### IV. Test the math first
-The Elo formula, rounding and zero-sum guarantee are covered by unit
+The FIDE formula, K-factors and rounding are covered by unit
 tests in Dart and by SQL tests against a real Postgres before any UI
 depends on them.
 
@@ -61,4 +61,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-02
+**Version**: 1.1.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-03

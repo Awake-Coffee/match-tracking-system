@@ -11,11 +11,9 @@ void main() {
     expect(await DemoLadderRepository().ladder(), isEmpty);
   });
 
-  test('ladder is zero-sum and replays from history', () async {
+  test('ladder replays from history', () async {
     final repo = await anaAndBogdan();
     final players = await repo.ladder();
-    final total = players.fold<int>(0, (s, p) => s + p.rating);
-    expect(total, startingRating * players.length);
 
     for (final p in players) {
       final games = await repo.matches(playerId: p.id, limit: 1000);
@@ -72,10 +70,10 @@ void main() {
     final revision = repo.revision;
     final match = await repo.respondToMatchRequest(request.id, accept: true);
 
-    expect(match!.deltaFor(ana.id), 16);
+    expect(match!.deltaFor(ana.id), 20);
     expect(match.clock!.preset, TimeControl.fischer5plus3);
-    expect(repo.me!.rating, 984);
-    expect((await repo.player(ana.id)).rating, 1016);
+    expect(repo.me!.rating, 980);
+    expect((await repo.player(ana.id)).rating, 1020);
     expect(await repo.matchRequests(), isEmpty);
     expect(repo.revision, greaterThan(revision));
   });

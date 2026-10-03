@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../domain/elo.dart';
 import '../domain/models.dart';
 import 'ladder_repository.dart';
@@ -32,6 +34,7 @@ class DemoLadderRepository extends LadderRepository {
       id: id,
       displayName: _uniqueName(name),
       rating: startingRating,
+      peakRating: startingRating,
       gamesPlayed: 0,
       wins: 0,
       losses: 0,
@@ -102,17 +105,20 @@ class DemoLadderRepository extends LadderRepository {
       MatchResult.black => 0.0,
       MatchResult.draw => 0.5,
     };
-    final delta = eloDelta(white.rating, black.rating, whiteScore);
+    final whiteDelta = fideRatingChange(white, black, whiteScore);
+    final blackDelta = fideRatingChange(black, white, 1 - whiteScore);
 
     _players[whiteId] = white.copyWith(
-      rating: white.rating + delta,
+      rating: white.rating + whiteDelta,
+      peakRating: math.max(white.peakRating, white.rating + whiteDelta),
       gamesPlayed: white.gamesPlayed + 1,
       wins: white.wins + (result == MatchResult.white ? 1 : 0),
       losses: white.losses + (result == MatchResult.black ? 1 : 0),
       draws: white.draws + (result == MatchResult.draw ? 1 : 0),
     );
     _players[blackId] = black.copyWith(
-      rating: black.rating - delta,
+      rating: black.rating + blackDelta,
+      peakRating: math.max(black.peakRating, black.rating + blackDelta),
       gamesPlayed: black.gamesPlayed + 1,
       wins: black.wins + (result == MatchResult.black ? 1 : 0),
       losses: black.losses + (result == MatchResult.white ? 1 : 0),
@@ -129,7 +135,8 @@ class DemoLadderRepository extends LadderRepository {
       clock: clock,
       whiteRatingBefore: white.rating,
       blackRatingBefore: black.rating,
-      ratingDelta: delta,
+      whiteRatingDelta: whiteDelta,
+      blackRatingDelta: blackDelta,
       playedAt: DateTime.now(),
     );
     _matches.add(match);
@@ -146,7 +153,8 @@ class DemoLadderRepository extends LadderRepository {
     clock: m.clock,
     whiteRatingBefore: m.whiteRatingBefore,
     blackRatingBefore: m.blackRatingBefore,
-    ratingDelta: m.ratingDelta,
+    whiteRatingDelta: m.whiteRatingDelta,
+    blackRatingDelta: m.blackRatingDelta,
     playedAt: m.playedAt,
   );
 

@@ -1,16 +1,21 @@
 -- Behavioural tests for the chess Elo migration. Each block raises on failure.
 \set ON_ERROR_STOP on
 
--- elo_delta matches the Dart implementation (see app/test/elo_test.dart).
+-- fide_rating_change matches the Dart implementation (see app/test/elo_test.dart).
 do $$
 begin
-  assert public.elo_delta(1000, 1000, 1) = 16, 'even win';
-  assert public.elo_delta(1000, 1000, 0) = -16, 'even loss';
-  assert public.elo_delta(1000, 1000, 0.5) = 0, 'even draw';
-  assert public.elo_delta(1200, 1000, 1) = 8, 'favourite win';
-  assert public.elo_delta(1000, 1200, 1) = 24, 'upset win';
-  assert public.elo_delta(1000, 1200, 0.5) = 8, 'underdog draw';
-  assert public.elo_delta(1600, 1000, 1) = 1, 'huge favourite win';
+  assert public.fide_rating_change(1000, 0, 1000, 1000, 1) = 20, 'newcomer win';
+  assert public.fide_rating_change(1000, 0, 1000, 1000, 0) = -20, 'newcomer loss';
+  assert public.fide_rating_change(1000, 0, 1000, 1000, 0.5) = 0, 'even draw';
+  assert public.fide_rating_change(1200, 0, 1200, 1000, 1) = 10, 'favourite win';
+  assert public.fide_rating_change(1000, 0, 1000, 1200, 1) = 30, 'upset win';
+  assert public.fide_rating_change(1000, 0, 1000, 1200, 0.5) = 10, 'underdog draw';
+  assert public.fide_rating_change(1000, 30, 1000, 1000, 1) = 10, 'K 20 after 30 games';
+  assert public.fide_rating_change(1600, 30, 1600, 1000, 1) = 2, '400-point rule';
+  assert public.fide_rating_change(2400, 30, 2400, 2400, 1) = 5, 'K 10 from 2400';
+  assert public.fide_rating_change(2435, 30, 2435, 2400, 1) = 5, 'half rounds up';
+  assert public.fide_rating_change(2435, 30, 2435, 2400, 0) = -5, 'negative half rounds up';
+  assert public.fide_rating_change(2300, 30, 2400, 2300, 1) = 5, 'K 10 stays after dropping below 2400';
 end $$;
 
 -- Sign-up creates profiles at 1000 and de-duplicates display names.
@@ -82,8 +87,10 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 
 do $$
 begin
-  assert (select rating from public.profiles where display_name = 'Ana') = 1016, 'winner +16';
-  assert (select rating from public.profiles where display_name = 'Bo') = 984, 'loser -16';
+  assert (select rating from public.profiles where display_name = 'Ana') = 1020, 'winner +20';
+  assert (select rating from public.profiles where display_name = 'Bo') = 980, 'loser -20';
+  assert (select peak_rating from public.profiles where display_name = 'Ana') = 1020, 'peak rises';
+  assert (select peak_rating from public.profiles where display_name = 'Bo') = 1000, 'peak stays';
   assert (select wins from public.profiles where display_name = 'Ana') = 1, 'win counted';
   assert (select losses from public.profiles where display_name = 'Bo') = 1, 'loss counted';
   assert (select result from public.matches order by id desc limit 1) = 'white', 'result stored from white';
@@ -104,7 +111,7 @@ do $$
 begin
   assert (select count(*) from public.match_requests) = 0, 'withdrawn and declined requests are gone';
   assert (select count(*) from public.matches) = 1, 'declined games are not rated';
-  assert (select rating from public.profiles where display_name = 'Ana') = 1016, 'rating unchanged';
+  assert (select rating from public.profiles where display_name = 'Ana') = 1020, 'rating unchanged';
 end $$;
 
 -- Custom presets carry the time actually set on the clock.
@@ -153,13 +160,12 @@ declare
 begin
   select * into m from public.matches order by id desc limit 1;
   assert m.white_id = '00000000-0000-0000-0000-00000000000b' and m.result = 'draw', 'draw with colors swapped';
-  assert (select sum(rating) from public.profiles) = 4000, 'ladder is zero-sum';
   assert (select games_played from public.profiles where display_name = 'Ana') = 4, 'games counted';
   -- Every profile's rating is 1000 plus its match deltas (principle II).
   assert not exists (
     select 1 from public.profiles p
     where p.rating <> 1000 + coalesce((
-      select sum(case when x.white_id = p.id then x.rating_delta else -x.rating_delta end)
+      select sum(case when x.white_id = p.id then x.white_rating_delta else x.black_rating_delta end)
       from public.matches x where p.id in (x.white_id, x.black_id)
     ), 0)
   ), 'ratings replay from history';
@@ -206,8 +212,8 @@ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    insert into public.matches (white_id, black_id, result, white_rating_before, black_rating_before, rating_delta, recorded_by)
-    values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'white', 1, 1, 400,
+    insert into public.matches (white_id, black_id, result, white_rating_before, black_rating_before, white_rating_delta, black_rating_delta, recorded_by)
+    values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'white', 1, 1, 400, -400,
             '00000000-0000-0000-0000-00000000000a');
     raise exception 'direct match insert should be denied';
   exception when insufficient_privilege then null;
