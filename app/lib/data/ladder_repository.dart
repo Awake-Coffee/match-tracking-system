@@ -21,7 +21,7 @@ abstract class LadderRepository extends ChangeNotifier {
 
   bool get isSignedIn => me != null;
 
-  /// Bumped whenever ratings or matches change.
+  /// Bumped whenever ratings, matches or pending games change.
   int get revision;
 
   /// Short description shown on the sign-in screen, or null for production.
@@ -45,14 +45,27 @@ abstract class LadderRepository extends ChangeNotifier {
   /// Newest first. When [playerId] is set, only that member's games.
   Future<List<ChessMatch>> matches({String? playerId, int limit = 50});
 
-  /// Records a game the signed-in member played and returns it.
-  Future<ChessMatch> recordMatch({
+  /// Reports a game the signed-in member played. It is rated only once the
+  /// opponent accepts it with [respondToMatchRequest].
+  Future<MatchRequest> requestMatch({
     required String opponentId,
     required PieceColor myColor,
     required Outcome myOutcome,
+    required ClockSetting clock,
   });
 
-  Future<void> updateProfile({String? displayName, String? design});
+  /// Games involving the signed-in member that wait for confirmation,
+  /// newest first.
+  Future<List<MatchRequest>> matchRequests();
+
+  /// The opponent accepts ([accept]) and gets the rated game back, or either
+  /// player drops the request and gets null.
+  Future<ChessMatch?> respondToMatchRequest(
+    int requestId, {
+    required bool accept,
+  });
+
+  Future<void> updateDisplayName(String displayName);
 }
 
 /// Ladder order: rating, then more games played, then name.

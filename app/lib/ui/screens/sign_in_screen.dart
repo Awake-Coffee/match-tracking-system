@@ -50,7 +50,9 @@ class _SignInScreenState extends State<SignInScreen> {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Couldn\'t reach the server. Check your connection and try again.');
+        setState(
+          () => _error = 'Couldn\'t reach the server. Check your connection and try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -74,7 +76,14 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Awake Coffee', style: d.body(16, color: d.muted, weight: FontWeight.w600)),
+                      Text(
+                        'Awake Coffee',
+                        style: d.body(
+                          16,
+                          color: d.muted,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text('Chess ladder', style: d.display(46)),
                       const SizedBox(height: 12),
@@ -90,7 +99,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           controller: _name,
                           decoration: const InputDecoration(
                             labelText: 'Display name',
-                            helperText: 'Shown on the ladder. You can change it later.',
+                            helperText:
+                                'Shown on the ladder. You can change it later.',
                           ),
                           textInputAction: TextInputAction.next,
                           autofillHints: const [AutofillHints.nickname],
@@ -104,34 +114,54 @@ class _SignInScreenState extends State<SignInScreen> {
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         autofillHints: const [AutofillHints.email],
-                        validator: (v) =>
-                            (v == null || !v.contains('@')) ? 'Enter an email address' : null,
+                        validator: (v) => (v == null || !v.contains('@'))
+                            ? 'Enter an email address'
+                            : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _password,
-                        decoration: const InputDecoration(labelText: 'Password'),
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                        ),
                         obscureText: true,
                         autofillHints: [
-                          _creating ? AutofillHints.newPassword : AutofillHints.password,
+                          _creating
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
                         ],
                         onFieldSubmitted: (_) => _submit(),
                         validator: (v) {
-                          if (v == null || v.isEmpty) return 'Enter your password';
-                          if (_creating && v.length < 8) return 'Use at least 8 characters';
+                          if (v == null || v.isEmpty) {
+                            return 'Enter your password';
+                          }
+                          if (_creating && v.length < 8) {
+                            return 'Use at least 8 characters';
+                          }
                           return null;
                         },
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
-                        Text(_error!, style: d.body(15, color: d.loss, weight: FontWeight.w600)),
+                        Text(
+                          _error!,
+                          style: d.body(
+                            15,
+                            color: d.loss,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                       const SizedBox(height: 24),
                       FilledButton(
                         onPressed: _busy ? null : _submit,
                         child: _busy
                             ? const SizedBox.square(
-                                dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : Text(_creating ? 'Create profile' : 'Sign in'),
                       ),
                       const SizedBox(height: 8),
@@ -139,12 +169,14 @@ class _SignInScreenState extends State<SignInScreen> {
                         onPressed: _busy
                             ? null
                             : () => setState(() {
-                                  _creating = !_creating;
-                                  _error = null;
-                                }),
-                        child: Text(_creating
-                            ? 'I already have a profile'
-                            : 'New here? Create a profile'),
+                                _creating = !_creating;
+                                _error = null;
+                              }),
+                        child: Text(
+                          _creating
+                              ? 'I already have a profile'
+                              : 'New here? Create a profile',
+                        ),
                       ),
                       if (note != null) ...[
                         const SizedBox(height: 24),

@@ -10,7 +10,12 @@ class LoadView<T> extends StatefulWidget {
   const LoadView({super.key, required this.load, required this.builder});
 
   final Future<T> Function(LadderRepository repo) load;
-  final Widget Function(BuildContext context, T data, Future<void> Function() reload) builder;
+  final Widget Function(
+    BuildContext context,
+    T data,
+    Future<void> Function() reload,
+  )
+  builder;
 
   @override
   State<LoadView<T>> createState() => _LoadViewState<T>();
@@ -93,7 +98,11 @@ class MessageView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(message, textAlign: TextAlign.center, style: d.body(16, color: d.muted)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: d.body(16, color: d.muted),
+            ),
             if (actionLabel != null) ...[
               const SizedBox(height: 16),
               OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),

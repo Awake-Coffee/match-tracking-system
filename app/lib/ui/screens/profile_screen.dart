@@ -23,13 +23,18 @@ class ProfileScreen extends StatelessWidget {
         await repo.player(playerId),
         await repo.matches(playerId: playerId, limit: 500),
       ),
-      builder: (context, data, _) => _Profile(player: data.$1, matches: data.$2, isMe: isMe),
+      builder: (context, data, _) =>
+          _Profile(player: data.$1, matches: data.$2, isMe: isMe),
     );
   }
 }
 
 class _Profile extends StatelessWidget {
-  const _Profile({required this.player, required this.matches, required this.isMe});
+  const _Profile({
+    required this.player,
+    required this.matches,
+    required this.isMe,
+  });
 
   final Player player;
 
@@ -58,7 +63,8 @@ class _Profile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(p.displayName, style: d.display(36)),
-                    if (isMe) Text('Your profile', style: d.body(15, color: d.muted)),
+                    if (isMe)
+                      Text('Your profile', style: d.body(15, color: d.muted)),
                   ],
                 ),
               ),
@@ -84,7 +90,10 @@ class _Profile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Rating', style: d.body(14, color: d.muted, weight: FontWeight.w600)),
+                Text(
+                  'Rating',
+                  style: d.body(14, color: d.muted, weight: FontWeight.w600),
+                ),
                 Text('${p.rating}', style: d.display(64, height: 1.05)),
                 const SizedBox(height: 16),
                 Wrap(

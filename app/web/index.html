@@ -29,10 +29,47 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>awake_ladder</title>
+  <title>Awake Chess Ladder</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Loading screen: visible from the first byte until Flutter paints over it
+       on its first frame (flutter-view is appended after it, so it sits on top). -->
+  <style>
+    @font-face {
+      font-family: Karla;
+      font-weight: 600;
+      font-display: block;
+      src: url("assets/assets/fonts/Karla-SemiBold.ttf");
+    }
+    body { margin: 0; background: #2A1810; }
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+    }
+    #splash svg { width: 56px; height: 72px; fill: #D69A52; animation: breathe 1.6s ease-in-out infinite; }
+    #splash span {
+      font: 600 15px Karla, system-ui, sans-serif;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: #BFA58A;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: .45; transform: translateY(2px); }
+      50% { opacity: 1; transform: translateY(-2px); }
+    }
+    @media (prefers-reduced-motion: reduce) { #splash svg { animation: none; } }
+  </style>
 </head>
 <body>
+  <div id="splash" role="status" aria-label="Loading">
+    <svg viewBox="0 0 45 58" aria-hidden="true"><path d="M22.5 2a8 8 0 0 0-5.2 14.1A11 11 0 0 0 12 25.5c0 2.7 1 5.1 2.6 7-3.9 2.3-7 7.6-7.6 15.5h31c-.6-7.9-3.7-13.2-7.6-15.5a10.9 10.9 0 0 0 2.6-7 11 11 0 0 0-5.3-9.4A8 8 0 0 0 22.5 2ZM5 50h35v6H5z"/></svg>
+    <span>Awake Coffee</span>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

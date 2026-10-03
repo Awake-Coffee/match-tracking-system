@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../app_scope.dart';
 import '../ladder/ladder_view.dart';
+import '../ladder/pawns_ladder.dart';
 import '../widgets/load_view.dart';
+import '../widgets/match_request_list.dart';
 
 class LadderScreen extends StatelessWidget {
   const LadderScreen({super.key});
@@ -12,8 +14,9 @@ class LadderScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final meId = context.repo.me?.id;
     return LoadView(
-      load: (repo) => repo.ladder(),
-      builder: (context, players, _) {
+      load: (repo) => (repo.ladder(), repo.matchRequests()).wait,
+      builder: (context, data, _) {
+        final (players, requests) = data;
         if (players.isEmpty) {
           return MessageView(
             message: 'No one is on the ladder yet.',
@@ -23,12 +26,15 @@ class LadderScreen extends StatelessWidget {
         }
         return ListView(
           children: [
-            LadderView(
+            MatchRequestList(requests: requests),
+            PawnsLadder(
               data: LadderData(
                 players: players,
                 meId: meId,
                 now: DateTime.now(),
-                onOpen: (p) => p.id == meId ? context.go('/me') : context.push('/players/${p.id}'),
+                onOpen: (p) => p.id == meId
+                    ? context.go('/me')
+                    : context.push('/players/${p.id}'),
               ),
             ),
           ],

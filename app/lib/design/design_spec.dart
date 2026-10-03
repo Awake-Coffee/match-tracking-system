@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
-/// How a design draws the ladder: the one place each design is bold.
-enum LadderStyle { menu, receipt, cups, bars, sky }
-
-/// Tests turn this off so fonts aren't fetched from the network.
-bool useGoogleFonts = true;
 
 /// The full set of tokens a design provides. Screens read these instead of
 /// hardcoding colors, type or shapes (constitution principle V).
 @immutable
 class DesignSpec {
   const DesignSpec({
-    required this.id,
-    required this.name,
-    required this.tagline,
     required this.brightness,
     required this.background,
     required this.surface,
@@ -28,21 +18,11 @@ class DesignSpec {
     required this.highlight,
     required this.displayFamily,
     required this.bodyFamily,
-    required this.ladderStyle,
     this.displayWeight = FontWeight.w400,
     this.radius = 8,
     this.lineWidth = 1,
-    this.dashed = false,
-    this.tornEdge = false,
-    this.chartColor,
   });
 
-  /// Stored on the profile (`profiles.design`).
-  final String id;
-  final String name;
-
-  /// One sentence shown in the design picker.
-  final String tagline;
   final Brightness brightness;
 
   final Color background;
@@ -61,57 +41,64 @@ class DesignSpec {
   final String displayFamily;
   final String bodyFamily;
   final FontWeight displayWeight;
-  final LadderStyle ladderStyle;
-
-  /// Corner radius for surfaces; 999 means pill-shaped.
   final double radius;
   final double lineWidth;
-  final bool dashed;
 
-  /// Receipt slips have a zigzag bottom edge.
-  final bool tornEdge;
+  TextStyle display(
+    double size, {
+    Color? color,
+    FontWeight? weight,
+    double? height,
+  }) => _font(
+    displayFamily,
+    TextStyle(
+      fontSize: size,
+      fontWeight: weight ?? displayWeight,
+      color: color ?? ink,
+      height: height ?? 1.1,
+    ),
+  );
 
-  /// Line color for charts when [accent] lacks 3:1 contrast on [background].
-  final Color? chartColor;
-
-  Color get chart => chartColor ?? accent;
-
-  bool get pill => radius >= 999;
-
-  TextStyle display(double size, {Color? color, FontWeight? weight, double? height}) =>
-      _font(displayFamily, TextStyle(
-        fontSize: size,
-        fontWeight: weight ?? displayWeight,
-        color: color ?? ink,
-        height: height ?? 1.1,
-      ));
-
-  TextStyle body(double size, {Color? color, FontWeight? weight, double? height}) =>
-      _font(bodyFamily, TextStyle(
-        fontSize: size,
-        fontWeight: weight ?? FontWeight.w400,
-        color: color ?? ink,
-        height: height ?? 1.4,
-      ));
+  TextStyle body(
+    double size, {
+    Color? color,
+    FontWeight? weight,
+    double? height,
+  }) => _font(
+    bodyFamily,
+    TextStyle(
+      fontSize: size,
+      fontWeight: weight ?? FontWeight.w400,
+      color: color ?? ink,
+      height: height ?? 1.4,
+    ),
+  );
 
   /// Tabular figures so ratings line up in columns.
-  TextStyle number(double size, {Color? color, FontWeight? weight, bool displayFace = false}) =>
-      (displayFace ? display(size, color: color, weight: weight) : body(size, color: color, weight: weight))
+  TextStyle number(
+    double size, {
+    Color? color,
+    FontWeight? weight,
+    bool displayFace = false,
+  }) =>
+      (displayFace
+              ? display(size, color: color, weight: weight)
+              : body(size, color: color, weight: weight))
           .copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
 
-  static TextStyle _font(String family, TextStyle style) {
-    if (!useGoogleFonts) return style.copyWith(fontFamily: family);
-    return GoogleFonts.getFont(family, textStyle: style);
-  }
+  static TextStyle _font(String family, TextStyle style) =>
+      style.copyWith(fontFamily: family);
 
-  Color outcomeColor(int delta) =>
-      delta > 0 ? win : delta < 0 ? loss : muted;
+  Color outcomeColor(int delta) => delta > 0
+      ? win
+      : delta < 0
+      ? loss
+      : muted;
 
-  BorderRadius get borderRadius => BorderRadius.circular(pill ? 28 : radius);
+  BorderRadius get borderRadius => BorderRadius.circular(radius);
 
-  OutlinedBorder buttonShape() => pill
-      ? const StadiumBorder()
-      : RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
+  OutlinedBorder buttonShape() =>
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
 
   ThemeData toTheme() {
     final scheme = ColorScheme(
@@ -155,7 +142,7 @@ class DesignSpec {
     );
 
     final side = BorderSide(color: line, width: lineWidth);
-    final inputRadius = BorderRadius.circular(pill ? 28 : radius);
+    final inputRadius = BorderRadius.circular(radius);
     final focusRing = BorderSide(color: accent, width: lineWidth + 1.5);
 
     return ThemeData(
@@ -164,7 +151,11 @@ class DesignSpec {
       scaffoldBackgroundColor: background,
       canvasColor: background,
       textTheme: textTheme,
-      dividerTheme: DividerThemeData(color: line, thickness: lineWidth, space: 1),
+      dividerTheme: DividerThemeData(
+        color: line,
+        thickness: lineWidth,
+        space: 1,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: background,
         foregroundColor: ink,
@@ -188,9 +179,11 @@ class DesignSpec {
         style: OutlinedButton.styleFrom(
           foregroundColor: ink,
           side: side,
-          minimumSize: const Size(64, 48),
+          // Matches FilledButton so paired actions line up.
+          minimumSize: const Size(64, 52),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: buttonShape(),
-          textStyle: body(15, weight: FontWeight.w600),
+          textStyle: body(16, weight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -207,7 +200,8 @@ class DesignSpec {
           minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
           textStyle: WidgetStatePropertyAll(body(15, weight: FontWeight.w600)),
           backgroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? accent : Colors.transparent,
+            (s) =>
+                s.contains(WidgetState.selected) ? accent : Colors.transparent,
           ),
           foregroundColor: WidgetStateProperty.resolveWith(
             (s) => s.contains(WidgetState.selected) ? onAccent : ink,
@@ -222,10 +216,19 @@ class DesignSpec {
         hintStyle: body(15, color: muted),
         helperStyle: body(13, color: muted),
         errorStyle: body(13, color: loss),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(borderRadius: inputRadius, borderSide: side),
-        enabledBorder: OutlineInputBorder(borderRadius: inputRadius, borderSide: side),
-        focusedBorder: OutlineInputBorder(borderRadius: inputRadius, borderSide: focusRing),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: inputRadius,
+          borderSide: side,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: inputRadius,
+          borderSide: focusRing,
+        ),
         errorBorder: OutlineInputBorder(
           borderRadius: inputRadius,
           borderSide: BorderSide(color: loss, width: lineWidth),
@@ -242,9 +245,13 @@ class DesignSpec {
         indicatorShape: buttonShape(),
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith(
-          (s) => body(12,
-              weight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-              color: s.contains(WidgetState.selected) ? ink : muted),
+          (s) => body(
+            12,
+            weight: s.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+            color: s.contains(WidgetState.selected) ? ink : muted,
+          ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (s) => IconThemeData(
@@ -264,7 +271,7 @@ class DesignSpec {
         menuStyle: MenuStyle(
           backgroundColor: WidgetStatePropertyAll(surface),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(pill ? 20 : radius)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
           ),
         ),
       ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
@@ -26,6 +25,5 @@ Future<void> main() async {
     repository = DemoLadderRepository();
   }
 
-  final prefs = await SharedPreferences.getInstance();
-  runApp(AwakeApp(repository: repository, preferences: prefs));
+  runApp(AwakeApp(repository: repository));
 }

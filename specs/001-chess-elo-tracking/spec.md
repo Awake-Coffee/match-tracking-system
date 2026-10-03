@@ -18,14 +18,24 @@ with Supabase auth. Build 5 designs."
   nearest integer and the loser receives exactly the negative, so the
   ladder is zero-sum and the total rating never drifts.
 - Q: Who may record a match? → A: Any signed-in member, but only for a
-  game they played in. They choose the opponent, the color they played
-  and the result.
+  game they played in. They choose the opponent, the color they played,
+  the result and the DGT 2500 time control preset. The game is rated only
+  once the opponent confirms it; either player can drop it before that.
+  Ratings use both players' ratings at the moment of confirmation.
 - Q: Can matches be edited or deleted? → A: Not in this release. A
   mistaken result is corrected by playing (or recording) a new game;
   admins can fix data directly in Supabase.
 - Q: What does "5 designs" mean? → A: Five complete visual themes for the
   same app. Every member picks the one they like in Settings, and the
   choice is saved to their profile.
+
+### Session 2026-10-03
+
+- Q: None of the five designs feel like Awake? → A: Add a sixth, Roast
+  pawns, mixing chess and coffee: each player is a pawn filled with
+  coffee up to their rating. It becomes the default.
+- Q: Do the other designs earn their keep? → A: No. Roast pawns is the
+  only design; the picker and the other five are removed.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -52,7 +62,8 @@ a display name. They land on the ladder with a rating of 1000.
 ### User Story 2 — Record a game (Priority: P1)
 
 After a game at the café, one of the two players records it: opponent,
-the color they played, and the result. Both ratings update at once.
+the color they played, the result and the DGT 2500 preset the clock was
+set to. The opponent confirms it, and then both ratings update at once.
 
 **Why this priority**: This is the core loop that builds the ladder.
 
@@ -70,6 +81,11 @@ winner shows 1016 and the loser 984.
 4. **Given** I'm not one of the players, **When** I try to record the
    game through the API, **Then** it is rejected.
 5. **Given** I choose myself as opponent, **Then** recording is rejected.
+6. **Given** I recorded a game, **When** my opponent hasn't confirmed it,
+   **Then** no rating changes; **When** they decline or I withdraw it,
+   **Then** it is never rated.
+7. **Given** I recorded a game, **When** I try to confirm it myself,
+   **Then** it is rejected.
 
 ### User Story 3 — See profiles and history (Priority: P2)
 
@@ -86,21 +102,6 @@ draws), rating over time, and recent games with the points won or lost.
    I see rating, W/L/D, peak rating and their last games newest first.
 2. **Given** the match log, **When** I open History, **Then** I see all
    recent games across the club with each player's rating change.
-
-### User Story 4 — Choose a design (Priority: P3)
-
-A member picks one of five designs in Settings. The whole app re-skins
-immediately and the choice follows them to other devices.
-
-**Independent Test**: Switch designs, reload, sign in on a second
-browser — the same design is applied.
-
-**Acceptance Scenarios**:
-
-1. **Given** Settings, **When** I tap a design, **Then** the app re-skins
-   without reloading.
-2. **Given** I chose a design, **When** I sign in elsewhere, **Then** the
-   same design loads.
 
 ### Edge Cases
 
@@ -123,8 +124,11 @@ browser — the same design is applied.
 - **FR-002**: Every auth user MUST have exactly one profile, created
   automatically at sign-up with rating 1000.
 - **FR-003**: Members MUST be able to record a chess game they played,
-  specifying opponent, own color (white/black) and result
-  (win/loss/draw).
+  specifying opponent, own color (white/black), result (win/loss/draw)
+  and the DGT 2500 time control preset (stored as the clock's option
+  number). For the clock's manual-setting presets the member MUST enter
+  the base minutes and, where the method has one, the increment / delay /
+  byo-yomi seconds. The opponent MUST confirm it before it is rated.
 - **FR-004**: The system MUST compute the rating change server-side with
   K = 32 and update both players and the match log atomically.
 - **FR-005**: Rating changes MUST be zero-sum per game.
@@ -135,32 +139,34 @@ browser — the same design is applied.
 - **FR-008**: The app MUST show a profile per member with rating, W/L/D,
   peak rating, rating history and recent games.
 - **FR-009**: The app MUST show a club-wide match history, newest first.
-- **FR-010**: Members MUST be able to change their display name and
-  design; they MUST NOT be able to change ratings or counters directly.
-- **FR-011**: The app MUST ship five designs and persist each member's
-  choice on their profile.
+- **FR-010**: Members MUST be able to change their display name; they
+  MUST NOT be able to change ratings or counters directly.
+- **FR-011**: The app MUST ship one design, Roast pawns.
 - **FR-012**: The app MUST preview the rating change before a game is
   saved, using the same formula as the server.
 
 ### Key Entities
 
 - **Profile**: one per member; display name, rating, games, wins,
-  losses, draws, chosen design.
-- **Match**: one chess game; white, black, result, pre-game ratings,
-  delta, who recorded it and when.
+  losses, draws.
+- **Match request**: a recorded game awaiting the opponent; white,
+  black, result, DGT option, who recorded it and when.
+- **Match**: one rated chess game; white, black, result, DGT option,
+  pre-game ratings, delta, who recorded it and when.
 
 ## Success Criteria *(mandatory)*
 
 - **SC-001**: A new member can sign up and appear on the ladder in under
   one minute.
-- **SC-002**: Recording a game takes three choices and one confirmation.
+- **SC-002**: Recording a game takes four choices and one confirmation;
+  confirming one takes a single tap.
 - **SC-003**: The sum of all ratings always equals 1000 × number of
   members.
 - **SC-004**: Rating previews match the saved result in 100% of games.
-- **SC-005**: All five designs pass WCAG AA contrast for body text.
+- **SC-005**: The design passes WCAG AA contrast for body text.
 
 ## Out of Scope
 
-- Games other than chess, tournaments, pairings, clocks.
-- Opponent confirmation of results, editing or deleting games.
+- Games other than chess, tournaments, pairings, running a clock in-app.
+- Editing or deleting rated games.
 - Provisional K-factors or rating floors.

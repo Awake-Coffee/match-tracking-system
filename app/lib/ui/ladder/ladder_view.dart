@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../design/design_scope.dart';
-import '../../design/design_spec.dart';
 import '../../domain/models.dart';
-import 'bars_ladder.dart';
-import 'cups_ladder.dart';
-import 'menu_ladder.dart';
-import 'receipt_ladder.dart';
-import 'sky_ladder.dart';
 
 /// Data every ladder style receives.
 class LadderData {
@@ -41,28 +35,15 @@ class LadderData {
 String ordinal(int n) {
   final mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 13) return '${n}th';
-  return switch (n % 10) { 1 => '${n}st', 2 => '${n}nd', 3 => '${n}rd', _ => '${n}th' };
+  return switch (n % 10) {
+    1 => '${n}st',
+    2 => '${n}nd',
+    3 => '${n}rd',
+    _ => '${n}th',
+  };
 }
 
 String record(Player p) => '${p.wins}-${p.losses}-${p.draws}';
-
-/// Picks the ladder layout for the active design.
-class LadderView extends StatelessWidget {
-  const LadderView({super.key, required this.data});
-
-  final LadderData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (context.design.ladderStyle) {
-      LadderStyle.menu => MenuLadder(data: data),
-      LadderStyle.receipt => ReceiptLadder(data: data),
-      LadderStyle.cups => CupsLadder(data: data),
-      LadderStyle.bars => BarsLadder(data: data),
-      LadderStyle.sky => SkyLadder(data: data),
-    };
-  }
-}
 
 /// Tap target wrapper shared by ladder rows: the whole row opens the profile
 /// and gets a visible focus highlight for keyboard users.
@@ -86,7 +67,8 @@ class LadderRowTap extends StatelessWidget {
     final isMe = player.id == data.meId;
     return Semantics(
       button: true,
-      label: '${rank != null ? '${ordinal(rank!)}, ' : ''}${player.displayName}'
+      label:
+          '${rank != null ? '${ordinal(rank!)}, ' : ''}${player.displayName}'
           '${isMe ? ' (you)' : ''}, rating ${player.rating}',
       excludeSemantics: true,
       child: InkWell(

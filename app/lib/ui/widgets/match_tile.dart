@@ -2,20 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../design/design_scope.dart';
-import '../../design/design_spec.dart';
 import '../../domain/models.dart';
 import 'surface.dart';
 
 String relativeDate(DateTime when, {DateTime? now}) {
   final today = now ?? DateTime.now();
-  final days = DateTime(today.year, today.month, today.day)
-      .difference(DateTime(when.year, when.month, when.day))
-      .inDays;
-  final time = '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
+  final days = DateTime(
+    today.year,
+    today.month,
+    today.day,
+  ).difference(DateTime(when.year, when.month, when.day)).inDays;
+  final time =
+      '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
   if (days <= 0) return 'Today, $time';
   if (days == 1) return 'Yesterday, $time';
   if (days < 7) return '$days days ago';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return '${when.day} ${months[when.month - 1]}';
 }
 
@@ -31,7 +46,9 @@ class MatchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = context.design;
     final m = match;
-    final me = perspectiveId != null && m.involves(perspectiveId!) ? perspectiveId : null;
+    final me = perspectiveId != null && m.involves(perspectiveId!)
+        ? perspectiveId
+        : null;
 
     final Widget headline;
     final Widget trailing;
@@ -42,13 +59,15 @@ class MatchTile extends StatelessWidget {
         Outcome.draw => 'Drew with',
       };
       headline = Text.rich(
-        TextSpan(children: [
-          TextSpan(text: '$verb '),
-          TextSpan(
-            text: m.opponentName(me),
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ]),
+        TextSpan(
+          children: [
+            TextSpan(text: '$verb '),
+            TextSpan(
+              text: m.opponentName(me),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
         style: d.body(16),
       );
       trailing = Column(
@@ -62,16 +81,20 @@ class MatchTile extends StatelessWidget {
       final bold = d.body(16, weight: FontWeight.w700);
       headline = Text.rich(
         m.result == MatchResult.draw
-            ? TextSpan(children: [
-                TextSpan(text: m.whiteName, style: bold),
-                const TextSpan(text: ' drew with '),
-                TextSpan(text: m.blackName, style: bold),
-              ])
-            : TextSpan(children: [
-                TextSpan(text: m.winnerName, style: bold),
-                const TextSpan(text: ' beat '),
-                TextSpan(text: m.loserName, style: bold),
-              ]),
+            ? TextSpan(
+                children: [
+                  TextSpan(text: m.whiteName, style: bold),
+                  const TextSpan(text: ' drew with '),
+                  TextSpan(text: m.blackName, style: bold),
+                ],
+              )
+            : TextSpan(
+                children: [
+                  TextSpan(text: m.winnerName, style: bold),
+                  const TextSpan(text: ' beat '),
+                  TextSpan(text: m.loserName, style: bold),
+                ],
+              ),
         style: d.body(16),
       );
       // Winner's change first; for a draw, white first.
@@ -86,14 +109,16 @@ class MatchTile extends StatelessWidget {
     }
 
     final when = relativeDate(m.playedAt);
-    final detail = d.ladderStyle == LadderStyle.receipt
-        ? 'Order #${m.id.toString().padLeft(4, '0')}, $when'
-        : me != null
-            ? 'Played ${m.colorOf(me).name}, $when'
-            : '${m.whiteName} had white, $when';
+    final detail = me != null
+        ? 'Played ${m.colorOf(me).name}, $when'
+        : '${m.whiteName} had white, $when';
+    final clock = m.clock;
+    final detailWithClock = clock == null ? detail : '$detail · ${clock.label}';
 
     return InkWell(
-      onTap: me == null ? null : () => context.push('/players/${m.opponentId(me)}'),
+      onTap: me == null
+          ? null
+          : () => context.push('/players/${m.opponentId(me)}'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
@@ -106,7 +131,7 @@ class MatchTile extends StatelessWidget {
                 children: [
                   headline,
                   const SizedBox(height: 2),
-                  Text(detail, style: d.body(13, color: d.muted)),
+                  Text(detailWithClock, style: d.body(13, color: d.muted)),
                 ],
               ),
             ),

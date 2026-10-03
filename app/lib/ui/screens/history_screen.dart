@@ -14,7 +14,10 @@ class HistoryScreen extends StatelessWidget {
       load: (repo) => repo.matches(limit: 100),
       builder: (context, matches, _) => ListView(
         children: [
-          const ScreenTitle('History', subtitle: 'Every game at the café, newest first.'),
+          const ScreenTitle(
+            'History',
+            subtitle: 'Every game played at Awake, newest first.',
+          ),
           if (matches.isEmpty)
             MessageView(
               message: 'No games yet.',

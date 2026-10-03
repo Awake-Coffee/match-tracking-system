@@ -3,15 +3,14 @@ import 'package:awake_ladder/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Player _p(String id, int rating) => Player(
-      id: id,
-      displayName: id,
-      rating: rating,
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      design: 'chalkboard',
-    );
+  id: id,
+  displayName: id,
+  rating: rating,
+  gamesPlayed: 0,
+  wins: 0,
+  losses: 0,
+  draws: 0,
+);
 
 void main() {
   group('eloDelta', () {
@@ -51,7 +50,11 @@ void main() {
 
     test('is zero-sum', () {
       for (final outcome in Outcome.values) {
-        final preview = MatchPreview(me: _p('a', 1137), opponent: _p('b', 962), outcome: outcome);
+        final preview = MatchPreview(
+          me: _p('a', 1137),
+          opponent: _p('b', 962),
+          outcome: outcome,
+        );
         expect(preview.myDelta + preview.opponentDelta, 0);
       }
     });

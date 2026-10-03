@@ -40,30 +40,33 @@ class _RatingChartState extends State<RatingChart> {
     final d = context.design;
     final points = widget.points;
     return Semantics(
-      label: 'Rating over ${points.length - 1} games, from ${points.first} '
+      label:
+          'Rating over ${points.length - 1} games, from ${points.first} '
           'to ${points.last}, peak ${points.reduce(math.max)}',
-      child: LayoutBuilder(builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, 180);
-        return MouseRegion(
-          onHover: (e) => _track(e.localPosition, size),
-          onExit: (_) => _clear(),
-          child: GestureDetector(
-            onPanDown: (e) => _track(e.localPosition, size),
-            onPanUpdate: (e) => _track(e.localPosition, size),
-            onPanEnd: (_) => _clear(),
-            onPanCancel: _clear,
-            child: CustomPaint(
-              size: size,
-              painter: _RatingPainter(
-                points: points,
-                design: d,
-                active: _active,
-                tooltip: _active == null ? null : widget.describe(_active!),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, 180);
+          return MouseRegion(
+            onHover: (e) => _track(e.localPosition, size),
+            onExit: (_) => _clear(),
+            child: GestureDetector(
+              onPanDown: (e) => _track(e.localPosition, size),
+              onPanUpdate: (e) => _track(e.localPosition, size),
+              onPanEnd: (_) => _clear(),
+              onPanCancel: _clear,
+              child: CustomPaint(
+                size: size,
+                painter: _RatingPainter(
+                  points: points,
+                  design: d,
+                  active: _active,
+                  tooltip: _active == null ? null : widget.describe(_active!),
+                ),
               ),
             ),
-          ),
-        );
-      }),
+          );
+        },
+      ),
     );
   }
 }
@@ -95,11 +98,17 @@ class _RatingPainter extends CustomPainter {
 
     // Clean tick step so labels read 950 / 1000 / 1050.
     final span = math.max(hi - lo, 40);
-    final step = span <= 80 ? 25 : span <= 200 ? 50 : 100;
+    final step = span <= 80
+        ? 25
+        : span <= 200
+        ? 50
+        : 100;
     final yMin = (lo / step).floor() * step;
     final yMax = math.max((hi / step).ceil() * step, yMin + step);
 
-    double x(int i) => plot.left + plot.width * (points.length == 1 ? 1 : i / (points.length - 1));
+    double x(int i) =>
+        plot.left +
+        plot.width * (points.length == 1 ? 1 : i / (points.length - 1));
     double y(num v) => plot.bottom - plot.height * (v - yMin) / (yMax - yMin);
 
     // Hairline, solid, recessive gridlines.
@@ -108,10 +117,16 @@ class _RatingPainter extends CustomPainter {
       ..strokeWidth = 1;
     for (var v = yMin; v <= yMax; v += step) {
       canvas.drawLine(Offset(plot.left, y(v)), Offset(plot.right, y(v)), grid);
-      _text(canvas, '$v', d.number(11, color: d.muted), Offset(plot.left - 8, y(v)), rightAlign: true);
+      _text(
+        canvas,
+        '$v',
+        d.number(11, color: d.muted),
+        Offset(plot.left - 8, y(v)),
+        rightAlign: true,
+      );
     }
 
-    final chart = d.chart;
+    final chart = d.accent;
     final line = Path()..moveTo(x(0), y(points[0]));
     for (var i = 1; i < points.length; i++) {
       line.lineTo(x(i), y(points[i]));
@@ -134,8 +149,12 @@ class _RatingPainter extends CustomPainter {
     // End marker with a ring in the page color, labelled with the rating.
     final last = points.length - 1;
     _dot(canvas, Offset(x(last), y(points[last])), chart);
-    _text(canvas, '${points[last]}', d.number(13, weight: FontWeight.w700),
-        Offset(x(last) + 10, y(points[last])));
+    _text(
+      canvas,
+      '${points[last]}',
+      d.number(13, weight: FontWeight.w700),
+      Offset(x(last) + 10, y(points[last])),
+    );
 
     final a = active;
     if (a != null && tooltip != null) {
@@ -160,7 +179,10 @@ class _RatingPainter extends CustomPainter {
   void _tooltip(Canvas canvas, Size size, String text, Offset anchor) {
     final d = design;
     final tp = TextPainter(
-      text: TextSpan(text: text, style: d.body(13, color: d.background, weight: FontWeight.w600)),
+      text: TextSpan(
+        text: text,
+        style: d.body(13, color: d.background, weight: FontWeight.w600),
+      ),
       textDirection: TextDirection.ltr,
       maxLines: 2,
     )..layout(maxWidth: 220);
@@ -171,14 +193,24 @@ class _RatingPainter extends CustomPainter {
     var top = anchor.dy - h - 12;
     if (top < 0) top = anchor.dy + 12;
     final r = RRect.fromRectAndRadius(
-        Rect.fromLTWH(left, top, w, h), Radius.circular(d.radius == 0 ? 0 : 6));
+      Rect.fromLTWH(left, top, w, h),
+      Radius.circular(d.radius == 0 ? 0 : 6),
+    );
     canvas.drawRRect(r, Paint()..color = d.ink);
     tp.paint(canvas, Offset(left + pad, top + pad));
   }
 
-  void _text(Canvas canvas, String s, TextStyle style, Offset at, {bool rightAlign = false}) {
-    final tp = TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)
-      ..layout();
+  void _text(
+    Canvas canvas,
+    String s,
+    TextStyle style,
+    Offset at, {
+    bool rightAlign = false,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(text: s, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
     final dx = rightAlign ? at.dx - tp.width : at.dx;
     tp.paint(canvas, Offset(dx, at.dy - tp.height / 2));
   }

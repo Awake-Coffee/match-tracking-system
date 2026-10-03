@@ -12,8 +12,6 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
   go_router: ^18.0.2
-  google_fonts: ^9.0.0
-  shared_preferences: ^2.5.5
   supabase_flutter: ^2.18.0
 
 dev_dependencies:
@@ -23,3 +21,18 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Bundled so text renders in the right face on the first frame instead of
+  # swapping in after a runtime Google Fonts fetch.
+  fonts:
+    - family: Gloock
+      fonts:
+        - asset: assets/fonts/Gloock-Regular.ttf
+    - family: Karla
+      fonts:
+        - asset: assets/fonts/Karla-Regular.ttf
+        - asset: assets/fonts/Karla-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Karla-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Karla-Bold.ttf
+          weight: 700

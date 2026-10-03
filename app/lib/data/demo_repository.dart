@@ -1,23 +1,17 @@
-import 'dart:math' as math;
-
 import '../domain/elo.dart';
 import '../domain/models.dart';
 import 'ladder_repository.dart';
 
 /// In-memory ladder used when no Supabase project is configured.
 ///
-/// Applies the same Elo rules as the database so the app (and every design)
-/// can be tried out without a backend. Data lives only in this tab.
+/// Applies the same Elo rules as the database so the app can be tried out
+/// without a backend. Starts empty and lives only in this tab.
 class DemoLadderRepository extends LadderRepository {
-  DemoLadderRepository({bool seed = true, DateTime? now})
-      : _now = now ?? DateTime.now() {
-    if (seed) _seed();
-  }
-
-  final DateTime _now;
   final Map<String, Player> _players = {};
   final Map<String, String> _emails = {};
   final List<ChessMatch> _matches = [];
+  final List<MatchRequest> _requests = [];
+  int _nextRequestId = 1;
   String? _meId;
   int _revision = 0;
 
@@ -32,36 +26,6 @@ class DemoLadderRepository extends LadderRepository {
       'Demo mode: no Supabase project is connected. Any email and password '
       'works, and games are kept only in this browser tab.';
 
-  void _seed() {
-    const names = [
-      'Ana', 'Bogdan', 'Chloe', 'Dev', 'Elena', 'Femi', 'Grace', 'Hiro', //
-    ];
-    for (final name in names) {
-      _addPlayer(name, '${name.toLowerCase()}@awake.coffee');
-    }
-    final rng = math.Random(7);
-    final ids = _players.keys.toList();
-    // Stronger players (earlier in the list) win more often.
-    for (var i = 0; i < 46; i++) {
-      final a = rng.nextInt(ids.length);
-      var b = rng.nextInt(ids.length - 1);
-      if (b >= a) b++;
-      final roll = rng.nextDouble() + (b - a) * 0.06;
-      final outcome = roll > 0.62
-          ? Outcome.win
-          : roll > 0.48
-              ? Outcome.draw
-              : Outcome.loss;
-      _apply(
-        me: ids[a],
-        opponentId: ids[b],
-        myColor: rng.nextBool() ? PieceColor.white : PieceColor.black,
-        myOutcome: outcome,
-        at: _now.subtract(Duration(hours: (46 - i) * 9 + rng.nextInt(5))),
-      );
-    }
-  }
-
   Player _addPlayer(String name, String email) {
     final id = 'demo-${_players.length + 1}';
     final player = Player(
@@ -72,7 +36,6 @@ class DemoLadderRepository extends LadderRepository {
       wins: 0,
       losses: 0,
       draws: 0,
-      design: 'chalkboard',
     );
     _players[id] = player;
     _emails[email.trim().toLowerCase()] = id;
@@ -82,8 +45,9 @@ class DemoLadderRepository extends LadderRepository {
   String _uniqueName(String base) {
     var candidate = base;
     var suffix = 1;
-    bool taken(String n) =>
-        _players.values.any((p) => p.displayName.toLowerCase() == n.toLowerCase());
+    bool taken(String n) => _players.values.any(
+      (p) => p.displayName.toLowerCase() == n.toLowerCase(),
+    );
     while (taken(candidate)) {
       suffix++;
       candidate = '$base $suffix';
@@ -91,24 +55,48 @@ class DemoLadderRepository extends LadderRepository {
     return candidate;
   }
 
+  ({String whiteId, String blackId}) _sides(
+    String me,
+    String opponentId,
+    PieceColor myColor,
+  ) => myColor == PieceColor.white
+      ? (whiteId: me, blackId: opponentId)
+      : (whiteId: opponentId, blackId: me);
+
+  MatchRequest _addRequest({
+    required String by,
+    required String opponentId,
+    required PieceColor myColor,
+    required Outcome myOutcome,
+    required ClockSetting clock,
+  }) {
+    final (:whiteId, :blackId) = _sides(by, opponentId, myColor);
+    final request = MatchRequest(
+      id: _nextRequestId++,
+      whiteId: whiteId,
+      blackId: blackId,
+      whiteName: _players[whiteId]!.displayName,
+      blackName: _players[blackId]!.displayName,
+      result: resultFor(myColor, myOutcome),
+      clock: clock,
+      requestedBy: by,
+      createdAt: DateTime.now(),
+    );
+    _requests.add(request);
+    return request;
+  }
+
   ChessMatch _apply({
     required String me,
     required String opponentId,
     required PieceColor myColor,
     required Outcome myOutcome,
-    required DateTime at,
+    ClockSetting? clock,
   }) {
-    final whiteId = myColor == PieceColor.white ? me : opponentId;
-    final blackId = myColor == PieceColor.white ? opponentId : me;
+    final (:whiteId, :blackId) = _sides(me, opponentId, myColor);
     final white = _players[whiteId]!;
     final black = _players[blackId]!;
-    final result = switch (myOutcome) {
-      Outcome.draw => MatchResult.draw,
-      Outcome.win =>
-        myColor == PieceColor.white ? MatchResult.white : MatchResult.black,
-      Outcome.loss =>
-        myColor == PieceColor.white ? MatchResult.black : MatchResult.white,
-    };
+    final result = resultFor(myColor, myOutcome);
     final whiteScore = switch (result) {
       MatchResult.white => 1.0,
       MatchResult.black => 0.0,
@@ -138,27 +126,29 @@ class DemoLadderRepository extends LadderRepository {
       whiteName: white.displayName,
       blackName: black.displayName,
       result: result,
+      clock: clock,
       whiteRatingBefore: white.rating,
       blackRatingBefore: black.rating,
       ratingDelta: delta,
-      playedAt: at,
+      playedAt: DateTime.now(),
     );
     _matches.add(match);
     return match;
   }
 
   ChessMatch _withCurrentNames(ChessMatch m) => ChessMatch(
-        id: m.id,
-        whiteId: m.whiteId,
-        blackId: m.blackId,
-        whiteName: _players[m.whiteId]!.displayName,
-        blackName: _players[m.blackId]!.displayName,
-        result: m.result,
-        whiteRatingBefore: m.whiteRatingBefore,
-        blackRatingBefore: m.blackRatingBefore,
-        ratingDelta: m.ratingDelta,
-        playedAt: m.playedAt,
-      );
+    id: m.id,
+    whiteId: m.whiteId,
+    blackId: m.blackId,
+    whiteName: _players[m.whiteId]!.displayName,
+    blackName: _players[m.blackId]!.displayName,
+    result: m.result,
+    clock: m.clock,
+    whiteRatingBefore: m.whiteRatingBefore,
+    blackRatingBefore: m.blackRatingBefore,
+    ratingDelta: m.ratingDelta,
+    playedAt: m.playedAt,
+  );
 
   Player _requireMe() {
     final me = this.me;
@@ -169,7 +159,9 @@ class DemoLadderRepository extends LadderRepository {
   @override
   Future<void> signIn({required String email, required String password}) async {
     final key = email.trim().toLowerCase();
-    if (!key.contains('@')) throw const LadderException('Enter an email address.');
+    if (!key.contains('@')) {
+      throw const LadderException('Enter an email address.');
+    }
     if (password.isEmpty) throw const LadderException('Enter your password.');
     _meId = _emails[key] ?? _addPlayer(key.split('@').first, key).id;
     notifyListeners();
@@ -183,7 +175,9 @@ class DemoLadderRepository extends LadderRepository {
   }) async {
     final key = email.trim().toLowerCase();
     if (_emails.containsKey(key)) {
-      throw const LadderException('That email already has an account. Sign in instead.');
+      throw const LadderException(
+        'That email already has an account. Sign in instead.',
+      );
     }
     _meId = _addPlayer(displayName.trim(), key).id;
     notifyListeners();
@@ -215,10 +209,11 @@ class DemoLadderRepository extends LadderRepository {
           .toList();
 
   @override
-  Future<ChessMatch> recordMatch({
+  Future<MatchRequest> requestMatch({
     required String opponentId,
     required PieceColor myColor,
     required Outcome myOutcome,
+    required ClockSetting clock,
   }) async {
     final me = _requireMe();
     if (opponentId == me.id) {
@@ -227,29 +222,70 @@ class DemoLadderRepository extends LadderRepository {
     if (!_players.containsKey(opponentId)) {
       throw const LadderException('Opponent not found.');
     }
-    final match = _apply(
-      me: me.id,
+    if (!clock.isComplete) {
+      throw const LadderException('Set the custom time you played.');
+    }
+    final request = _addRequest(
+      by: me.id,
       opponentId: opponentId,
       myColor: myColor,
       myOutcome: myOutcome,
-      at: DateTime.now(),
+      clock: clock,
     );
+    _revision++;
+    notifyListeners();
+    return request;
+  }
+
+  @override
+  Future<List<MatchRequest>> matchRequests() async {
+    final me = _requireMe();
+    return _requests.reversed.where((r) => r.involves(me.id)).toList();
+  }
+
+  @override
+  Future<ChessMatch?> respondToMatchRequest(
+    int requestId, {
+    required bool accept,
+  }) async {
+    final me = _requireMe();
+    final request = _requests
+        .where((r) => r.id == requestId && r.involves(me.id))
+        .firstOrNull;
+    if (request == null) {
+      throw const LadderException(
+        'That game is no longer waiting for confirmation.',
+      );
+    }
+    if (accept && !request.awaits(me.id)) {
+      throw const LadderException('Your opponent has to confirm this game.');
+    }
+    _requests.remove(request);
+    final reporter = request.requestedBy;
+    final match = accept
+        ? _apply(
+            me: reporter,
+            opponentId: request.opponentId(reporter),
+            myColor: request.colorOf(reporter),
+            myOutcome: request.outcomeFor(reporter),
+            clock: request.clock,
+          )
+        : null;
     _revision++;
     notifyListeners();
     return match;
   }
 
   @override
-  Future<void> updateProfile({String? displayName, String? design}) async {
+  Future<void> updateDisplayName(String displayName) async {
     final me = _requireMe();
-    if (displayName != null) {
-      final name = displayName.trim();
-      final taken = _players.values.any(
-          (p) => p.id != me.id && p.displayName.toLowerCase() == name.toLowerCase());
-      if (taken) throw const LadderException('That name is taken. Try another.');
-    }
-    _players[me.id] = me.copyWith(displayName: displayName?.trim(), design: design);
-    if (displayName != null) _revision++;
+    final name = displayName.trim();
+    final taken = _players.values.any(
+      (p) => p.id != me.id && p.displayName.toLowerCase() == name.toLowerCase(),
+    );
+    if (taken) throw const LadderException('That name is taken. Try another.');
+    _players[me.id] = me.copyWith(displayName: name);
+    _revision++;
     notifyListeners();
   }
 }

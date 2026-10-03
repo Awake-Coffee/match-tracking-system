@@ -5,9 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/models.dart';
 import 'ladder_repository.dart';
 
-const _matchSelect =
-    '*, white:profiles!matches_white_id_fkey(display_name), '
-    'black:profiles!matches_black_id_fkey(display_name)';
+String _matchSelect(String table) =>
+    '*, white:profiles!${table}_white_id_fkey(display_name), '
+    'black:profiles!${table}_black_id_fkey(display_name)';
 
 class SupabaseLadderRepository extends LadderRepository {
   SupabaseLadderRepository(this._client) {
@@ -15,7 +15,10 @@ class SupabaseLadderRepository extends LadderRepository {
       if (state.event == AuthChangeEvent.signedOut) {
         _me = null;
         notifyListeners();
-      } else if (state.session != null && _me?.id != state.session!.user.id) {
+        // initialSession is left to restore(), so startup fetches the profile once.
+      } else if (state.event != AuthChangeEvent.initialSession &&
+          state.session != null &&
+          _me?.id != state.session!.user.id) {
         unawaited(_loadMe());
       }
     });
@@ -40,8 +43,11 @@ class SupabaseLadderRepository extends LadderRepository {
   Future<void> _loadMe() async {
     final user = _client.auth.currentUser;
     if (user == null) return;
-    final row =
-        await _client.from('profiles').select().eq('id', user.id).maybeSingle();
+    final row = await _client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
     _me = row == null ? null : Player.fromRow(row);
     notifyListeners();
   }
@@ -59,8 +65,10 @@ class SupabaseLadderRepository extends LadderRepository {
   @override
   Future<void> signIn({required String email, required String password}) =>
       _guard(() async {
-        await _client.auth
-            .signInWithPassword(email: email.trim(), password: password);
+        await _client.auth.signInWithPassword(
+          email: email.trim(),
+          password: password,
+        );
         await _loadMe();
       });
 
@@ -69,110 +77,140 @@ class SupabaseLadderRepository extends LadderRepository {
     required String email,
     required String password,
     required String displayName,
-  }) =>
-      _guard(() async {
-        final res = await _client.auth.signUp(
-          email: email.trim(),
-          password: password,
-          data: {'display_name': displayName.trim()},
-        );
-        if (res.session == null) {
-          throw const LadderException(
-            'Check your inbox to confirm your email, then sign in.',
-          );
-        }
-        await _loadMe();
-      });
+  }) => _guard(() async {
+    final res = await _client.auth.signUp(
+      email: email.trim(),
+      password: password,
+      data: {'display_name': displayName.trim()},
+    );
+    if (res.session == null) {
+      throw const LadderException(
+        'Check your inbox to confirm your email, then sign in.',
+      );
+    }
+    await _loadMe();
+  });
 
   @override
   Future<void> signOut() => _guard(() async {
-        await _client.auth.signOut();
-        _me = null;
-        notifyListeners();
-      });
+    await _client.auth.signOut();
+    _me = null;
+    notifyListeners();
+  });
 
   @override
   Future<List<Player>> ladder() => _guard(() async {
-        final rows = await _client
-            .from('profiles')
-            .select()
-            .order('rating', ascending: false)
-            .order('games_played', ascending: false)
-            .order('display_name');
-        return rows.map(Player.fromRow).toList();
-      });
+    final rows = await _client
+        .from('profiles')
+        .select()
+        .order('rating', ascending: false)
+        .order('games_played', ascending: false)
+        .order('display_name');
+    return rows.map(Player.fromRow).toList();
+  });
 
   @override
   Future<Player> player(String id) => _guard(() async {
-        final row = await _client.from('profiles').select().eq('id', id).single();
-        return Player.fromRow(row);
-      });
+    final row = await _client.from('profiles').select().eq('id', id).single();
+    return Player.fromRow(row);
+  });
 
   @override
   Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) =>
       _guard(() async {
-        var query = _client.from('matches').select(_matchSelect);
+        var query = _client.from('matches').select(_matchSelect('matches'));
         if (playerId != null) {
           query = query.or('white_id.eq.$playerId,black_id.eq.$playerId');
         }
-        final rows =
-            await query.order('played_at', ascending: false).limit(limit);
+        final rows = await query
+            .order('played_at', ascending: false)
+            .limit(limit);
         return rows.map(ChessMatch.fromRow).toList();
       });
 
   @override
-  Future<ChessMatch> recordMatch({
+  Future<MatchRequest> requestMatch({
     required String opponentId,
     required PieceColor myColor,
     required Outcome myOutcome,
-  }) =>
-      _guard(() async {
-        final inserted = await _client.rpc<Map<String, dynamic>>(
-          'record_chess_match',
-          params: {
-            'p_opponent_id': opponentId,
-            'p_my_color': myColor.name,
-            'p_my_result': myOutcome.name,
-          },
-        );
-        final row = await _client
-            .from('matches')
-            .select(_matchSelect)
-            .eq('id', inserted['id'] as int)
-            .single();
-        await _loadMe();
-        _revision++;
-        notifyListeners();
-        return ChessMatch.fromRow(row);
-      });
+    required ClockSetting clock,
+  }) => _guard(() async {
+    final inserted = await _client.rpc<Map<String, dynamic>>(
+      'request_chess_match',
+      params: {
+        'p_opponent_id': opponentId,
+        'p_my_color': myColor.name,
+        'p_my_result': myOutcome.name,
+        'p_dgt_option': clock.preset.dgtOption,
+        'p_custom_base_minutes': clock.customBaseMinutes,
+        'p_custom_extra_seconds': clock.customExtraSeconds,
+      },
+    );
+    final row = await _client
+        .from('match_requests')
+        .select(_matchSelect('match_requests'))
+        .eq('id', inserted['id'] as int)
+        .single();
+    _revision++;
+    notifyListeners();
+    return MatchRequest.fromRow(row);
+  });
 
   @override
-  Future<void> updateProfile({String? displayName, String? design}) =>
-      _guard(() async {
-        final me = _me;
-        if (me == null) return;
-        final changes = <String, dynamic>{
-          'display_name': ?displayName?.trim(),
-          'design': ?design,
-        };
-        if (changes.isEmpty) return;
-        // Apply locally first so a design switch is instant.
-        _me = me.copyWith(displayName: displayName?.trim(), design: design);
-        notifyListeners();
-        try {
-          await _client.from('profiles').update(changes).eq('id', me.id);
-        } on PostgrestException catch (e) {
-          _me = me;
-          notifyListeners();
-          throw LadderException(
-            e.code == '23505' ? 'That name is taken. Try another.' : e.message,
-          );
-        }
-        if (displayName != null) {
-          _revision++;
-          notifyListeners();
-        }
-      });
+  Future<List<MatchRequest>> matchRequests() => _guard(() async {
+    // RLS only returns the signed-in member's own pending games.
+    final rows = await _client
+        .from('match_requests')
+        .select(_matchSelect('match_requests'))
+        .order('created_at', ascending: false);
+    return rows.map(MatchRequest.fromRow).toList();
+  });
+
+  @override
+  Future<ChessMatch?> respondToMatchRequest(
+    int requestId, {
+    required bool accept,
+  }) => _guard(() async {
+    final inserted = await _client.rpc<Map<String, dynamic>?>(
+      'respond_to_chess_match',
+      params: {'p_request_id': requestId, 'p_accept': accept},
+    );
+    final matchId = inserted?['id'] as int?;
+    final row = matchId == null
+        ? null
+        : await _client
+              .from('matches')
+              .select(_matchSelect('matches'))
+              .eq('id', matchId)
+              .single();
+    if (row != null) await _loadMe();
+    _revision++;
+    notifyListeners();
+    return row == null ? null : ChessMatch.fromRow(row);
+  });
+
+  @override
+  Future<void> updateDisplayName(String displayName) => _guard(() async {
+    final me = _me;
+    if (me == null) throw const LadderException('Sign in to continue.');
+    try {
+      // Returning the row makes an update that RLS silently skipped fail
+      // instead of pretending to save.
+      final row = await _client
+          .from('profiles')
+          .update({'display_name': displayName.trim()})
+          .eq('id', me.id)
+          .select()
+          .single();
+      _me = Player.fromRow(row);
+    } on PostgrestException catch (e) {
+      throw LadderException(
+        e.code == '23505' ? 'That name is taken. Try another.' : e.message,
+      );
+    }
+    _revision++;
+    notifyListeners();
+  });
 
   @override
   void dispose() {

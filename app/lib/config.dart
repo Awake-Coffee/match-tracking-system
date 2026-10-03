@@ -1,7 +1,7 @@
 /// Build-time configuration, passed with `--dart-define`.
 ///
 /// When either value is missing the app runs in demo mode with an in-memory
-/// ladder, which is how the designs can be previewed without a backend.
+/// ladder, so the app can be tried without a backend.
 class AppConfig {
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 
