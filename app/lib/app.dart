@@ -7,6 +7,7 @@ import 'design/design_spec.dart';
 import 'domain/models.dart';
 import 'ui/app_scope.dart';
 import 'ui/game.dart';
+import 'ui/install/installer.dart';
 import 'ui/navigation.dart';
 import 'ui/screens/history_screen.dart';
 import 'ui/screens/ladder_screen.dart';
@@ -23,10 +24,14 @@ class AwakeApp extends StatefulWidget {
     super.key,
     required this.repository,
     this.initialLocation = '/',
+    this.installer,
   });
 
   final LadderRepository repository;
   final String initialLocation;
+
+  /// Puts the app on the home screen; the browser's own when null.
+  final Installer? installer;
 
   @override
   State<AwakeApp> createState() => _AwakeAppState();
@@ -35,6 +40,7 @@ class AwakeApp extends StatefulWidget {
 typedef _Access = ({bool signedIn, bool recovering});
 
 class _AwakeAppState extends State<AwakeApp> {
+  late final Installer _installer = widget.installer ?? Installer.platform();
   late final GoRouter _router = _buildRouter();
 
   /// Whether the member was signed in at the last redirect, to tell signing
@@ -250,16 +256,19 @@ class _AwakeAppState extends State<AwakeApp> {
   Widget build(BuildContext context) {
     return AppScope(
       repository: _repo,
-      child: MaterialApp.router(
-        title: 'Awake Ladder',
-        debugShowCheckedModeBanner: false,
-        // Signed-out pages and dialogs wear chess, light or dark with the
-        // system.
-        theme: _themeOf(Game.chess.designFor(Brightness.light)),
-        darkTheme: _themeOf(Game.chess.designFor(Brightness.dark)),
-        routerConfig: _router,
-        builder: (context, child) =>
-            DesignScope(spec: _designOf(Game.chess, context), child: child!),
+      child: InstallScope(
+        installer: _installer,
+        child: MaterialApp.router(
+          title: 'Awake Ladder',
+          debugShowCheckedModeBanner: false,
+          // Signed-out pages and dialogs wear chess, light or dark with the
+          // system.
+          theme: _themeOf(Game.chess.designFor(Brightness.light)),
+          darkTheme: _themeOf(Game.chess.designFor(Brightness.dark)),
+          routerConfig: _router,
+          builder: (context, child) =>
+              DesignScope(spec: _designOf(Game.chess, context), child: child!),
+        ),
       ),
     );
   }

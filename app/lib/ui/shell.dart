@@ -7,6 +7,7 @@ import '../design/design_spec.dart';
 import '../domain/models.dart';
 import 'app_scope.dart';
 import 'game.dart';
+import 'install/install_banner.dart';
 import 'ladder/ladder_view.dart' show ordinal;
 import 'widgets/surface.dart' show SpecBackdrop;
 
@@ -163,6 +164,8 @@ class _AppShellState extends State<AppShell> {
             child: Column(
               children: [
                 _PhoneHeader(picker: picker),
+                // Phones only: on a laptop the app is a website.
+                const InstallBanner(),
                 Expanded(child: content),
               ],
             ),

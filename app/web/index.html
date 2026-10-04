@@ -22,11 +22,13 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Awake Ladder">
   <meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#ECE8E0" media="(prefers-color-scheme: light)">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <!-- Full-bleed: iOS rounds the corners itself. -->
+  <link rel="apple-touch-icon" href="icons/Icon-maskable-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
@@ -34,6 +36,66 @@
 
   <title>Awake Ladder</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Installing to the home screen. The browser offers its install dialog
+       through an event that can fire before Flutter has loaded, so it is
+       caught here and held for the app (lib/ui/install/installer_web.dart),
+       which opens it from its own button. iOS Safari has no such dialog: the
+       app explains Share, then Add to Home Screen. -->
+  <script>
+    window.awakeInstall = (function () {
+      var deferred = null;
+      var installed = false;
+      var listeners = [];
+      function changed() {
+        listeners.forEach(function (listener) { listener(); });
+      }
+      window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault();
+        deferred = event;
+        changed();
+      });
+      window.addEventListener('appinstalled', function () {
+        deferred = null;
+        installed = true;
+        changed();
+      });
+      return {
+        standalone: function () {
+          return installed ||
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.navigator.standalone === true;
+        },
+        canPrompt: function () { return deferred !== null; },
+        ios: function () {
+          var ua = window.navigator.userAgent;
+          // iPadOS reports itself as a Mac, but Macs have no touch screen.
+          return /iPhone|iPad|iPod/.test(ua) ||
+            (/Macintosh/.test(ua) && window.navigator.maxTouchPoints > 1);
+        },
+        prompt: function () {
+          if (deferred === null) return Promise.resolve('unavailable');
+          var event = deferred;
+          deferred = null;
+          event.prompt();
+          return event.userChoice.then(function (choice) {
+            changed();
+            return choice.outcome;
+          });
+        },
+        listen: function (listener) { listeners.push(listener); },
+      };
+    })();
+
+    // Makes the app installable. See sw.js.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (error) {
+          console.warn('Service worker not registered:', error);
+        });
+      });
+    }
+  </script>
 
   <!-- Loading screen: visible from the first byte until Flutter paints over it
        on its first frame (flutter-view is appended after it, so it sits on top). -->
