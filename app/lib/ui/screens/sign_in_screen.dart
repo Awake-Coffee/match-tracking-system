@@ -255,56 +255,57 @@ class _SignInScreenState extends State<SignInScreen> {
     final confirming = _confirming;
     final resetSent = _resetSent;
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Form(
-                key: _form,
-                child: AutofillGroup(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Awake Coffee',
-                        style: d.body(
-                          16,
-                          color: d.muted,
-                          weight: FontWeight.w600,
+      body: SpecBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Form(
+                  key: _form,
+                  child: AutofillGroup(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          d.caps('Awake Coffee'),
+                          style: d.display(14, color: d.muted),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Spelled out for newcomers.
-                      Text(
-                        'Chess, backgammon and Star Wars: Unlimited',
-                        style: d.display(authHeadlineSize),
-                      ),
-                      const SizedBox(height: 12),
-                      if (confirming != null)
-                        _ConfirmationPanel(
-                          email: confirming,
-                          onBack: _backToSignIn,
-                        )
-                      else if (resetSent != null)
-                        _ResetSentPanel(
-                          email: resetSent,
-                          onBack: _backToSignIn,
-                          onTryAgain: () => setState(() => _resetSent = null),
-                        )
-                      else if (_resetting || linkError != null)
-                        ..._resetFields(d, linkError)
-                      else
-                        ..._formFields(d),
-                      if (note != null) ...[
-                        const SizedBox(height: 24),
-                        SpecSurface(
-                          padding: const EdgeInsets.all(14),
-                          child: Text(note, style: d.body(14, color: d.muted)),
+                        const SizedBox(height: 4),
+                        // Spelled out for newcomers.
+                        Text(
+                          'Chess, backgammon and Star Wars: Unlimited',
+                          style: d.display(authHeadlineSize),
                         ),
+                        const SizedBox(height: 12),
+                        if (confirming != null)
+                          _ConfirmationPanel(
+                            email: confirming,
+                            onBack: _backToSignIn,
+                          )
+                        else if (resetSent != null)
+                          _ResetSentPanel(
+                            email: resetSent,
+                            onBack: _backToSignIn,
+                            onTryAgain: () => setState(() => _resetSent = null),
+                          )
+                        else if (_resetting || linkError != null)
+                          ..._resetFields(d, linkError)
+                        else
+                          ..._formFields(d),
+                        if (note != null) ...[
+                          const SizedBox(height: 24),
+                          SpecSurface(
+                            padding: const EdgeInsets.all(14),
+                            child: Text(
+                              note,
+                              style: d.body(14, color: d.muted),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),

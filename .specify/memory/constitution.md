@@ -30,7 +30,8 @@ depends on them.
 Screens read colors, type, shape and leaderboard layout from a
 `DesignSpec`. No screen hardcodes a color or font. Adding a design must
 not require touching screen logic. Each game has its own design (chess:
-Roast pawns, backgammon: Baize, Star Wars: Unlimited: Holotable).
+Counter, light or dark with the system setting; backgammon: Baize; Star
+Wars: Unlimited: Holotable).
 
 ### VI. Start narrow
 Chess, backgammon and Star Wars: Unlimited are supported, each in the

@@ -18,7 +18,8 @@ enum Game {
     shortLabel: 'Chess',
     mark: IconData(0x265E, fontFamily: _marksFont),
     routePrefix: '',
-    design: roastPawns,
+    design: counterDark,
+    lightDesign: counterLight,
     resultNoun: 'game',
     resultNounPlural: 'games',
   ),
@@ -50,6 +51,7 @@ enum Game {
     required this.mark,
     required this.routePrefix,
     required this.design,
+    this.lightDesign,
     required this.resultNoun,
     required this.resultNounPlural,
   });
@@ -64,7 +66,17 @@ enum Game {
   /// The game's mark on its tile in the game picker.
   final IconData mark;
   final String routePrefix;
+
+  /// The game's design, and its only one unless it has a [lightDesign].
   final DesignSpec design;
+
+  /// The design under the system's light setting, for a game whose look
+  /// follows it. Read both through [designFor].
+  final DesignSpec? lightDesign;
+
+  /// The design to show while the system is set to [brightness].
+  DesignSpec designFor(Brightness brightness) =>
+      brightness == Brightness.light ? lightDesign ?? design : design;
 
   /// What one result is called: a chess "game", a backgammon "match".
   final String resultNoun;

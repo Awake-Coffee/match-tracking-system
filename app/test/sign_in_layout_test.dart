@@ -12,8 +12,8 @@ import 'ladder_fixture.dart';
 /// Registers the sign-in screen's bundled faces so wrapping matches a phone.
 Future<void> _loadFonts() async {
   final faces = {
-    'Gloock': ['Gloock-Regular'],
-    'Karla': ['Karla-Regular', 'Karla-Medium', 'Karla-SemiBold', 'Karla-Bold'],
+    'Archivo Narrow': ['ArchivoNarrow-Medium', 'ArchivoNarrow-Bold'],
+    'Archivo': ['Archivo-Regular', 'Archivo-SemiBold', 'Archivo-Bold'],
   };
   for (final MapEntry(key: family, value: files) in faces.entries) {
     final loader = FontLoader(family);

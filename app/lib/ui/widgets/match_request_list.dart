@@ -324,6 +324,28 @@ class _PendingResultCardState extends State<_PendingResultCard> {
     final lead = r.incoming
         ? 'Confirm and you go to'
         : 'Once confirmed you go to';
+    final d = context.design;
+    if (d.leaders) {
+      // Read like a menu line: what you do, a dotted leader, where you land.
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: LeaderRow(
+              lead: Text(lead, style: style),
+              color: d.muted,
+              baselineGap: 5,
+            ),
+          ),
+          Text(
+            '${impact.after}',
+            style: d.number(17, weight: FontWeight.w700, displayFace: true),
+          ),
+          const SizedBox(width: 8),
+          DeltaText(impact.delta),
+        ],
+      );
+    }
     // One paragraph, so it wraps as a sentence and reads as one.
     return Text.rich(
       TextSpan(
@@ -349,7 +371,7 @@ class _PendingResultCardState extends State<_PendingResultCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(r.headline, style: d.body(16, weight: FontWeight.w700)),
+          Text(r.headline, style: d.strong(16)),
           const SizedBox(height: 2),
           Text(
             r.rated ? r.detail : '${r.detail} · Unrated',

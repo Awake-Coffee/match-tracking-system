@@ -4,21 +4,58 @@ import 'design_spec.dart';
 
 // WCAG contrast is enforced by test/design_contrast_test.dart.
 
-const roastPawns = DesignSpec(
+/// Counter, the chess design: the café's letterboard. White capitals on
+/// ridged black felt, ratings at the end of dotted leaders like prices on a
+/// menu. There is no accent color: emphasis is the board inverted, ink
+/// behind background-colored letters. Follows the system's light or dark
+/// setting; [counterLight] is the same board in white felt.
+const counterDark = DesignSpec(
   brightness: Brightness.dark,
-  background: Color(0xFF2A1810),
-  surface: Color(0xFF3E2619),
-  ink: Color(0xFFF7EEE1),
-  muted: Color(0xFFBFA58A),
-  accent: Color(0xFFD69A52),
-  onAccent: Color(0xFF2A1810),
-  win: Color(0xFFA8CF9B),
-  loss: Color(0xFFE9A196),
-  line: Color(0xFF6B4A33),
-  highlight: Color(0xFF4A2E1E),
-  displayFamily: 'Gloock',
-  bodyFamily: 'Karla',
-  radius: 2,
+  background: Color(0xFF161514),
+  surface: Color(0xFF201E1B),
+  ink: Color(0xFFF2EDE4),
+  muted: Color(0xFFA9A196),
+  accent: Color(0xFFF2EDE4),
+  onAccent: Color(0xFF161514),
+  win: Color(0xFF9BD3A0),
+  loss: Color(0xFFF0A08C),
+  line: Color(0xFF4A463F),
+  highlight: Color(0xFF2B2925),
+  displayFamily: 'Archivo Narrow',
+  bodyFamily: 'Archivo',
+  displayWeight: FontWeight.w700,
+  displayTracking: 0.06,
+  allCaps: true,
+  grain: Color(0x09FFFFFF),
+  textTabs: true,
+  labelsInDisplayFace: true,
+  leaders: true,
+  radius: 0,
+);
+
+/// Counter on white felt, for the system's light setting.
+const counterLight = DesignSpec(
+  brightness: Brightness.light,
+  background: Color(0xFFECE8E0),
+  surface: Color(0xFFE2DDD3),
+  ink: Color(0xFF1A1814),
+  muted: Color(0xFF5E584F),
+  accent: Color(0xFF1A1814),
+  onAccent: Color(0xFFECE8E0),
+  win: Color(0xFF2E6B3A),
+  loss: Color(0xFF9E3219),
+  line: Color(0xFFC4BDB0),
+  highlight: Color(0xFFDCD6CB),
+  displayFamily: 'Archivo Narrow',
+  bodyFamily: 'Archivo',
+  displayWeight: FontWeight.w700,
+  displayTracking: 0.06,
+  allCaps: true,
+  grain: Color(0x0D1A1814),
+  textTabs: true,
+  labelsInDisplayFace: true,
+  leaders: true,
+  radius: 0,
 );
 
 /// Baize, the backgammon design: a felt table where the ladder is a race

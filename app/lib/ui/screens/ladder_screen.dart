@@ -7,8 +7,8 @@ import '../../domain/models.dart';
 import '../app_scope.dart';
 import '../game.dart';
 import '../ladder/baize_ladder.dart';
+import '../ladder/counter_ladder.dart';
 import '../ladder/ladder_view.dart';
-import '../ladder/pawns_ladder.dart';
 import '../ladder/route_ladder.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_request_list.dart';
@@ -202,7 +202,7 @@ class ModeLadderScreen extends StatelessWidget {
               ),
             ),
             switch (game) {
-              Game.chess => PawnsLadder(data: ladder),
+              Game.chess => CounterLadder(data: ladder),
               Game.backgammon => BaizeLadder(data: ladder),
               Game.swu => RouteLadder(data: ladder),
             },

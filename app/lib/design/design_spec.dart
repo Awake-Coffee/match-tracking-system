@@ -22,6 +22,12 @@ class DesignSpec {
     this.radius = 8,
     this.lineWidth = 1,
     this.chaseDisplaySize,
+    this.displayTracking = 0,
+    this.allCaps = false,
+    this.grain,
+    this.textTabs = false,
+    this.labelsInDisplayFace = false,
+    this.leaders = false,
   });
 
   final Brightness brightness;
@@ -49,6 +55,32 @@ class DesignSpec {
   /// the chase line then uses the display face at this size.
   final double? chaseDisplaySize;
 
+  /// Letter spacing of the display face, as a fraction of its size.
+  final double displayTracking;
+
+  /// Whether headings set in capitals, like letters on a letterboard. Read
+  /// through [caps], so a design without it keeps the text as written.
+  final bool allCaps;
+
+  /// Fine horizontal lines over [background], like the ridges of letterboard
+  /// felt; null paints the background flat. See SpecBackdrop.
+  final Color? grain;
+
+  /// Whether the bottom tabs are words alone, underlined when selected,
+  /// instead of an icon over a label.
+  final bool textTabs;
+
+  /// Whether button labels and strong text (names, headlines) use the
+  /// display face instead of the body face.
+  final bool labelsInDisplayFace;
+
+  /// Whether a name and its number are joined by a dotted leader, like a
+  /// menu's dish and price. See DottedLeader.
+  final bool leaders;
+
+  /// [text] as this design sets headings.
+  String caps(String text) => allCaps ? text.toUpperCase() : text;
+
   TextStyle display(
     double size, {
     Color? color,
@@ -61,8 +93,25 @@ class DesignSpec {
       fontWeight: weight ?? displayWeight,
       color: color ?? ink,
       height: height ?? 1.1,
+      letterSpacing: displayTracking == 0 ? null : size * displayTracking,
     ),
   );
+
+  /// Button labels, in the face [labelsInDisplayFace] picks.
+  TextStyle button(double size) => labelsInDisplayFace
+      ? display(size, weight: FontWeight.w700)
+      : body(size, weight: FontWeight.w700);
+
+  /// Names and headlines that stand out from body text, in the face
+  /// [labelsInDisplayFace] picks. The display face runs narrower, so it
+  /// sets a little larger, and untracked: these sit inside sentences.
+  TextStyle strong(double size, {Color? color}) => labelsInDisplayFace
+      ? display(
+          size + 2,
+          color: color,
+          weight: FontWeight.w700,
+        ).copyWith(letterSpacing: 0)
+      : body(size, color: color, weight: FontWeight.w700);
 
   TextStyle body(
     double size, {
@@ -186,7 +235,7 @@ class DesignSpec {
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: buttonShape(),
-          textStyle: body(16, weight: FontWeight.w700),
+          textStyle: button(16),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -197,7 +246,7 @@ class DesignSpec {
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 24),
           shape: buttonShape(),
-          textStyle: body(16, weight: FontWeight.w700),
+          textStyle: button(16),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -210,14 +259,14 @@ class DesignSpec {
       chipTheme: ChipThemeData(
         shape: buttonShape(),
         side: side,
-        labelStyle: body(14, weight: FontWeight.w600),
+        labelStyle: button(14),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           shape: WidgetStatePropertyAll(buttonShape()),
           side: WidgetStatePropertyAll(side),
           minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
-          textStyle: WidgetStatePropertyAll(body(15, weight: FontWeight.w600)),
+          textStyle: WidgetStatePropertyAll(button(15)),
           backgroundColor: WidgetStateProperty.resolveWith(
             (s) =>
                 s.contains(WidgetState.selected) ? accent : Colors.transparent,

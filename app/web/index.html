@@ -24,7 +24,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Awake Ladder">
-  <meta name="theme-color" content="#2A1810">
+  <meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ECE8E0" media="(prefers-color-scheme: light)">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
@@ -38,12 +39,16 @@
        on its first frame (flutter-view is appended after it, so it sits on top). -->
   <style>
     @font-face {
-      font-family: Karla;
-      font-weight: 600;
+      font-family: "Archivo Narrow";
+      font-weight: 700;
       font-display: block;
-      src: url("assets/assets/fonts/Karla-SemiBold.ttf");
+      src: url("assets/assets/fonts/ArchivoNarrow-Bold.ttf");
     }
-    body { margin: 0; background: #2A1810; }
+    /* The chess design, Counter, follows the system light or dark setting. */
+    body { margin: 0; background: #161514; color: #F2EDE4; }
+    @media (prefers-color-scheme: light) {
+      body { background: #ECE8E0; color: #1A1814; }
+    }
     #splash {
       position: fixed;
       inset: 0;
@@ -53,12 +58,11 @@
       justify-content: center;
       gap: 18px;
     }
-    #splash svg { width: 56px; height: 72px; fill: #D69A52; animation: breathe 1.6s ease-in-out infinite; }
+    #splash svg { width: 56px; height: 72px; fill: currentColor; animation: breathe 1.6s ease-in-out infinite; }
     #splash span {
-      font: 600 15px Karla, system-ui, sans-serif;
-      letter-spacing: .14em;
+      font: 700 15px "Archivo Narrow", system-ui, sans-serif;
+      letter-spacing: .22em;
       text-transform: uppercase;
-      color: #BFA58A;
     }
     @keyframes breathe {
       0%, 100% { opacity: .45; transform: translateY(2px); }

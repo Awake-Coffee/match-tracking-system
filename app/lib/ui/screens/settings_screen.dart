@@ -178,13 +178,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: d.loss,
-                      side: BorderSide(color: d.loss),
+                  // Gives way to the spinner on narrow phones.
+                  Flexible(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: d.loss,
+                        side: BorderSide(color: d.loss),
+                      ),
+                      onPressed: _deleting ? null : _deleteAccount,
+                      child: const Text('Delete account'),
                     ),
-                    onPressed: _deleting ? null : _deleteAccount,
-                    child: const Text('Delete account'),
                   ),
                   if (_deleting) ...[
                     const SizedBox(width: 16),

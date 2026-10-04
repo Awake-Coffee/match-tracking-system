@@ -23,7 +23,8 @@ void aa(String what, Color fg, Color bg, [double min = 4.5]) {
 void main() {
   // SC-005 / SC-104 / SC-203: every design meet WCAG AA for the text they draw.
   for (final (name, d) in [
-    ('Roast pawns', roastPawns),
+    ('Counter dark', counterDark),
+    ('Counter light', counterLight),
     ('Baize', baize),
     ('Holotable', holotable),
     ('Holotable ground', holotableGround),
@@ -42,6 +43,15 @@ void main() {
       aa('badge count on loss', d.onAccent, d.loss);
       aa('chart line on background', d.accent, d.background, 3);
     });
+  }
+
+  // Counter inverts the board for your own line and the selected control.
+  for (final (name, d) in [
+    ('Counter dark', counterDark),
+    ('Counter light', counterLight),
+  ]) {
+    aa('$name inverted line', d.background, d.ink);
+    aa('$name muted on highlight', d.muted, d.highlight);
   }
 
   // Baize's rank chips sit on the opposite point color.
