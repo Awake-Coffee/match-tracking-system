@@ -265,6 +265,10 @@ abstract class GameReport {
 String joinedName(Map<String, dynamic> row, String side) =>
     (row[side] as Map?)?['display_name'] as String? ?? '';
 
+/// A nullable timestamp column as local time.
+DateTime? parseTime(String? value) =>
+    value == null ? null : DateTime.parse(value).toLocal();
+
 /// A confirmed chess game, backgammon or SWU match, as a player's rating line
 /// sees it. Unrated ones change nothing, so their after equals their before.
 abstract interface class RatedGame {
@@ -326,6 +330,11 @@ class ChessMatch extends GameReport implements RatedGame {
       ratingBeforeFor(playerId) + deltaFor(playerId);
 }
 
+/// Where a reported result stands. Declined ones stay until the reporter
+/// dismisses them, so the reporter learns the answer instead of watching the
+/// request vanish.
+enum RequestStatus { pending, declined }
+
 /// A reported game that only counts once the other player confirms it.
 class MatchRequest extends GameReport {
   const MatchRequest({
@@ -339,6 +348,8 @@ class MatchRequest extends GameReport {
     super.rated,
     required this.requestedBy,
     required this.createdAt,
+    this.status = RequestStatus.pending,
+    this.respondedAt,
   });
 
   factory MatchRequest.fromRow(Map<String, dynamic> row) => MatchRequest(
@@ -352,17 +363,46 @@ class MatchRequest extends GameReport {
     rated: row['rated'] as bool,
     requestedBy: row['requested_by'] as String,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    status: RequestStatus.values.byName(row['status'] as String),
+    respondedAt: parseTime(row['responded_at'] as String?),
   );
 
   final int id;
   final String requestedBy;
   final DateTime createdAt;
+  final RequestStatus status;
+
+  /// When the opponent declined; null while pending.
+  final DateTime? respondedAt;
 
   @override
   ClockSetting get clock => super.clock!;
 
-  /// Whether [playerId] is the one who has to confirm or decline.
-  bool awaits(String playerId) => involves(playerId) && playerId != requestedBy;
+  /// Whether [playerId] is the one who has to confirm or decline it now.
+  bool awaits(String playerId) =>
+      status == RequestStatus.pending &&
+      involves(playerId) &&
+      playerId != requestedBy;
+
+  /// Whether [playerId] reported this and the opponent said no.
+  bool declinedFor(String playerId) =>
+      status == RequestStatus.declined && playerId == requestedBy;
+
+  /// This request after the opponent declined it at [at].
+  MatchRequest declined(DateTime at) => MatchRequest(
+    id: id,
+    whiteId: whiteId,
+    blackId: blackId,
+    whiteName: whiteName,
+    blackName: blackName,
+    result: result,
+    clock: clock,
+    rated: rated,
+    requestedBy: requestedBy,
+    createdAt: createdAt,
+    status: RequestStatus.declined,
+    respondedAt: at,
+  );
 }
 
 /// The board result implied by one player's color and outcome.

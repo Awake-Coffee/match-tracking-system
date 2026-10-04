@@ -99,8 +99,9 @@ abstract class LadderRepository extends ChangeNotifier {
     bool rated = true,
   });
 
-  /// Games involving the signed-in member that wait for confirmation,
-  /// newest first.
+  /// Games involving the signed-in member that wait for confirmation, newest
+  /// first, plus the ones they reported that the opponent declined, until
+  /// they [dismissMatchRequest].
   Future<List<MatchRequest>> matchRequests();
 
   /// The opponent accepts ([accept]) and gets the confirmed game back, or
@@ -109,6 +110,9 @@ abstract class LadderRepository extends ChangeNotifier {
     int requestId, {
     required bool accept,
   });
+
+  /// The reporter clears a game the opponent declined.
+  Future<void> dismissMatchRequest(int requestId);
 
   /// Every member, best backgammon rating first.
   Future<List<Player>> backgammonLadder();
@@ -131,7 +135,8 @@ abstract class LadderRepository extends ChangeNotifier {
   });
 
   /// Matches involving the signed-in member that wait for confirmation,
-  /// newest first.
+  /// newest first, plus the ones they reported that the opponent declined,
+  /// until they [dismissBackgammonMatchRequest].
   Future<List<BackgammonMatchRequest>> backgammonMatchRequests();
 
   /// The opponent accepts ([accept]) and gets the confirmed match back, or
@@ -140,6 +145,9 @@ abstract class LadderRepository extends ChangeNotifier {
     int requestId, {
     required bool accept,
   });
+
+  /// The reporter clears a match the opponent declined.
+  Future<void> dismissBackgammonMatchRequest(int requestId);
 
   /// Every member, best Star Wars: Unlimited rating first.
   Future<List<Player>> swuLadder();
@@ -158,7 +166,8 @@ abstract class LadderRepository extends ChangeNotifier {
   });
 
   /// Matches involving the signed-in member that wait for confirmation,
-  /// newest first.
+  /// newest first, plus the ones they reported that the opponent declined,
+  /// until they [dismissSwuMatchRequest].
   Future<List<SwuMatchRequest>> swuMatchRequests();
 
   /// The opponent accepts ([accept]) and gets the confirmed match back, or
@@ -167,6 +176,9 @@ abstract class LadderRepository extends ChangeNotifier {
     int requestId, {
     required bool accept,
   });
+
+  /// The reporter clears a match the opponent declined.
+  Future<void> dismissSwuMatchRequest(int requestId);
 
   Future<void> updateDisplayName(String displayName);
 }

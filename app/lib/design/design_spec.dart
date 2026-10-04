@@ -243,6 +243,13 @@ class DesignSpec {
           borderSide: BorderSide(color: loss, width: lineWidth + 1.5),
         ),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: borderRadius, side: side),
+        titleTextStyle: display(22),
+        contentTextStyle: body(15),
+      ),
       badgeTheme: BadgeThemeData(
         backgroundColor: loss,
         textColor: onAccent,

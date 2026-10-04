@@ -129,6 +129,95 @@ void main() {
     expect(repo.me!.gamesPlayed, ana.gamesPlayed);
   });
 
+  test(
+    'a declined game stays for the reporter until they dismiss it',
+    () async {
+      final repo = await anaAndBogdan();
+      final ana = repo.me!;
+      final request = (await repo.matchRequests()).single;
+      final bogdanId = request.requestedBy;
+      await repo.respondToMatchRequest(request.id, accept: false);
+
+      // The decliner has nothing left to answer and can't answer it again.
+      expect(await repo.matchRequests(), isEmpty);
+      await expectLater(
+        repo.respondToMatchRequest(request.id, accept: false),
+        throwsA(isA<LadderException>()),
+      );
+      await expectLater(
+        repo.dismissMatchRequest(request.id),
+        throwsA(isA<LadderException>()),
+      );
+
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      final declined = (await repo.matchRequests()).single;
+      expect(declined.status, RequestStatus.declined);
+      expect(declined.respondedAt, isNotNull);
+      expect(declined.declinedFor(bogdanId), isTrue);
+      expect(declined.awaits(bogdanId), isFalse);
+      expect(declined.awaits(ana.id), isFalse);
+      await expectLater(
+        repo.respondToMatchRequest(request.id, accept: true),
+        throwsA(isA<LadderException>()),
+        reason: 'a declined game can no longer be confirmed',
+      );
+
+      await repo.dismissMatchRequest(request.id);
+      expect(await repo.matchRequests(), isEmpty);
+      expect((await repo.player(ana.id)).rating, ana.rating);
+    },
+  );
+
+  test(
+    'a declined backgammon or SWU match is dismissed the same way',
+    () async {
+      final repo = await anaAndBogdanWithSwu();
+      final bgRequest = (await repo.backgammonMatchRequests()).single;
+      final swuRequest = (await repo.swuMatchRequests()).single;
+      await repo.respondToBackgammonMatchRequest(bgRequest.id, accept: false);
+      await repo.respondToSwuMatchRequest(swuRequest.id, accept: false);
+      expect(await repo.backgammonMatchRequests(), isEmpty);
+      expect(await repo.swuMatchRequests(), isEmpty);
+
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      final bogdanId = repo.me!.id;
+      final bg = (await repo.backgammonMatchRequests()).single;
+      final swu = (await repo.swuMatchRequests()).single;
+      expect(bg.declinedFor(bogdanId) && !bg.awaits(bogdanId), isTrue);
+      expect(swu.declinedFor(bogdanId) && !swu.awaits(bogdanId), isTrue);
+
+      await repo.dismissBackgammonMatchRequest(bg.id);
+      await repo.dismissSwuMatchRequest(swu.id);
+      expect(await repo.backgammonMatchRequests(), isEmpty);
+      expect(await repo.swuMatchRequests(), isEmpty);
+      await expectLater(
+        repo.dismissSwuMatchRequest(swu.id),
+        throwsA(isA<LadderException>()),
+      );
+    },
+  );
+
+  test('a pending game can only be withdrawn, not dismissed', () async {
+    final repo = await anaAndBogdan();
+    final ana = repo.me!;
+    final mine = await repo.requestMatch(
+      opponentId: (await repo.matchRequests()).single.requestedBy,
+      myColor: PieceColor.white,
+      myOutcome: Outcome.win,
+      clock: const ClockSetting(TimeControl.sudden5),
+    );
+    await expectLater(
+      repo.dismissMatchRequest(mine.id),
+      throwsA(isA<LadderException>()),
+    );
+    await repo.respondToMatchRequest(mine.id, accept: false);
+    expect(
+      (await repo.matchRequests()).where((r) => r.requestedBy == ana.id),
+      isEmpty,
+      reason: 'withdrawing deletes outright',
+    );
+  });
+
   test('custom presets need the time the players set', () async {
     final repo = await anaAndBogdan();
     final opponentId = (await repo.ladder())

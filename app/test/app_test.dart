@@ -1514,16 +1514,121 @@ void main() {
       expect(repo.me!.swu.rating, 998);
     });
 
+    testWidgets('declining asks first and can be called off', (tester) async {
+      _phone(tester);
+      final repo = await anaAndBogdan();
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Decline'));
+      await tester.pumpAndSettle();
+      expect(find.text('Decline Bogdan\'s result?'), findsOneWidget);
+      expect(
+        find.text('Bogdan will be told, and the result won\'t count.'),
+        findsOneWidget,
+      );
+      expect((await repo.matchRequests()).single.awaits(repo.me!.id), isTrue);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Keep it'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Bogdan says you lost'), findsOneWidget);
+      expect((await repo.matchRequests()).single.awaits(repo.me!.id), isTrue);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Decline'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Decline'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Bogdan says you lost'), findsNothing);
+      expect(
+        _awaitingBadge('1'),
+        findsNothing,
+        reason: 'nothing left to answer',
+      );
+      expect(repo.me!.rating, 1020, reason: 'declined results move no rating');
+    });
+
+    testWidgets('the reporter sees the decline until they dismiss it', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdan();
+      final request = (await repo.matchRequests()).single;
+      await repo.respondToMatchRequest(request.id, accept: false);
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ana declined your game'), findsOneWidget);
+      expect(find.textContaining('You had white, you won'), findsOneWidget);
+      expect(find.text('Waiting for Ana to confirm'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Withdraw'), findsNothing);
+      expect(
+        _awaitingBadge('1'),
+        findsNothing,
+        reason: 'only incoming pending results are counted',
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana declined your game'), findsNothing);
+      expect(await repo.matchRequests(), isEmpty);
+    });
+
+    testWidgets('a declined backgammon or SWU match says so too', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdanWithSwu();
+      for (final request in await repo.backgammonMatchRequests()) {
+        await repo.respondToBackgammonMatchRequest(request.id, accept: false);
+      }
+      for (final request in await repo.swuMatchRequests()) {
+        await repo.respondToSwuMatchRequest(request.id, accept: false);
+      }
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Backgammon'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana declined your match'), findsOneWidget);
+      expect(find.text('Match to 3, you won 3-1'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana declined your match'), findsNothing);
+
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Star Wars: Unlimited'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana declined your match'), findsOneWidget);
+      expect(find.text('Best of three, you won 2-0'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana declined your match'), findsNothing);
+    });
+
     testWidgets('a card says how long ago it was reported', (tester) async {
       _phone(tester);
       PendingResult card(Duration age) => PendingResult(
         headline: 'Bogdan says you lost',
         detail: 'You had white',
+        opponentName: 'Bogdan',
         rated: true,
         incoming: true,
         reportedAt: DateTime.now().subtract(age),
         impact: (after: 984, delta: -16),
         respond: ({required accept}) async => null,
+        dismiss: () async {},
       );
       await tester.pumpWidget(
         MaterialApp(
