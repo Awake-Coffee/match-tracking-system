@@ -60,14 +60,16 @@ applies it to production.
 
 ## CI/CD
 
-- **CI** (`.github/workflows/ci.yml`, every PR and push to `main`): Flutter
-  analyze and tests, the SQL tests, and on PRs a dry run listing the
-  migrations that would be applied to production.
-- **Deploy Supabase** (`.github/workflows/deploy-supabase.yml`, pushes to
-  `main` that touch `supabase/migrations/` or `supabase/auth.json`, or run by
-  hand): runs the SQL tests, `supabase db push`, then sets the auth Site URL
-  and Redirect URLs from `supabase/auth.json`.
-- **App**: Vercel builds and deploys every push (see Build).
+All of it lives in `.github/workflows/ci.yml`:
+
+- **Every PR and push to `main`**: Flutter analyze and tests, the SQL tests,
+  and on PRs a dry run listing the migrations that would be applied to
+  production. Vercel deploys a preview of every PR branch.
+- **Pushes to `main`** (or run by hand), once the tests pass: builds the app
+  and uploads it to Vercel without serving it, runs `supabase db push`, sets
+  the auth Site URL and Redirect URLs from `supabase/auth.json`, then promotes
+  the new app. The live app never runs against a schema it doesn't know, so
+  Vercel's own deploys of `main` are off (`vercel.json`).
 
 The deploy needs these repository settings (Settings → Secrets and
 variables → Actions):
@@ -77,6 +79,9 @@ variables → Actions):
 | `SUPABASE_DB_URL` | secret | Session pooler connection string (Supabase → Connect), with the database password filled in |
 | `SUPABASE_ACCESS_TOKEN` | secret | Personal access token from supabase.com/dashboard/account/tokens |
 | `SUPABASE_PROJECT_REF` | variable | The `<project-ref>` in `https://<project-ref>.supabase.co` |
+| `VERCEL_TOKEN` | secret | Token from vercel.com/account/tokens, scoped to the team |
+| `VERCEL_ORG_ID` | variable | Team ID (`team_…`) |
+| `VERCEL_PROJECT_ID` | variable | Project ID (`prj_…`) |
 
 ## Build
 
@@ -86,7 +91,8 @@ cd app && flutter build web --release --dart-define-from-file=../.env
 
 The static site lands in `app/build/web/`.
 
-Vercel builds every push with `scripts/vercel-build.sh` (see `vercel.json`),
+Vercel previews and the production deploy both build with
+`scripts/vercel-build.sh` (see `vercel.json`),
 which installs Flutter and passes the project's `SUPABASE_URL` and
 `SUPABASE_PUBLISHABLE_KEY` environment variables to `flutter build`.
 Production builds fail if either is missing.
