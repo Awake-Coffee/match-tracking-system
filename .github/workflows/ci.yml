@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Never cancel main: a cancelled deploy can stop between migrating and promoting.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  app:
+    name: Flutter analyze and test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6 # matches app/.metadata and scripts/vercel-build.sh
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  database:
+    name: SQL tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      # The runner image ships PostgreSQL server binaries; run.sh finds them.
+      - run: supabase/tests/run.sh
+
+  pending-migrations:
+    name: Pending migrations
+    # Secrets aren't available to pull requests from forks.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: List migrations this PR would apply to production
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice::SUPABASE_DB_URL is not set; skipping."
+            exit 0
+          fi
+          npx --yes supabase@2.119.0 db push --dry-run --db-url "$SUPABASE_DB_URL"
+
+  deploy:
+    name: Deploy to production
+    # Only after the app and SQL tests pass, so a red main never ships.
+    needs: [app, database]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    environment: supabase-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check settings
+        run: |
+          missing=0
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_URL SUPABASE_PROJECT_REF VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then echo "::error::$name is not set"; missing=1; fi
+          done
+          exit $missing
+
+      # The app and the database ship in this order so the live app never runs
+      # against a schema it doesn't know: build and upload the new app without
+      # serving it, migrate, then switch traffic to it in one alias swap.
+      - name: Build app
+        run: |
+          npx --yes vercel@62.2.0 pull --yes --environment=production --token "$VERCEL_TOKEN"
+          npx --yes vercel@62.2.0 build --prod --token "$VERCEL_TOKEN"
+
+      - name: Upload app without serving it
+        id: app
+        run: |
+          url=$(npx --yes vercel@62.2.0 deploy --prebuilt --prod --skip-domain --token "$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Apply migrations
+        run: npx --yes supabase@2.119.0 db push --db-url "$SUPABASE_DB_URL" --yes
+
+      - name: Apply auth URL settings
+        # PATCH only changes the fields in auth.json; the rest of the auth
+        # config is left as it is in the dashboard.
+        run: |
+          curl -sS --fail-with-body -o /dev/null -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @supabase/auth.json \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
+          echo "Auth URLs set from supabase/auth.json"
+
+      # Straight to the API: `vercel promote` looks up the token's user first,
+      # which 404s for the non-user token CI deploys with.
+      - name: Serve the new app
+        env:
+          APP_URL: ${{ steps.app.outputs.url }}
+        run: |
+          api="https://api.vercel.com"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          deployment_id=$(curl -sS --fail-with-body -H "$auth" \
+            "$api/v13/deployments/${APP_URL#https://}?teamId=$VERCEL_ORG_ID" | jq -r .id)
+          curl -sS --fail-with-body -o /dev/null -X POST -H "$auth" \
+            "$api/v10/projects/$VERCEL_PROJECT_ID/promote/$deployment_id?teamId=$VERCEL_ORG_ID"
+          echo "Promoted $APP_URL ($deployment_id)"

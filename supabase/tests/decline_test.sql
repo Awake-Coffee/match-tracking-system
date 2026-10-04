@@ -12,124 +12,87 @@ set role authenticated;
 
 -- Ana reports one result in each game; Bo declines them all.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', false);
-select public.request_chess_match(
-  '00000000-0000-0000-0000-0000000000b6', 'white', 'win', 1::smallint, null, null, true);
-select public.request_backgammon_match(
-  '00000000-0000-0000-0000-0000000000b6', 5::smallint, 5::smallint, 2::smallint, true);
-select public.request_swu_match(
-  '00000000-0000-0000-0000-0000000000b6', 2::smallint, 0::smallint, true);
+select public.request_match(
+  'chess', '00000000-0000-0000-0000-0000000000b6', 1, 0, true, 'white', 1::smallint);
+select public.request_match('backgammon', '00000000-0000-0000-0000-0000000000b6', 5, 2);
+select public.request_match('swu', '00000000-0000-0000-0000-0000000000b6', 2, 0);
 
 -- Bo can't read a declined request afterwards, so remember the ids.
-select set_config('test.chess_id', (select max(id) from public.match_requests)::text, false),
-       set_config('test.bg_id', (select max(id) from public.backgammon_match_requests)::text, false),
-       set_config('test.swu_id', (select max(id) from public.swu_match_requests)::text, false);
+select set_config('test.ids', (select string_agg(id::text, ',' order by id)
+  from public.match_requests), false);
 
 do $$
 begin
-  assert (select bool_and(status = 'pending' and responded_at is null) from public.match_requests),
-    'chess request starts pending';
-  assert (select bool_and(status = 'pending' and responded_at is null) from public.backgammon_match_requests),
-    'backgammon request starts pending';
-  assert (select bool_and(status = 'pending' and responded_at is null) from public.swu_match_requests),
-    'SWU request starts pending';
+  assert (select count(*) = 3 and bool_and(status = 'pending' and responded_at is null)
+    from public.match_requests), 'requests start pending in every game';
 end $$;
 
 -- The reporter can't dismiss what is still pending.
 do $$
 begin
-  perform public.dismiss_declined_chess_match((select max(id) from public.match_requests));
-  assert false, 'dismissing a pending chess request should fail';
+  perform public.dismiss_declined_match((select max(id) from public.match_requests));
+  assert false, 'dismissing a pending request should fail';
 exception when sqlstate 'P0002' then null;
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b6', false);
-select public.respond_to_chess_match((select max(id) from public.match_requests), false);
-select public.respond_to_backgammon_match((select max(id) from public.backgammon_match_requests), false);
-select public.respond_to_swu_match((select max(id) from public.swu_match_requests), false);
+select public.respond_to_match(id, false) from public.match_requests order by id;
 
 -- Bo has no use for a request he declined: only Ana can still read it.
 do $$
 begin
-  assert not exists (select 1 from public.match_requests)
-    and not exists (select 1 from public.backgammon_match_requests)
-    and not exists (select 1 from public.swu_match_requests),
+  assert not exists (select 1 from public.match_requests),
     'the respondent no longer sees what they declined';
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', false);
 do $$
 begin
-  assert (select count(*) = 1 and bool_and(status = 'declined' and responded_at is not null)
-    from public.match_requests), 'chess request kept as declined';
-  assert (select count(*) = 1 and bool_and(status = 'declined' and responded_at is not null)
-    from public.backgammon_match_requests), 'backgammon request kept as declined';
-  assert (select count(*) = 1 and bool_and(status = 'declined' and responded_at is not null)
-    from public.swu_match_requests), 'SWU request kept as declined';
-  assert not exists (select 1 from public.matches where white_id = '00000000-0000-0000-0000-0000000000a6')
-    and not exists (select 1 from public.backgammon_matches where winner_id = '00000000-0000-0000-0000-0000000000a6')
-    and not exists (select 1 from public.swu_matches where reporter_id = '00000000-0000-0000-0000-0000000000a6'),
+  assert (select count(distinct match_type) = 3
+      and bool_and(status = 'declined' and responded_at is not null)
+    from public.match_requests), 'requests kept as declined in every game';
+  assert not exists (select 1 from public.matches
+    where '00000000-0000-0000-0000-0000000000a6' in (player1_id, player2_id)),
     'declining records no result';
-  assert (select rating = 1000 and bg_rating = 1500 and swu_rating = 1000 and games_played = 0
-    from public.profiles where display_name = 'Decline Ana'), 'declining moves no rating';
+  assert not exists (select 1 from public.ratings
+    where player_id = '00000000-0000-0000-0000-0000000000a6'
+      and (rating <> public.starting_rating(match_type) or played > 0)),
+    'declining moves no rating';
 end $$;
 
--- A declined request can't be answered again, by either player.
+-- A declined request can't be answered again, nor dismissed by the one who
+-- declined it.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b6', false);
 do $$
+declare
+  id bigint;
 begin
-  perform public.respond_to_chess_match(current_setting('test.chess_id')::bigint, true);
-  assert false, 'confirming a declined chess request should fail';
-exception when sqlstate 'P0002' then null;
-end $$;
-do $$
-begin
-  perform public.respond_to_backgammon_match(current_setting('test.bg_id')::bigint, true);
-  assert false, 'confirming a declined backgammon request should fail';
-exception when sqlstate 'P0002' then null;
-end $$;
-do $$
-begin
-  perform public.respond_to_swu_match(current_setting('test.swu_id')::bigint, true);
-  assert false, 'confirming a declined SWU request should fail';
-exception when sqlstate 'P0002' then null;
-end $$;
-
--- Only the reporter can dismiss it.
-do $$
-begin
-  perform public.dismiss_declined_chess_match(current_setting('test.chess_id')::bigint);
-  assert false, 'the respondent should not dismiss a chess request';
-exception when sqlstate 'P0002' then null;
-end $$;
-do $$
-begin
-  perform public.dismiss_declined_backgammon_match(current_setting('test.bg_id')::bigint);
-  assert false, 'the respondent should not dismiss a backgammon request';
-exception when sqlstate 'P0002' then null;
-end $$;
-do $$
-begin
-  perform public.dismiss_declined_swu_match(current_setting('test.swu_id')::bigint);
-  assert false, 'the respondent should not dismiss an SWU request';
-exception when sqlstate 'P0002' then null;
+  foreach id in array string_to_array(current_setting('test.ids'), ',')::bigint[] loop
+    begin
+      perform public.respond_to_match(id, true);
+      assert false, 'confirming a declined request should fail';
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.dismiss_declined_match(id);
+      assert false, 'the respondent should not dismiss a request';
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', false);
-select public.dismiss_declined_chess_match(current_setting('test.chess_id')::bigint);
-select public.dismiss_declined_backgammon_match(current_setting('test.bg_id')::bigint);
-select public.dismiss_declined_swu_match(current_setting('test.swu_id')::bigint);
+select public.dismiss_declined_match(id)
+  from unnest(string_to_array(current_setting('test.ids'), ',')::bigint[]) as id;
 
 do $$
 begin
-  assert not exists (select 1 from public.match_requests)
-    and not exists (select 1 from public.backgammon_match_requests)
-    and not exists (select 1 from public.swu_match_requests), 'dismissing deletes the request';
+  assert not exists (select 1 from public.match_requests), 'dismissing deletes the request';
 end $$;
 
 -- The reporter withdrawing a pending request still deletes it outright.
-select public.request_chess_match(
-  '00000000-0000-0000-0000-0000000000b6', 'white', 'win', 1::smallint, null, null, true);
-select public.respond_to_chess_match((select max(id) from public.match_requests), false);
+select public.request_match('swu', '00000000-0000-0000-0000-0000000000b6', 2, 1);
+select public.respond_to_match((select max(id) from public.match_requests), false);
 do $$
 begin
   assert not exists (select 1 from public.match_requests), 'withdrawing deletes the request';
@@ -139,7 +102,7 @@ end $$;
 select set_config('request.jwt.claim.sub', '', false);
 do $$
 begin
-  perform public.dismiss_declined_chess_match(1);
+  perform public.dismiss_declined_match(1);
   assert false, 'dismissing needs sign-in';
 exception when sqlstate '28000' then null;
 end $$;
