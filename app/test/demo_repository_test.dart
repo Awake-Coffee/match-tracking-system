@@ -26,6 +26,34 @@ void main() {
     }
   });
 
+  test('deleting an account keeps confirmed results under its name', () async {
+    final repo = await anaAndBogdan();
+    final ana = repo.me!;
+    await repo.deleteAccount();
+    expect(repo.isSignedIn, isFalse);
+
+    // Ana is off the ladder and her login is gone, but Bogdan keeps the
+    // rating her game gave him and still sees the game against "Ana".
+    expect((await repo.ladder()).map((p) => p.displayName), ['Bogdan']);
+    await repo.signIn(email: bogdanEmail, password: 'x');
+    final bogdan = repo.me!;
+    final games = await repo.matches(playerId: bogdan.id);
+    expect(games, hasLength(1));
+    expect(games.single.opponentName(bogdan.id), 'Ana');
+    expect(games.single.opponentId(bogdan.id), ana.id);
+    expect(bogdan.rating, lessThan(startingRating));
+    // What was waiting on her answer went with her.
+    expect(await repo.matchRequests(), isEmpty);
+    await expectLater(repo.player(ana.id), throwsA(isA<LadderException>()));
+  });
+
+  test('deleting an account needs a signed-in member', () async {
+    await expectLater(
+      DemoLadderRepository().deleteAccount(),
+      throwsA(isA<LadderException>()),
+    );
+  });
+
   test('ladder is sorted by rating, then games, then name', () async {
     final players = await (await anaAndBogdan()).ladder();
     for (var i = 1; i < players.length; i++) {

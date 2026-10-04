@@ -224,12 +224,13 @@ class DemoLadderRepository extends LadderRepository {
     return match;
   }
 
+  /// Names follow renames, but a deleted member's stay as they were played.
   ChessMatch _withCurrentNames(ChessMatch m) => ChessMatch(
     id: m.id,
     whiteId: m.whiteId,
     blackId: m.blackId,
-    whiteName: _players[m.whiteId]!.displayName,
-    blackName: _players[m.blackId]!.displayName,
+    whiteName: _players[m.whiteId]?.displayName ?? m.whiteName,
+    blackName: _players[m.blackId]?.displayName ?? m.blackName,
     result: m.result,
     clock: m.clock,
     rated: m.rated,
@@ -310,6 +311,20 @@ class DemoLadderRepository extends LadderRepository {
     _meId = null;
     _recovering = false;
     notifyListeners();
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final me = _requireMe();
+    _emails.removeWhere((_, id) => id == me.id);
+    _players.remove(me.id);
+    // Open requests go with the profile; confirmed results stay, and keep
+    // showing the name they were played under.
+    _requests.removeWhere((r) => r.involves(me.id));
+    _backgammonRequests.removeWhere((r) => r.involves(me.id));
+    _swuRequests.removeWhere((r) => r.involves(me.id));
+    _revision++;
+    await signOut();
   }
 
   @override
@@ -439,8 +454,8 @@ class DemoLadderRepository extends LadderRepository {
         id: m.id,
         winnerId: m.winnerId,
         loserId: m.loserId,
-        winnerName: _players[m.winnerId]!.displayName,
-        loserName: _players[m.loserId]!.displayName,
+        winnerName: _players[m.winnerId]?.displayName ?? m.winnerName,
+        loserName: _players[m.loserId]?.displayName ?? m.loserName,
         matchLength: m.matchLength,
         loserScore: m.loserScore,
         rated: m.rated,
@@ -627,8 +642,8 @@ class DemoLadderRepository extends LadderRepository {
     id: m.id,
     reporterId: m.reporterId,
     respondentId: m.respondentId,
-    reporterName: _players[m.reporterId]!.displayName,
-    respondentName: _players[m.respondentId]!.displayName,
+    reporterName: _players[m.reporterId]?.displayName ?? m.reporterName,
+    respondentName: _players[m.respondentId]?.displayName ?? m.respondentName,
     reporterGames: m.reporterGames,
     respondentGames: m.respondentGames,
     rated: m.rated,

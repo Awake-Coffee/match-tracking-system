@@ -261,9 +261,13 @@ abstract class GameReport {
   };
 }
 
-/// A player's display name embedded by a `side:profiles!...` select.
+/// A player's display name: embedded by a `side:profiles!...` select on a
+/// request, or the `<side>_name` copy a confirmed result keeps so it still
+/// reads right after that member deleted their account.
 String joinedName(Map<String, dynamic> row, String side) =>
-    (row[side] as Map?)?['display_name'] as String? ?? '';
+    (row[side] as Map?)?['display_name'] as String? ??
+    row['${side}_name'] as String? ??
+    '';
 
 /// A nullable timestamp column as local time.
 DateTime? parseTime(String? value) =>

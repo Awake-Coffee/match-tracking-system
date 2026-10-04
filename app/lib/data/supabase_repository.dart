@@ -11,46 +11,57 @@ import 'live_updates.dart';
 import 'query_cache.dart';
 
 /// A table of one game's results: its name, the two player columns
-/// (`<side>_id`) and how to read a row.
+/// (`<side>_id`), how to read a row, and whether it keeps its own copy of the
+/// players' names (confirmed results do, so they outlive a deleted account;
+/// requests are removed with it and embed the live profile instead).
 typedef _ResultTable<T> = ({
   String name,
   (String, String) sides,
   T Function(Map<String, dynamic>) fromRow,
+  bool keepsNames,
 });
 
 final _ResultTable<ChessMatch> _chessMatches = (
   name: 'matches',
   sides: ('white', 'black'),
   fromRow: ChessMatch.fromRow,
+  keepsNames: true,
 );
 final _ResultTable<MatchRequest> _chessRequests = (
   name: 'match_requests',
   sides: ('white', 'black'),
   fromRow: MatchRequest.fromRow,
+  keepsNames: false,
 );
 final _ResultTable<BackgammonMatch> _backgammonMatches = (
   name: 'backgammon_matches',
   sides: ('winner', 'loser'),
   fromRow: BackgammonMatch.fromRow,
+  keepsNames: true,
 );
 final _ResultTable<BackgammonMatchRequest> _backgammonRequests = (
   name: 'backgammon_match_requests',
   sides: ('winner', 'loser'),
   fromRow: BackgammonMatchRequest.fromRow,
+  keepsNames: false,
 );
 final _ResultTable<SwuMatch> _swuMatches = (
   name: 'swu_matches',
   sides: ('reporter', 'respondent'),
   fromRow: SwuMatch.fromRow,
+  keepsNames: true,
 );
 final _ResultTable<SwuMatchRequest> _swuRequests = (
   name: 'swu_match_requests',
   sides: ('reporter', 'respondent'),
   fromRow: SwuMatchRequest.fromRow,
+  keepsNames: false,
 );
 
-/// Every column plus both players' display names, embedded under the side.
+/// Every column plus both players' display names: embedded under the side
+/// for requests, already a column of confirmed results.
 String _selectWithNames<T>(_ResultTable<T> table) {
+  if (table.keepsNames) return '*';
   final (first, second) = table.sides;
   return '*, $first:profiles!${table.name}_${first}_id_fkey(display_name), '
       '$second:profiles!${table.name}_${second}_id_fkey(display_name)';
@@ -324,6 +335,19 @@ class SupabaseLadderRepository extends LadderRepository {
     await _client.auth.signOut();
     _me = null;
     _recovering = false;
+    _queries.clear();
+    notifyListeners();
+  });
+
+  @override
+  Future<void> deleteAccount() => _guard(() async {
+    await _client.rpc<void>('delete_my_account');
+    // The session's user is gone, so only forget it here: telling the server
+    // to revoke it would be refused.
+    await _client.auth.signOut(scope: SignOutScope.local);
+    _me = null;
+    _recovering = false;
+    _players = null;
     _queries.clear();
     notifyListeners();
   });
