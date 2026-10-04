@@ -10,8 +10,8 @@ void main() {
       var hits = 0;
       Future<List<int>> fetch() async => [++hits];
 
-      final first = await cache.of(('matches', null, 50), fetch);
-      final second = await cache.of(('matches', null, 50), fetch);
+      final first = await cache.of(('matches', 'chess', null, 50), fetch);
+      final second = await cache.of(('matches', 'chess', null, 50), fetch);
 
       expect(hits, 1);
       expect(second, same(first));
@@ -40,12 +40,13 @@ void main() {
       var hits = 0;
       Future<int> fetch() async => ++hits;
 
-      await cache.of(('matches', null, 50), fetch);
-      await cache.of(('matches', 'ana', 50), fetch);
-      await cache.of(('matches', 'ana', 500), fetch);
-      await cache.of(('match_requests', null, null), fetch);
+      await cache.of(('matches', 'chess', null, 50), fetch);
+      await cache.of(('matches', 'backgammon', null, 50), fetch);
+      await cache.of(('matches', 'chess', 'ana', 50), fetch);
+      await cache.of(('matches', 'chess', 'ana', 500), fetch);
+      await cache.of(('match_requests', 'chess', null, null), fetch);
 
-      expect(hits, 4);
+      expect(hits, 5);
     });
 
     test('clearing refetches, as when the data changes', () async {
