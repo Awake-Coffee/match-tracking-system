@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../design/design_scope.dart';
 import '../../design/designs.dart';
 import '../../domain/models.dart';
-import '../../domain/swu.dart';
 import '../game.dart';
 import '../widgets/record_form.dart';
 
@@ -19,12 +18,14 @@ const _scoresFor = {
 class SwuRecordForm extends StatefulWidget {
   const SwuRecordForm({
     super.key,
+    required this.mode,
     required this.me,
     required this.players,
     this.initialOpponentId,
     this.recentOpponentIds = const [],
   });
 
+  final GameMode mode;
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
@@ -59,8 +60,11 @@ class _SwuRecordFormState extends State<SwuRecordForm>
     final opponent = _opponent;
     final outcome = _outcome;
     final score = _score;
-    final preview = opponent != null && outcome != null && score != null
-        ? SwuPreview(me: widget.me, opponent: opponent, outcome: outcome)
+    final seats = opponent != null && score != null
+        ? <SeatReport>[
+            (playerId: widget.me.id, side: 1, score: score.$1),
+            (playerId: opponent.id, side: 2, score: score.$2),
+          ]
         : null;
     final label = d.body(15, weight: FontWeight.w700);
 
@@ -75,7 +79,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
               Text('Opponent', style: label),
               const SizedBox(height: 8),
               OpponentPicker(
-                game: Game.swu,
+                mode: widget.mode,
                 players: widget.players,
                 meId: widget.me.id,
                 selectedId: _opponentId,
@@ -143,20 +147,14 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                       emptyHint:
                           'Pick an opponent, the result and the games to see '
                           'how ratings change.',
-                      rows: preview == null
+                      rows: seats == null
                           ? null
-                          : [
-                              (
-                                name: 'You',
-                                before: preview.me.swu.rating,
-                                delta: preview.myDelta,
-                              ),
-                              (
-                                name: preview.opponent.displayName,
-                                before: preview.opponent.swu.rating,
-                                delta: preview.opponentDelta,
-                              ),
-                            ],
+                          : previewRows(
+                              widget.mode,
+                              widget.me.id,
+                              widget.players,
+                              seats,
+                            ),
                     ),
                     SendForConfirmationButton(
                       error: error,
@@ -166,17 +164,18 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                         if (outcome == null) 'a result',
                         if (outcome != null && score == null) 'the games',
                       ],
-                      onPressed: opponent == null || score == null
+                      onPressed: opponent == null || seats == null
                           ? null
                           : () => sendForConfirmation(
                               game: Game.swu,
-                              opponentName: opponent.displayName,
+                              sentTo: opponent.displayName,
                               rated: _rated,
-                              request: (repo) => repo.requestSwuMatch(
-                                opponentId: opponent.id,
-                                myGames: score.$1,
-                                opponentGames: score.$2,
-                                rated: _rated,
+                              request: (repo) => repo.reportResult(
+                                ResultReport(
+                                  mode: widget.mode,
+                                  seats: seats,
+                                  rated: _rated,
+                                ),
                               ),
                             ),
                     ),

@@ -10,10 +10,10 @@ client-side Elo implementation exists solely to *preview* a result and
 must produce the same numbers as the database.
 
 ### II. Every rating point is traceable
-A player's rating in a game is that game's starting rating plus the sum
-of the deltas of the results they played in it. Each match row stores both players'
-ratings before the game and the delta applied to each, so any rating can be
-audited and the full history replayed.
+A player's rating in a mode is that game's starting rating plus the sum of
+the deltas of the results they played in that mode. Each result stores
+every player's rating before it and the delta applied to them, so any
+rating can be audited and the full history replayed.
 
 ### III. Secure by default (RLS everywhere)
 Every table has Row Level Security enabled. Authenticated members can
@@ -33,11 +33,14 @@ not require touching screen logic. Each game has its own design (chess:
 Roast pawns, backgammon: Baize, Star Wars: Unlimited: Holotable).
 
 ### VI. Start narrow
-Chess, backgammon and Star Wars: Unlimited are supported. The games share
-one `ratings` table, one `match_requests` and one `matches` table and one
-pair of RPCs, told apart by a `match_type`; each game keeps its own score
-rules, rating math and UI (SWU reuses the FIDE math). No speculative
-abstractions are built for games that aren't played yet.
+Chess, backgammon and Star Wars: Unlimited are supported, each in the
+modes listed in `game_modes`; every mode has its own ladder. The games
+share one `ratings` table (per member, game and mode), one pair of request
+and result tables with a row per player, and one pair of RPCs, told apart
+by a `match_type` and a `mode`. Each game keeps its own score rules, rating
+math and UI (SWU reuses the FIDE math); a result of more than two players
+averages the game's pairwise change against every opponent. No speculative
+abstractions are built for games or modes that aren't played yet.
 
 ## Technology Constraints
 
@@ -64,4 +67,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.4.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-05
+**Version**: 1.5.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-05

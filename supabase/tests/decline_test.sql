@@ -12,36 +12,36 @@ set role authenticated;
 
 -- Ana reports one result in each game; Bo declines them all.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', false);
-select public.request_match(
+select test.request_duel(
   'chess', '00000000-0000-0000-0000-0000000000b6', 1, 0, true, 'white', 1::smallint);
-select public.request_match('backgammon', '00000000-0000-0000-0000-0000000000b6', 5, 2);
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000b6', 2, 0);
+select test.request_duel('backgammon', '00000000-0000-0000-0000-0000000000b6', 5, 2);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000b6', 2, 0);
 
 -- Bo can't read a declined request afterwards, so remember the ids.
 select set_config('test.ids', (select string_agg(id::text, ',' order by id)
-  from public.match_requests), false);
+  from test.match_requests), false);
 
 do $$
 begin
   assert (select count(*) = 3 and bool_and(status = 'pending' and responded_at is null)
-    from public.match_requests), 'requests start pending in every game';
+    from test.match_requests), 'requests start pending in every game';
 end $$;
 
 -- The reporter can't dismiss what is still pending.
 do $$
 begin
-  perform public.dismiss_declined_match((select max(id) from public.match_requests));
+  perform public.dismiss_declined_match((select max(id) from test.match_requests));
   assert false, 'dismissing a pending request should fail';
 exception when sqlstate 'P0002' then null;
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b6', false);
-select public.respond_to_match(id, false) from public.match_requests order by id;
+select public.respond_to_match(id, false) from test.match_requests order by id;
 
 -- Bo has no use for a request he declined: only Ana can still read it.
 do $$
 begin
-  assert not exists (select 1 from public.match_requests),
+  assert not exists (select 1 from test.match_requests),
     'the respondent no longer sees what they declined';
 end $$;
 
@@ -50,8 +50,8 @@ do $$
 begin
   assert (select count(distinct match_type) = 3
       and bool_and(status = 'declined' and responded_at is not null)
-    from public.match_requests), 'requests kept as declined in every game';
-  assert not exists (select 1 from public.matches
+    from test.match_requests), 'requests kept as declined in every game';
+  assert not exists (select 1 from test.matches
     where '00000000-0000-0000-0000-0000000000a6' in (player1_id, player2_id)),
     'declining records no result';
   assert not exists (select 1 from public.ratings
@@ -87,15 +87,15 @@ select public.dismiss_declined_match(id)
 
 do $$
 begin
-  assert not exists (select 1 from public.match_requests), 'dismissing deletes the request';
+  assert not exists (select 1 from test.match_requests), 'dismissing deletes the request';
 end $$;
 
 -- The reporter withdrawing a pending request still deletes it outright.
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000b6', 2, 1);
-select public.respond_to_match((select max(id) from public.match_requests), false);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000b6', 2, 1);
+select public.respond_to_match((select max(id) from test.match_requests), false);
 do $$
 begin
-  assert not exists (select 1 from public.match_requests), 'withdrawing deletes the request';
+  assert not exists (select 1 from test.match_requests), 'withdrawing deletes the request';
 end $$;
 
 -- Dismissing needs a signed-in member.

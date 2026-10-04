@@ -26,7 +26,7 @@ class PawnsLadder extends StatelessWidget {
     // pawns stay readable whether the ladder spans 50 points or 500.
     final maxDrift = players.fold(
       100,
-      (m, p) => math.max(m, (p.rating - startingRating).abs()),
+      (m, p) => math.max(m, (data.standingOf(p).rating - startingRating).abs()),
     );
 
     return Padding(
@@ -69,13 +69,15 @@ class PawnsLadder extends StatelessWidget {
                     for (final p in players.take(_pawnsInARank))
                       Expanded(
                         child: _PawnButton(
-                          label: '${p.displayName}, rating ${p.rating}',
+                          label:
+                              '${p.displayName}, rating ${data.standingOf(p).rating}',
                           onOpen: () => data.onOpen(p),
                           child: _Pawn(
                             player: p,
                             fill:
                                 0.5 +
-                                (p.rating - startingRating) / (2.2 * maxDrift),
+                                (data.standingOf(p).rating - startingRating) /
+                                    (2.2 * maxDrift),
                             isMe: p.id == data.meId,
                           ),
                         ),
@@ -99,7 +101,12 @@ class PawnsLadder extends StatelessWidget {
               player: p,
               data: data,
               rank: i + 1,
-              child: _Row(player: p, rank: i + 1, isMe: p.id == data.meId),
+              child: _Row(
+                player: p,
+                standing: data.standingOf(p),
+                rank: i + 1,
+                isMe: p.id == data.meId,
+              ),
             ),
           UnplayedGroup(data: data),
         ],
@@ -250,9 +257,15 @@ class _Pawn extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.player, required this.rank, required this.isMe});
+  const _Row({
+    required this.player,
+    required this.standing,
+    required this.rank,
+    required this.isMe,
+  });
 
   final Player player;
+  final Standing standing;
   final int rank;
   final bool isMe;
 
@@ -299,13 +312,13 @@ class _Row extends StatelessWidget {
                   style: d.body(16, weight: FontWeight.w700),
                 ),
                 Text(
-                  '${player.gamesPlayed} games, ${record(player)}',
+                  '${standing.played} games, ${standing.record}',
                   style: d.number(12, color: d.muted),
                 ),
               ],
             ),
           ),
-          Text('${player.rating}', style: d.number(22, displayFace: true)),
+          Text('${standing.rating}', style: d.number(22, displayFace: true)),
         ],
       ),
     );

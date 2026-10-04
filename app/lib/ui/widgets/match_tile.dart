@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../design/design_scope.dart';
-import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
-import '../../domain/swu.dart';
 import '../game.dart';
+import '../ladder/ladder_view.dart' show ordinal;
 import 'surface.dart';
 
 String relativeDate(DateTime when, {DateTime? now}) {
@@ -56,22 +55,72 @@ String relativeAge(DateTime when, {DateTime? now}) {
   return relativeDate(when, now: current);
 }
 
-/// [id]'s profile in [game], or null once that member deleted their account:
+/// [id]'s profile in [mode], or null once that member deleted their account:
 /// their results stay in the history, but there is no profile to open.
-String? _profilePath(Game game, String id, Set<String> memberIds) =>
-    memberIds.contains(id) ? game.path('players/$id') : null;
+String? _profilePath(GameMode mode, String id, Set<String> memberIds) =>
+    memberIds.contains(id)
+    ? Game.of(mode.type).path('players/$id?mode=${mode.key}')
+    : null;
 
-/// One game in a list. From the club's view it reads "Ana beat Bo"; from a
-/// player's view ([perspectiveId]) it reads "Won against Bo".
-class MatchTile extends StatelessWidget {
-  const MatchTile({
+/// "Ana", "Ana & Bo", "Ana, Bo & Cy".
+String joinNames(List<String> names) => names.length < 2
+    ? names.join()
+    : '${names.sublist(0, names.length - 1).join(', ')} & ${names.last}';
+
+/// What a seat is called in a sentence: chouette marks its box.
+String seatName(GameReport r, Seat s) =>
+    r.mode.format == ResultFormat.boxVsTeam && s.side == 1
+    ? '${s.name} (box)'
+    : s.name;
+
+/// How a result went beyond who won, from [meId]'s side when set: the
+/// colours in a chess duel, the score in backgammon and SWU, the number of
+/// players in a free-for-all. Empty for bughouse. Without date or clock.
+String resultDetail(GameReport r, String? meId) => switch (r.mode) {
+  GameMode(format: ResultFormat.freeForAll) => '${r.seats.length} players',
+  GameMode(type: MatchType.chess, format: ResultFormat.duel) =>
+    meId != null
+        ? 'Played ${r.colorOf(meId).name}'
+        : '${r.seats.first.name} had white',
+  GameMode(type: MatchType.chess) => '',
+  GameMode(type: MatchType.backgammon) =>
+    '${r.scoreFor(meId)} in a match to ${r.matchLength}',
+  GameMode(type: MatchType.swu) => '${r.scoreFor(meId)} in games',
+};
+
+/// [parts] that aren't empty, joined with [separator].
+String joinParts(List<String> parts, String separator) =>
+    parts.where((p) => p.isNotEmpty).join(separator);
+
+/// One part of a result sentence: plain text, or a bold name that opens
+/// [path] when set.
+typedef _Part = ({String text, bool name, String? path});
+
+_Part _text(String text) => (text: text, name: false, path: null);
+
+/// [seats] as linked names joined into one phrase.
+List<_Part> _names(Iterable<_Part> names) {
+  final list = names.toList();
+  return [
+    for (final (i, n) in list.indexed) ...[
+      if (i > 0) _text(i == list.length - 1 ? ' & ' : ', '),
+      n,
+    ],
+  ];
+}
+
+/// One result in a list, in any mode. From the club's view it reads "Ana beat
+/// Bo"; from a player's view ([perspectiveId]) it reads "Won against Bo". A
+/// free-for-all lists everyone by place. The mode is labelled above.
+class ResultTile extends StatelessWidget {
+  const ResultTile({
     super.key,
-    required this.match,
+    required this.result,
     required this.memberIds,
     this.perspectiveId,
   });
 
-  final ChessMatch match;
+  final GameResult result;
 
   /// Members who still have a profile; anyone else's name links nowhere.
   final Set<String> memberIds;
@@ -79,231 +128,135 @@ class MatchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final m = match;
-    final me = perspectiveId != null && m.involves(perspectiveId!)
+    final r = result;
+    final me = perspectiveId != null && r.involves(perspectiveId!)
         ? perspectiveId
         : null;
-    final when = relativeDate(m.playedAt);
-    final clock = m.clock;
-    final detail = me != null
-        ? 'Played ${m.colorOf(me).name}, $when'
-        : '${m.whiteName} had white, $when';
-    final leading = _PieceDot(
-      color: me != null ? m.colorOf(me) : PieceColor.white,
+    final duel = r.mode.format == ResultFormat.duel;
+    // In a duel the whole row opens the opponent, so their name isn't a link.
+    _Part name(RatedSeat s) => (
+      text: s.playerId == me && !duel ? 'You' : seatName(r, s),
+      name: true,
+      path: me != null && duel
+          ? null
+          : _profilePath(r.mode, s.playerId, memberIds),
     );
-    final fullDetail = clock == null ? detail : '$detail · ${clock.label}';
+    final detail = joinParts([
+      joinParts([resultDetail(r, me), relativeDate(r.playedAt)], ', '),
+      r.clock?.label ?? '',
+    ], ' · ');
 
-    if (me != null) {
-      final verb = switch (m.outcomeFor(me)) {
-        Outcome.win => 'Won against',
-        Outcome.loss => 'Lost to',
-        Outcome.draw => 'Drew with',
+    final List<_Part> headline;
+    final List<RatedSeat> shown;
+    if (r.mode.format == ResultFormat.freeForAll) {
+      final byPlace = <int, List<RatedSeat>>{};
+      for (final s in r.seats) {
+        (byPlace[r.placeOf(s.playerId)] ??= []).add(s);
+      }
+      final places = byPlace.keys.toList()..sort();
+      headline = [
+        for (final (i, place) in places.indexed) ...[
+          if (i > 0) _text(' · '),
+          ..._names(byPlace[place]!.map(name)),
+          _text(' ${ordinal(place)}'),
+        ],
+      ];
+      shown = [for (final place in places) ...byPlace[place]!];
+    } else if (me != null) {
+      final verb = switch (r.outcomeFor(me)) {
+        Outcome.win => 'Won',
+        Outcome.loss => 'Lost',
+        Outcome.draw => 'Drew',
       };
-      return _ResultRow.forPlayer(
-        leading: leading,
-        verb: verb,
-        opponentName: m.opponentName(me),
-        opponentPath: _profilePath(Game.chess, m.opponentId(me), memberIds),
-        detail: fullDetail,
-        rated: m.rated,
-        delta: m.deltaFor(me),
-        ratingAfter: m.ratingAfterFor(me),
-      );
+      final teammates = r.teammatesOf(me);
+      final against = teammates.isEmpty && r.outcomeFor(me) == Outcome.draw
+          ? 'with'
+          : r.outcomeFor(me) == Outcome.loss
+          ? 'to'
+          : 'against';
+      headline = [
+        _text(verb),
+        if (teammates.isNotEmpty) ...[
+          _text(' with '),
+          ..._names(teammates.map(name)),
+        ],
+        _text(' $against '),
+        ..._names(r.opponentsOf(me).map(name)),
+      ];
+      shown = [r.seatOf(me)!];
+    } else {
+      // Winners first; for a draw, side 1 (white in chess) first.
+      final sides = [...r.sides]
+        ..sort((a, b) => b.first.score.compareTo(a.first.score));
+      final drawn = sides[0].first.score == sides[1].first.score;
+      final ordered = drawn ? r.sides : sides;
+      headline = [
+        ..._names(ordered[0].map(name)),
+        _text(drawn ? ' drew with ' : ' beat '),
+        ..._names(ordered[1].map(name)),
+      ];
+      shown = [ordered[0].first, ordered[1].first];
     }
-    // Winner's change first; for a draw, white first.
-    final firstId = m.winnerId ?? m.whiteId;
-    final secondId = firstId == m.whiteId ? m.blackId : m.whiteId;
-    return _ResultRow.forClub(
-      leading: leading,
-      firstName: m.winnerName ?? m.whiteName,
-      firstPath: _profilePath(Game.chess, firstId, memberIds),
-      verb: m.result == MatchResult.draw ? 'drew with' : 'beat',
-      secondName: m.loserName ?? m.blackName,
-      secondPath: _profilePath(Game.chess, secondId, memberIds),
-      detail: fullDetail,
-      rated: m.rated,
-      firstDelta: m.deltaFor(firstId),
-      secondDelta: m.deltaFor(secondId),
-    );
-  }
-}
 
-/// One backgammon match in a list, from the club's or a player's view like
-/// [MatchTile].
-class BackgammonMatchTile extends StatelessWidget {
-  const BackgammonMatchTile({
-    super.key,
-    required this.match,
-    required this.memberIds,
-    this.perspectiveId,
-  });
-
-  final BackgammonMatch match;
-
-  /// Members who still have a profile; anyone else's name links nowhere.
-  final Set<String> memberIds;
-  final String? perspectiveId;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = match;
-    final me = perspectiveId != null && m.involves(perspectiveId!)
-        ? perspectiveId
-        : null;
-    final detail =
-        '${m.scoreFor(me)} in a match to ${m.matchLength}, '
-        '${relativeDate(m.playedAt)}';
-    if (me != null) {
-      return _ResultRow.forPlayer(
-        verb: m.wonBy(me) ? 'Won against' : 'Lost to',
-        opponentName: m.opponentName(me),
-        opponentPath: _profilePath(
-          Game.backgammon,
-          m.opponentId(me),
-          memberIds,
-        ),
-        detail: detail,
-        rated: m.rated,
-        delta: m.deltaFor(me),
-        ratingAfter: m.ratingAfterFor(me),
-      );
-    }
-    return _ResultRow.forClub(
-      firstName: m.winnerName,
-      firstPath: _profilePath(Game.backgammon, m.winnerId, memberIds),
-      verb: 'beat',
-      secondName: m.loserName,
-      secondPath: _profilePath(Game.backgammon, m.loserId, memberIds),
+    return _ResultRow(
+      leading: r.mode.type == MatchType.chess && duel
+          ? _PieceDot(color: me != null ? r.colorOf(me) : PieceColor.white)
+          : null,
+      modeLabel: r.mode.label,
+      headline: headline,
       detail: detail,
-      rated: m.rated,
-      firstDelta: m.winnerRatingDelta,
-      secondDelta: m.loserRatingDelta,
+      rated: r.rated,
+      deltas: [for (final s in shown.take(2)) s.ratingDelta],
+      ratingAfter: me == null ? null : r.ratingAfterFor(me),
+      path: me != null && duel
+          ? _profilePath(r.mode, r.opponentsOf(me).single.playerId, memberIds)
+          : null,
     );
   }
 }
 
-/// One Star Wars: Unlimited match in a list, from the club's or a player's
-/// view like [MatchTile].
-class SwuMatchTile extends StatelessWidget {
-  const SwuMatchTile({
-    super.key,
-    required this.match,
-    required this.memberIds,
-    this.perspectiveId,
-  });
-
-  final SwuMatch match;
-
-  /// Members who still have a profile; anyone else's name links nowhere.
-  final Set<String> memberIds;
-  final String? perspectiveId;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = match;
-    final me = perspectiveId != null && m.involves(perspectiveId!)
-        ? perspectiveId
-        : null;
-    final detail = '${m.scoreFor(me)} in games, ${relativeDate(m.playedAt)}';
-    if (me != null) {
-      return _ResultRow.forPlayer(
-        verb: switch (m.outcomeFor(me)) {
-          Outcome.win => 'Won against',
-          Outcome.loss => 'Lost to',
-          Outcome.draw => 'Drew with',
-        },
-        opponentName: m.opponentName(me),
-        opponentPath: _profilePath(Game.swu, m.opponentId(me), memberIds),
-        detail: detail,
-        rated: m.rated,
-        delta: m.deltaFor(me),
-        ratingAfter: m.ratingAfterFor(me),
-      );
-    }
-    // Winner first; for a draw, whoever recorded it.
-    final firstId = m.winnerId ?? m.reporterId;
-    final secondId = m.opponentId(firstId);
-    return _ResultRow.forClub(
-      firstName: m.nameOf(firstId),
-      firstPath: _profilePath(Game.swu, firstId, memberIds),
-      verb: m.winnerId == null ? 'drew with' : 'beat',
-      secondName: m.nameOf(secondId),
-      secondPath: _profilePath(Game.swu, secondId, memberIds),
-      detail: detail,
-      rated: m.rated,
-      firstDelta: m.deltaFor(firstId),
-      secondDelta: m.deltaFor(secondId),
-    );
-  }
-}
-
-/// The row all tiles share: "Won against **Bo**" with your change and new
-/// rating, or "**Ana** beat **Bo**" with both changes. An unrated result says
-/// so in place of the changes. From a player's view the whole row opens the
-/// opponent; from the club's view each name opens that player, so the
-/// sentence still reads as one.
+/// The row every result shares: the mode, a sentence of names with the
+/// result, and either your change and new rating or the main changes. An
+/// unrated result says so in place of the changes. A row from a duel
+/// player's view opens the opponent; elsewhere each name opens that player,
+/// so the sentence still reads as one.
 class _ResultRow extends StatelessWidget {
-  const _ResultRow.forPlayer({
+  const _ResultRow({
     this.leading,
-    required this.verb,
-    required String opponentName,
-    required this.opponentPath,
+    required this.modeLabel,
+    required this.headline,
     required this.detail,
     required this.rated,
-    required int delta,
-    required int this.ratingAfter,
-  }) : firstName = null,
-       firstPath = null,
-       secondName = opponentName,
-       secondPath = null,
-       firstDelta = delta,
-       secondDelta = null;
-
-  const _ResultRow.forClub({
-    this.leading,
-    required String this.firstName,
-    required this.firstPath,
-    required this.verb,
-    required this.secondName,
-    required this.secondPath,
-    required this.detail,
-    required this.rated,
-    required this.firstDelta,
-    required int this.secondDelta,
-  }) : opponentPath = null,
-       ratingAfter = null;
+    required this.deltas,
+    this.ratingAfter,
+    this.path,
+  });
 
   final Widget? leading;
-
-  /// Null from a player's view, where the sentence starts with [verb].
-  final String? firstName;
-  final String verb;
-  final String secondName;
+  final String modeLabel;
+  final List<_Part> headline;
   final String detail;
   final bool rated;
-  final int firstDelta;
-  final int? secondDelta;
+  final List<int> deltas;
+
+  /// The viewer's rating after it, from a player's view.
   final int? ratingAfter;
 
-  /// Where tapping the row goes: the opponent's profile, from a player's view.
-  /// Null when there is nowhere to go (a deleted member), as from the club's.
-  final String? opponentPath;
+  /// Where tapping the row goes; null when only the names are links.
+  final String? path;
 
-  /// Where tapping each name goes, from the club's view; null for a deleted
-  /// member, whose name is then plain bold.
-  final String? firstPath;
-  final String? secondPath;
-
-  /// A bold name, linked to [path] when it is set. A link is an inline
+  /// A bold name, linked to its path when it has one. A link is an inline
   /// widget rather than a tappable span so it can take keyboard focus.
-  InlineSpan _name(BuildContext context, String name, String? path) {
+  InlineSpan _span(BuildContext context, _Part part) {
+    if (!part.name) return TextSpan(text: part.text);
     final bold = context.design.body(16, weight: FontWeight.w700);
-    if (path == null) return TextSpan(text: name, style: bold);
+    final path = part.path;
+    if (path == null) return TextSpan(text: part.text, style: bold);
     return WidgetSpan(
       alignment: PlaceholderAlignment.baseline,
       baseline: TextBaseline.alphabetic,
       child: _NameLink(
-        name: name,
+        name: part.text,
         style: bold.copyWith(decoration: TextDecoration.underline),
         onOpen: () => context.go(path),
       ),
@@ -313,40 +266,22 @@ class _ResultRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final first = firstName;
-    final headline = Text.rich(
-      TextSpan(
-        children: [
-          if (first != null) ...[
-            _name(context, first, firstPath),
-            TextSpan(text: ' $verb '),
-          ] else
-            TextSpan(text: '$verb '),
-          _name(context, secondName, secondPath),
-        ],
-      ),
-      style: d.body(16),
-    );
     final after = ratingAfter;
-    final second = secondDelta;
     final trailing = rated
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: after != null
                 ? [
-                    DeltaText(firstDelta, size: 16),
+                    DeltaText(deltas.single, size: 16),
                     Text('$after', style: d.number(13, color: d.muted)),
                   ]
-                : [
-                    DeltaText(firstDelta, size: 15),
-                    DeltaText(second!, size: 15),
-                  ],
+                : [for (final delta in deltas) DeltaText(delta, size: 15)],
           )
         : Text(
             'Unrated',
             style: d.body(13, color: d.muted, weight: FontWeight.w600),
           );
-    final path = opponentPath;
+    final path = this.path;
 
     return InkWell(
       onTap: path == null ? null : () => context.go(path),
@@ -362,7 +297,16 @@ class _ResultRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  headline,
+                  ModeChip(modeLabel),
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        for (final part in headline) _span(context, part),
+                      ],
+                    ),
+                    style: d.body(16),
+                  ),
                   const SizedBox(height: 2),
                   Text(detail, style: d.body(13, color: d.muted)),
                 ],
@@ -372,6 +316,29 @@ class _ResultRow extends StatelessWidget {
             trailing,
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A mode's name as a small tag over a result.
+class ModeChip extends StatelessWidget {
+  const ModeChip(this.label, {super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: d.highlight,
+        borderRadius: d.borderRadius,
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: d.body(11, color: d.accent, weight: FontWeight.w700),
       ),
     );
   }

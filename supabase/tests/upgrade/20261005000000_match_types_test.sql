@@ -47,7 +47,7 @@ declare
       coalesce(dgt_option::text, '-'),
       coalesce(custom_base_minutes::text, '-') || '+' || coalesce(custom_extra_seconds::text, '-'),
       recorded_by = player1_id, to_char(played_at at time zone 'UTC', 'HH24'))
-    from public.matches order by id);
+    from test.matches order by id);
 begin
   assert cardinality(rows) = 7, 'every result carried over';
   -- Chess: white is player 1. Backgammon and SWU: the reporter is.
@@ -58,7 +58,7 @@ begin
   assert rows[5] = 'backgammon t-f 1.0-3.0 t 1522/1478 -12/18 - -+- t 14', rows[5];
   assert rows[6] = 'chess t-f 1.0-0.0 f 981/1000 0/0 10 -+- f 15', rows[6];
   assert rows[7] = 'swu f-f 1.0-1.0 f 1020/980 0/0 - -+- t 16', rows[7];
-  assert (select player1_id from public.matches where id = 3) = cy, 'SWU reporter is player 1';
+  assert (select player1_id from test.matches where id = 3) = cy, 'SWU reporter is player 1';
 end $$;
 
 -- Pending requests carry over and can still be answered.
@@ -72,7 +72,7 @@ declare
       match_type, player1_id = ana, requested_by = ana, player1_score, player2_score, rated,
       coalesce(dgt_option::text, '-'), coalesce(custom_base_minutes::text, '-'),
       coalesce(custom_extra_seconds::text, '-'))
-    from public.match_requests order by id);
+    from test.match_requests order by id);
 begin
   assert cardinality(rows) = 3, 'every request carried over';
   assert rows[1] = 'backgammon t t 2.0-7.0 t - -+-', rows[1];
@@ -82,11 +82,11 @@ end $$;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
-select public.respond_to_match((select id from public.match_requests where match_type = 'backgammon'), true);
+select public.respond_to_match((select id from test.match_requests where match_type = 'backgammon'), true);
 
 do $$
 declare
-  m public.matches := (select m from public.matches m order by id desc limit 1);
+  m test.matches := (select m from test.matches m order by id desc limit 1);
 begin
   assert m.match_type = 'backgammon' and m.player1_score = 2 and m.player2_score = 7
     and m.player1_rating_before = 1510 and m.player2_rating_before = 1500
@@ -99,14 +99,14 @@ end $$;
 
 reset role;
 
--- Members who join after the upgrade get a rating in every game.
+-- Since game modes (20261007000000), members who join get a rating with their
+-- first result in a mode rather than at sign-up.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000004', 'di@up.example');
 
 do $$
 begin
-  assert (select count(*) from public.ratings
-    where player_id = '00000000-0000-0000-0000-000000000004'
-      and rating = public.starting_rating(match_type)) = 3, 'new member rated in every game';
+  assert not exists (select 1 from public.ratings
+    where player_id = '00000000-0000-0000-0000-000000000004'), 'no rating before a first result';
 end $$;
 
 \echo 'match_types upgrade_test: all assertions passed'

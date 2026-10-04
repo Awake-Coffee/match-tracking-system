@@ -7,31 +7,34 @@ import '../game.dart';
 /// Data every ladder style receives.
 class LadderData {
   const LadderData({
-    required this.game,
+    required this.mode,
     required this.players,
     required this.meId,
     required this.onOpen,
     required this.now,
   });
 
-  final Game game;
+  /// Whose ladder this is: one mode of a game.
+  final GameMode mode;
 
-  /// Every member, sorted with the highest rating in [game] first.
+  /// Every member, sorted with the highest rating in [mode] first.
   final List<Player> players;
   final String? meId;
   final void Function(Player) onOpen;
   final DateTime now;
 
-  int get gamesLogged => players.fold(0, (sum, p) => sum + p.gamesPlayed) ~/ 2;
+  Game get game => Game.of(mode.type);
 
-  /// Members who have played [game], best first. Only they get a rank, a
+  Standing standingOf(Player p) => p.standingIn(mode);
+
+  /// Members who have played [mode], best first. Only they get a rank, a
   /// pawn, a point or a stop on the route.
-  List<Player> get ranked => game.rankedIn(players);
+  List<Player> get ranked => rankedIn(players, mode);
 
-  /// Members with no results in [game] yet, listed apart and unranked.
+  /// Members with no results in [mode] yet, listed apart and unranked.
   List<Player> get unplayed => [
     for (final p in players)
-      if (game.playedOf(p) == 0) p,
+      if (standingOf(p).played == 0) p,
   ];
 
   /// "You're 3rd of 8 with 1016." or null when signed out. The 8 counts
@@ -39,8 +42,8 @@ class LadderData {
   String? get summary {
     final me = players.where((p) => p.id == meId).firstOrNull;
     if (me == null) return null;
-    final rating = game.ratingOf(me);
-    if (game.playedOf(me) == 0) {
+    final rating = standingOf(me).rating;
+    if (standingOf(me).played == 0) {
       return 'You start at $rating. Record a ${game.resultNoun} to climb.';
     }
     final ranked = this.ranked;
@@ -56,7 +59,7 @@ class LadderData {
     final i = ranked.indexWhere((p) => p.id == meId);
     if (i < 1) return null;
     final above = ranked[i - 1];
-    final points = game.ratingOf(above) - game.ratingOf(ranked[i]) + 1;
+    final points = standingOf(above).rating - standingOf(ranked[i]).rating + 1;
     return '$points to pass ${above.displayName}';
   }
 }
@@ -71,8 +74,6 @@ String ordinal(int n) {
     _ => '${n}th',
   };
 }
-
-String record(Player p) => '${p.wins}-${p.losses}-${p.draws}';
 
 /// The members who have not played yet, below the ranked ladder: muted, with
 /// no rank number, still opening their profile. Empty when everyone has played.
@@ -116,7 +117,7 @@ class UnplayedGroup extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '${data.game.ratingOf(p)}',
+                    '${data.standingOf(p).rating}',
                     style: d.number(16, color: d.muted),
                   ),
                 ],
@@ -152,7 +153,7 @@ class LadderRowTap extends StatelessWidget {
       button: true,
       label:
           '${rank != null ? '${ordinal(rank!)}, ' : ''}${player.displayName}'
-          '${isMe ? ' (you)' : ''}, rating ${data.game.ratingOf(player)}',
+          '${isMe ? ' (you)' : ''}, rating ${data.standingOf(player).rating}',
       excludeSemantics: true,
       child: InkWell(
         onTap: () => data.onOpen(player),

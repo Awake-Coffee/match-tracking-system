@@ -28,7 +28,7 @@ void main() {
 
   test('an unrated chess game is kept but moves nothing', () async {
     final (repo, ana, bogdan) = await _fresh();
-    final request = await repo.requestMatch(
+    final request = await repo.reportChess(
       opponentId: bogdan.id,
       myColor: PieceColor.white,
       myOutcome: Outcome.win,
@@ -38,20 +38,20 @@ void main() {
     expect(request.rated, isFalse);
 
     await repo.signIn(email: bogdanEmail, password: 'x');
-    final match = await repo.respondToMatchRequest(request.id, accept: true);
+    final match = await repo.respondToRequest(request.id, accept: true);
 
     expect(match!.rated, isFalse);
     expect(match.deltaFor(ana.id), 0);
     expect(match.ratingAfterFor(bogdan.id), 1000);
-    expect((await repo.matches()).single.rated, isFalse);
-    for (final p in await repo.ladder()) {
-      expect(p.rating, 1000);
-      expect(p.gamesPlayed, 0);
-      expect(p.wins + p.losses + p.draws, 0);
+    expect((await repo.results(MatchType.chess)).single.rated, isFalse);
+    for (final p in await repo.ladderIn(GameMode.standardChess)) {
+      expect(p.chess.rating, 1000);
+      expect(p.chess.played, 0);
+      expect(p.chess.wins + p.chess.losses + p.chess.draws, 0);
     }
 
     // The next rated game is rated as if the friendly never happened.
-    final rated = await repo.requestMatch(
+    final rated = await repo.reportChess(
       opponentId: ana.id,
       myColor: PieceColor.white,
       myOutcome: Outcome.win,
@@ -59,7 +59,7 @@ void main() {
     );
     await repo.signIn(email: anaEmail, password: 'x');
     expect(
-      (await repo.respondToMatchRequest(
+      (await repo.respondToRequest(
         rated.id,
         accept: true,
       ))!.deltaFor(bogdan.id),
@@ -69,47 +69,43 @@ void main() {
 
   test('an unrated backgammon match leaves rating and experience', () async {
     final (repo, ana, bogdan) = await _fresh();
-    final request = await repo.requestBackgammonMatch(
+    final request = await repo.reportBackgammon(
       opponentId: bogdan.id,
-      matchLength: 7,
       myScore: 7,
       opponentScore: 2,
       rated: false,
     );
     await repo.signIn(email: bogdanEmail, password: 'x');
-    final match = await repo.respondToBackgammonMatchRequest(
-      request.id,
-      accept: true,
-    );
+    final match = await repo.respondToRequest(request.id, accept: true);
 
     expect(match!.rated, isFalse);
-    expect(match.winnerId, ana.id);
-    expect(match.winnerRatingDelta, 0);
-    expect(match.loserRatingDelta, 0);
-    for (final p in await repo.backgammonLadder()) {
+    expect(match.outcomeFor(ana.id), Outcome.win);
+    expect(match.deltaFor(ana.id), 0);
+    expect(match.deltaFor(bogdan.id), 0);
+    for (final p in await repo.ladderIn(GameMode.standardBackgammon)) {
       expect(p.backgammon.rating, 1500);
-      expect(p.backgammon.matchesPlayed, 0);
+      expect(p.backgammon.played, 0);
       expect(p.backgammon.experience, 0);
     }
   });
 
   test('an unrated SWU match moves nothing', () async {
     final (repo, ana, bogdan) = await _fresh();
-    final request = await repo.requestSwuMatch(
+    final request = await repo.reportSwu(
       opponentId: bogdan.id,
       myGames: 2,
       opponentGames: 1,
       rated: false,
     );
     await repo.signIn(email: bogdanEmail, password: 'x');
-    final match = await repo.respondToSwuMatchRequest(request.id, accept: true);
+    final match = await repo.respondToRequest(request.id, accept: true);
 
     expect(match!.rated, isFalse);
     expect(match.deltaFor(ana.id), 0);
     expect(match.deltaFor(bogdan.id), 0);
-    for (final p in await repo.swuLadder()) {
+    for (final p in await repo.ladderIn(GameMode.premier)) {
       expect(p.swu.rating, 1000);
-      expect(p.swu.matchesPlayed, 0);
+      expect(p.swu.played, 0);
     }
   });
 
@@ -137,7 +133,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(rated);
     await tester.pumpAndSettle();
-    expect(find.text('Unrated: neither rating changes.'), findsOneWidget);
+    expect(find.text('Unrated: no rating changes.'), findsOneWidget);
     expect(find.text('1000 to '), findsNothing);
 
     final send = find.widgetWithText(FilledButton, 'Send for confirmation');
@@ -149,8 +145,8 @@ void main() {
     expect(find.textContaining('goes in the history'), findsOneWidget);
     expect(find.textContaining('· Unrated'), findsOneWidget);
 
-    expect(repo.me!.rating, 1000);
-    expect(ana.rating, 1000);
+    expect(repo.me!.chess.rating, 1000);
+    expect(ana.chess.rating, 1000);
   });
 
   testWidgets('confirming an unrated game leaves ratings and lists it', (
@@ -159,7 +155,7 @@ void main() {
     _phone(tester);
     final (repo, ana, _) = await _fresh();
     await repo.signIn(email: bogdanEmail, password: 'x');
-    await repo.requestMatch(
+    await repo.reportChess(
       opponentId: ana.id,
       myColor: PieceColor.black,
       myOutcome: Outcome.loss,
@@ -174,7 +170,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
     await tester.pumpAndSettle();
     expect(find.textContaining('confirmed as unrated'), findsOneWidget);
-    expect(repo.me!.rating, 1000);
+    expect(repo.me!.chess.rating, 1000);
 
     await tester.tap(find.text('History').last);
     await tester.pumpAndSettle();

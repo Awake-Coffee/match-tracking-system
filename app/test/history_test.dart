@@ -42,7 +42,9 @@ Finder _sentence(String text) => find.byElementPredicate((e) {
 });
 
 Future<String> _idOf(DemoLadderRepository repo, String name) async =>
-    (await repo.ladder()).firstWhere((p) => p.displayName == name).id;
+    (await repo.ladderIn(GameMode.standardChess))
+        .firstWhere((p) => p.displayName == name)
+        .id;
 
 /// [reporter] reports a game against [opponent] that [opponent] confirms,
 /// then signs back in as [backTo].
@@ -57,14 +59,14 @@ Future<void> _play(
 }) async {
   final opponentId = await _idOf(repo, opponent);
   await repo.signIn(email: reporterEmail, password: 'x');
-  final request = await repo.requestMatch(
+  final request = await repo.reportChess(
     opponentId: opponentId,
     myColor: PieceColor.white,
     myOutcome: outcome,
     clock: const ClockSetting(TimeControl.sudden5),
   );
   await repo.signIn(email: opponentEmail, password: 'x');
-  await repo.respondToMatchRequest(request.id, accept: true);
+  await repo.respondToRequest(request.id, accept: true);
   await repo.signIn(email: backTo, password: 'x');
 }
 
@@ -308,14 +310,14 @@ void main() {
     );
     await _openHistory(tester, repo);
 
-    expect(find.byType(MatchTile), findsNWidgets(2));
+    expect(find.byType(ResultTile), findsNWidgets(2));
     await _pick(tester, 'Cleo');
 
-    expect(find.byType(MatchTile), findsOneWidget);
+    expect(find.byType(ResultTile), findsOneWidget);
     expect(_sentence('Bogdan beat Cleo'), findsOneWidget);
 
     await _pick(tester, 'Everyone');
-    expect(find.byType(MatchTile), findsNWidgets(2));
+    expect(find.byType(ResultTile), findsNWidgets(2));
   });
 
   testWidgets('a member with no games says so', (tester) async {
@@ -343,12 +345,12 @@ void main() {
     final repo = await _withDraws(HistoryScreen.pageSize);
     await _openHistory(tester, repo);
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize));
     expect(_sentence('Ana beat Bogdan'), findsNothing);
     await tester.tap(find.text('Load more'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize + 1));
     expect(_sentence('Ana beat Bogdan'), findsOneWidget);
     expect(find.text('Load more'), findsNothing);
   });
@@ -358,7 +360,7 @@ void main() {
     final repo = await _withDraws(HistoryScreen.pageSize - 1);
     await _openHistory(tester, repo);
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize));
     expect(find.text('Load more'), findsNothing);
   });
 
@@ -368,11 +370,11 @@ void main() {
     await _openHistory(tester, repo);
     await _pick(tester, 'Ana');
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize));
     await tester.tap(find.text('Load more'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize + 1));
     expect(_sentence('Ana beat Bogdan'), findsOneWidget);
     expect(_sentence('Bogdan beat Cleo'), findsNothing);
     expect(find.text('Load more'), findsNothing);
@@ -390,7 +392,7 @@ void main() {
     repo.reload();
     await tester.pumpAndSettle();
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize + 1));
     expect(_sentence('Ana beat Bogdan'), findsOneWidget);
   });
 
@@ -400,11 +402,11 @@ void main() {
     await _openHistory(tester, repo);
     await tester.tap(find.text('Load more'));
     await tester.pumpAndSettle();
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 3));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize + 3));
 
     await _pick(tester, 'Ana');
 
-    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    expect(find.byType(ResultTile), findsNWidgets(HistoryScreen.pageSize));
     expect(_sentence('Bogdan beat Cleo'), findsNothing);
     expect(find.text('Load more'), findsOneWidget);
   });
@@ -416,38 +418,45 @@ void main() {
     final repo = SharedLadder();
     await anaAndBogdan(into: repo);
     await _openHistory(tester, repo);
-    expect(find.byType(MatchTile), findsOneWidget);
+    expect(find.byType(ResultTile), findsOneWidget);
 
     repo.offline = true;
     await _pick(tester, 'Bogdan');
 
     expect(find.textContaining('Couldn\'t show that player'), findsOneWidget);
     expect(_filterText(tester), 'Everyone');
-    expect(find.byType(MatchTile), findsOneWidget);
+    expect(find.byType(ResultTile), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
 
     repo.offline = false;
     await _pick(tester, 'Bogdan');
     expect(_filterText(tester), 'Bogdan');
-    expect(find.byType(MatchTile), findsOneWidget);
+    expect(find.byType(ResultTile), findsOneWidget);
   });
 
   group('the before cursor', () {
     test('returns only results played before it', () async {
       final repo = await _withDraws(2);
-      final all = await repo.matches();
+      final all = await repo.results(MatchType.chess);
       expect(all, hasLength(3));
 
-      final older = await repo.matches(before: all.first.playedAt);
+      final older = await repo.results(
+        MatchType.chess,
+        before: all.first.playedAt,
+      );
       expect(older.map((m) => m.id), all.skip(1).map((m) => m.id));
-      expect(await repo.matches(before: all.last.playedAt), isEmpty);
+      expect(
+        await repo.results(MatchType.chess, before: all.last.playedAt),
+        isEmpty,
+      );
     });
 
     test('works with a player and a limit', () async {
       final repo = await _withDraws(3);
       final anaId = repo.me!.id;
-      final all = await repo.matches(playerId: anaId);
-      final page = await repo.matches(
+      final all = await repo.results(MatchType.chess, playerId: anaId);
+      final page = await repo.results(
+        MatchType.chess,
         playerId: anaId,
         limit: 2,
         before: all.first.playedAt,
@@ -457,19 +466,22 @@ void main() {
 
     test('pages backgammon and Star Wars: Unlimited too', () async {
       final repo = await anaAndBogdanWithSwu();
-      final backgammon = (await repo.backgammonMatches()).single;
-      final swu = (await repo.swuMatches()).single;
+      final backgammon = (await repo.results(MatchType.backgammon)).single;
+      final swu = (await repo.results(MatchType.swu)).single;
 
       expect(
-        await repo.backgammonMatches(before: DateTime.now()),
+        await repo.results(MatchType.backgammon, before: DateTime.now()),
         hasLength(1),
       );
       expect(
-        await repo.backgammonMatches(before: backgammon.playedAt),
+        await repo.results(MatchType.backgammon, before: backgammon.playedAt),
         isEmpty,
       );
-      expect(await repo.swuMatches(before: DateTime.now()), hasLength(1));
-      expect(await repo.swuMatches(before: swu.playedAt), isEmpty);
+      expect(
+        await repo.results(MatchType.swu, before: DateTime.now()),
+        hasLength(1),
+      );
+      expect(await repo.results(MatchType.swu, before: swu.playedAt), isEmpty);
     });
   });
 }

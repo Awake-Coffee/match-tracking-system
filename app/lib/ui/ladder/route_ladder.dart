@@ -22,18 +22,16 @@ class RouteLadder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final game = data.game;
-    final start = game.startingRating;
+    final start = data.game.startingRating;
+    int rating(Player p) => data.standingOf(p).rating;
     final players = data.ranked;
-    final ratings = [for (final p in players) game.ratingOf(p), start];
+    final ratings = [for (final p in players) rating(p), start];
     final spread = ratings.reduce(math.max) - ratings.reduce(math.min);
     final pixelsPerPoint = math.min(3.0, _routeBudget / math.max(1, spread));
-    final space = players.where((p) => game.ratingOf(p) >= start).toList();
-    final ground = players.where((p) => game.ratingOf(p) < start).toList();
-    final lowestInSpace = space.isEmpty ? start : game.ratingOf(space.last);
-    final highestOnGround = ground.isEmpty
-        ? start
-        : game.ratingOf(ground.first);
+    final space = players.where((p) => rating(p) >= start).toList();
+    final ground = players.where((p) => rating(p) < start).toList();
+    final lowestInSpace = space.isEmpty ? start : rating(space.last);
+    final highestOnGround = ground.isEmpty ? start : rating(ground.first);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -123,7 +121,8 @@ class _Arena extends StatelessWidget {
   static const _laneWidth = 72.0;
 
   Widget _gapBetween(Player above, Player below) {
-    final points = data.game.ratingOf(above) - data.game.ratingOf(below);
+    final points =
+        data.standingOf(above).rating - data.standingOf(below).rating;
     return _Gap(height: math.max(4.0, points * pixelsPerPoint), points: points);
   }
 
@@ -249,10 +248,9 @@ class _Stop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final game = data.game;
     final isMe = player.id == data.meId;
-    final played = game.playedOf(player);
-    final s = player.swu;
+    final s = data.standingOf(player);
+    final played = s.played;
     final dot = leader ? 18.0 : 12.0;
     return Container(
       height: 52,
@@ -290,8 +288,7 @@ class _Stop extends StatelessWidget {
                   style: d.body(16, weight: FontWeight.w600),
                 ),
                 Text(
-                  '$played ${played == 1 ? 'match' : 'matches'}, '
-                  '${s.wins}-${s.losses}-${s.draws}',
+                  '$played ${played == 1 ? 'match' : 'matches'}, ${s.record}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: d.number(12, color: d.muted),
@@ -299,10 +296,7 @@ class _Stop extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            '${game.ratingOf(player)}',
-            style: d.number(22, weight: FontWeight.w600),
-          ),
+          Text('${s.rating}', style: d.number(22, weight: FontWeight.w600)),
         ],
       ),
     );

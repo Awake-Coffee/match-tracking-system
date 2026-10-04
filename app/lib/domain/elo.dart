@@ -1,4 +1,4 @@
-/// Rating every member starts with.
+/// Rating every member starts with on a chess ladder.
 const startingRating = 1000;
 
 /// Upper bound of each rating-difference band in the FIDE expected-score
@@ -9,8 +9,8 @@ const _fideBandUpperBounds = [
   256, 267, 278, 290, 302, 315, 328, 344, 357, 374, 391,
 ];
 
-/// What the FIDE rules need of a player: a chess member, or a member's
-/// standing in another game rated the same way.
+/// What the FIDE rules need of a player: their standing in a mode rated
+/// this way (chess and SWU).
 abstract interface class FideRated {
   int get rating;
   int get peakRating;

@@ -54,25 +54,33 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-/// The signed-in member's place in one game, shown on its picker card.
-/// [rank] is null until they've played.
-typedef _Standing = ({int rating, int? rank, int ladderSize, int awaitingMe});
+/// The signed-in member's place in one game, shown on its picker card: in
+/// the mode they play most. [rank] is null until they've played.
+typedef _Standing = ({
+  GameMode mode,
+  int rating,
+  int? rank,
+  int ladderSize,
+  int awaitingMe,
+});
 
 Future<_Standing> _standingIn(
   Game game,
   LadderRepository repo,
   Player me,
 ) async {
-  final (ladder, awaitingMe) = await (
-    game.ladderOf(repo),
+  final (members, awaitingMe) = await (
+    repo.members(),
     game.awaitingCountOf(repo, me.id),
   ).wait;
-  final fresh = ladder.where((p) => p.id == me.id).firstOrNull ?? me;
+  final fresh = members.where((p) => p.id == me.id).firstOrNull ?? me;
+  final mode = fresh.mostPlayedIn(game.type);
   // Only members who have played are ranked, so "of N" counts them alone.
-  final ranked = game.rankedIn(ladder);
+  final ranked = rankedIn(ladderOf(members, mode), mode);
   final i = ranked.indexWhere((p) => p.id == me.id);
   return (
-    rating: game.ratingOf(fresh),
+    mode: mode,
+    rating: fresh.standingIn(mode).rating,
     rank: i < 0 ? null : i + 1,
     ladderSize: ranked.length,
     awaitingMe: awaitingMe,
@@ -432,7 +440,8 @@ class _GameCard extends StatelessWidget {
                         TextSpan(
                           text: switch (standing.rank) {
                             final rank? =>
-                              ' · ${ordinal(rank)} of ${standing.ladderSize}',
+                              ' · ${ordinal(rank)} of ${standing.ladderSize}'
+                                  '${game.modes.length > 1 ? ' in ${standing.mode.label}' : ''}',
                             null => ' · not ranked yet',
                           },
                         ),

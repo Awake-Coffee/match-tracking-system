@@ -26,80 +26,73 @@ language sql as $$
   where p.display_name = p_name and r.match_type = p_type;
 $$;
 
-do $$
-begin
-  assert (select count(*) from public.ratings r join public.profiles p on p.id = r.player_id
-    where p.display_name like 'Swu %' and r.match_type = 'swu'
-      and r.rating = 1000 and r.peak_rating = 1000) = 3,
-    'everyone starts at 1000';
-end $$;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
 
 -- Ana reports a 2-1 win: nothing moves until Bo confirms.
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000b2', 2, 1);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000b2', 2, 1);
 
 do $$
 declare
-  req public.match_requests := (select r from public.match_requests r order by id desc limit 1);
+  req test.match_requests := (select r from test.match_requests r order by id desc limit 1);
 begin
   assert req.match_type = 'swu' and req.player1_id = auth.uid()
     and req.player1_score = 2 and req.player2_score = 1,
     'score stored from the reporter''s side';
-  assert (select count(*) from public.matches where match_type = 'swu') = 0,
+  assert (select count(*) from test.matches where match_type = 'swu') = 0,
     'no match before confirmation';
   begin
     perform public.respond_to_match(req.id, true);
     raise exception 'reporter should not confirm their own match';
   exception when sqlstate '42501' then null;
   end;
-  assert (select count(*) from public.match_requests) = 1, 'failed self-confirm keeps the request';
+  assert (select count(*) from test.match_requests) = 1, 'failed self-confirm keeps the request';
 end $$;
 
 -- Cy isn't in it: can't see or answer it.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c2', false);
 do $$
 begin
-  assert (select count(*) from public.match_requests) = 0, 'outsiders cannot see requests';
+  assert (select count(*) from test.match_requests) = 0, 'outsiders cannot see requests';
   begin
-    perform public.respond_to_match((select max(id) from public.match_requests), true);
+    perform public.respond_to_match((select max(id) from test.match_requests), true);
     raise exception 'outsider should not confirm';
   exception when sqlstate 'P0002' then null;
   end;
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', false);
-select public.respond_to_match((select max(id) from public.match_requests), true);
+select public.respond_to_match((select max(id) from test.match_requests), true);
 
 do $$
 declare
   ana public.ratings := pg_temp.standing('Swu Ana', 'swu');
   bo public.ratings := pg_temp.standing('Swu Bo', 'swu');
-  m public.matches := (select m from public.matches m order by id desc limit 1);
+  m test.matches := (select m from test.matches m order by id desc limit 1);
 begin
   assert ana.rating = 1020 and bo.rating = 980, 'FIDE deltas with K = 40';
   assert ana.peak_rating = 1020 and bo.peak_rating = 1000, 'peaks tracked';
   assert ana.wins = 1 and bo.losses = 1 and ana.played = 1, 'record counted';
-  assert (pg_temp.standing('Swu Ana', 'chess')).rating = 1000
-    and (pg_temp.standing('Swu Ana', 'backgammon')).rating = 1500, 'chess and backgammon untouched';
+  assert pg_temp.standing('Swu Ana', 'chess') is null
+    and pg_temp.standing('Swu Ana', 'backgammon') is null, 'chess and backgammon untouched';
   assert m.match_type = 'swu' and m.player1_id = ana.player_id and m.recorded_by = ana.player_id
     and m.player1_rating_before = 1000 and m.player1_rating_delta = 20
     and m.player2_rating_delta = -20 and m.player1_score = 2, 'match row is auditable';
-  assert (select count(*) from public.match_requests) = 0, 'request consumed';
+  assert (select count(*) from test.match_requests) = 0, 'request consumed';
 end $$;
 
 -- Bo reports a 1-1 draw against the higher-rated Ana, then a declined and a
 -- withdrawn one.
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000a2', 1, 1);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000a2', 1, 1);
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
-select public.respond_to_match((select max(id) from public.match_requests), true);
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000b2', 0, 2);
-select public.respond_to_match((select max(id) from public.match_requests), false);
+select public.respond_to_match((select max(id) from test.match_requests), true);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000b2', 0, 2);
+select public.respond_to_match((select max(id) from test.match_requests), false);
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', false);
-select public.request_match('swu', '00000000-0000-0000-0000-0000000000a2', 2, 0);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000a2', 2, 0);
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
-select public.respond_to_match((select max(id) from public.match_requests), false);
+select public.respond_to_match((select max(id) from test.match_requests), false);
 
 do $$
 declare
@@ -108,18 +101,18 @@ declare
 begin
   assert ana.rating = 1018 and bo.rating = 982, 'a draw moves the favourite down';
   assert ana.draws = 1 and bo.draws = 1 and bo.played = 2, 'draw counted';
-  assert (select count(*) from public.matches where match_type = 'swu') = 2,
+  assert (select count(*) from test.matches where match_type = 'swu') = 2,
     'only confirmed matches are rated';
-  assert (select count(*) from public.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  assert (select count(*) from test.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
   -- Ana declined Bo's report, so only Bo still reads it.
-  assert (select count(*) from public.match_requests) = 0, 'the one who declined no longer sees the request';
+  assert (select count(*) from test.match_requests) = 0, 'the one who declined no longer sees the request';
   -- Every SWU rating is 1000 plus its match deltas (principle II).
   assert not exists (
     select 1 from public.ratings r
     where r.match_type = 'swu' and r.rating <> 1000 + coalesce((
       select sum(case when x.player1_id = r.player_id
         then x.player1_rating_delta else x.player2_rating_delta end)
-      from public.matches x
+      from test.matches x
       where x.match_type = 'swu' and r.player_id in (x.player1_id, x.player2_id)
     ), 0)
   ), 'ratings replay from history';
@@ -131,27 +124,27 @@ declare
   bo uuid := '00000000-0000-0000-0000-0000000000b2';
 begin
   begin
-    perform public.request_match('swu', auth.uid(), 2, 0);
+    perform test.request_duel('swu', auth.uid(), 2, 0);
     raise exception 'self-play should fail';
   exception when sqlstate '22023' then null;
   end;
   begin
-    perform public.request_match('swu', bo, 0, 0);
+    perform test.request_duel('swu', bo, 0, 0);
     raise exception '0-0 should fail';
   exception when sqlstate '22023' then null;
   end;
   begin
-    perform public.request_match('swu', bo, 2, 2);
+    perform test.request_duel('swu', bo, 2, 2);
     raise exception '2-2 should fail';
   exception when sqlstate '22023' then null;
   end;
   begin
-    perform public.request_match('swu', bo, 3, 0);
+    perform test.request_duel('swu', bo, 3, 0);
     raise exception 'three wins should fail';
   exception when sqlstate '22023' then null;
   end;
   begin
-    perform public.request_match('swu', gen_random_uuid(), 2, 0);
+    perform test.request_duel('swu', gen_random_uuid(), 2, 0);
     raise exception 'unknown opponent should fail';
   exception when sqlstate 'P0002' then null;
   end;
@@ -166,11 +159,9 @@ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    insert into public.matches (match_type, player1_id, player2_id, player1_score, player2_score,
-      player1_rating_before, player2_rating_before, player1_rating_delta, player2_rating_delta,
-      recorded_by)
-    values ('swu', auth.uid(), '00000000-0000-0000-0000-0000000000b2', 2, 0, 1, 1, 400, -400,
-            auth.uid());
+    insert into public.match_players (match_id, player_id, player_name, side, score,
+      rating_before, rating_delta)
+    select id, auth.uid(), 'Swu Ana', 1, 2, 1, 400 from public.matches limit 1;
     raise exception 'direct match insert should be denied';
   exception when insufficient_privilege then null;
   end;
@@ -180,7 +171,7 @@ select set_config('request.jwt.claim.sub', '', false);
 do $$
 begin
   begin
-    perform public.request_match('swu', '00000000-0000-0000-0000-0000000000b2', 2, 0);
+    perform test.request_duel('swu', '00000000-0000-0000-0000-0000000000b2', 2, 0);
     raise exception 'anonymous record should fail';
   exception when sqlstate '28000' then null;
   end;

@@ -3,18 +3,21 @@
 Internal chess, backgammon and Star Wars: Unlimited ladders for Awake
 Coffee. Members sign in, report games they played (chess on the café's DGT
 2500 clocks, backgammon as matches to N points, SWU as best-of-three
-matches), and ratings move once the opponent confirms the result. Each
-game has its own rating, ladder and look; a switch at the top of every
-screen moves between them.
+matches), and ratings move once the other players confirm the result. Each
+game has its own look; a switch at the top of every screen moves between
+them. Each game is played in several modes (Chess960, Bughouse, Nackgammon,
+Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
 
 - **App**: Flutter web (`app/`). Chess uses the "Roast pawns" design,
   backgammon "Baize", Star Wars: Unlimited "Holotable".
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
   computed in database functions, so clients can't tamper with them. All
-  games share one schema keyed by a `match_type` enum: `ratings` (one row
-  per member per game), `match_requests`, `matches`, and the
-  `request_match` / `respond_to_match` RPCs.
-  Full spec: [`specs/005-match-types/spec.md`](specs/005-match-types/spec.md).
+  games share one schema keyed by a `match_type` enum and a `mode`:
+  `game_modes`, `ratings` (one row per member per mode played),
+  `match_requests` / `match_request_players`, `matches` / `match_players`,
+  and the `request_match` / `respond_to_match` RPCs.
+  Full specs: [`specs/005-match-types/spec.md`](specs/005-match-types/spec.md),
+  [`specs/006-game-modes/spec.md`](specs/006-game-modes/spec.md).
 - **Chess rating**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
   first 30 games, then 20, 10 for good once 2400 is reached). Everyone
   starts at 1000.
@@ -26,6 +29,11 @@ screen moves between them.
   (win, draw or loss; the game score is shown but not weighted). Everyone
   starts at 1000.
   Full spec: [`specs/003-star-wars-unlimited/spec.md`](specs/003-star-wars-unlimited/spec.md).
+- **Game modes**: every mode is its own ladder. Bughouse (2 v 2), Chouette
+  (a box against a team) and Twin Suns (2 to 4 players, scored by finishing
+  order) count once every other player confirms; each player's change is
+  the average of the game's two-player change against every opponent.
+  Full spec: [`specs/006-game-modes/spec.md`](specs/006-game-modes/spec.md).
 - **Unrated games**: switch "Rated" off when recording a friendly. It is
   confirmed and kept in history but moves no rating or record.
   Full spec: [`specs/004-unrated-games/spec.md`](specs/004-unrated-games/spec.md).

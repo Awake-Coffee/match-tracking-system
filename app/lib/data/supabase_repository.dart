@@ -3,79 +3,29 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../domain/backgammon.dart';
 import '../domain/models.dart';
-import '../domain/swu.dart';
 import 'ladder_repository.dart';
 import 'live_updates.dart';
 import 'query_cache.dart';
 
-/// One game's rows in the shared `matches` or `match_requests` table: the
-/// table, the game's `match_type`, how to read a row, and whether the table
-/// keeps its own copy of the players' names (confirmed results do, so they
-/// outlive a deleted account; requests are removed with it and embed the
-/// live profile instead).
-typedef _ResultTable<T> = ({
-  String name,
-  String matchType,
-  T Function(Map<String, dynamic>) fromRow,
-  bool keepsNames,
-});
-
-final _ResultTable<ChessMatch> _chessMatches = (
-  name: 'matches',
-  matchType: 'chess',
-  fromRow: ChessMatch.fromRow,
-  keepsNames: true,
-);
-final _ResultTable<MatchRequest> _chessRequests = (
-  name: 'match_requests',
-  matchType: 'chess',
-  fromRow: MatchRequest.fromRow,
-  keepsNames: false,
-);
-final _ResultTable<BackgammonMatch> _backgammonMatches = (
-  name: 'matches',
-  matchType: 'backgammon',
-  fromRow: BackgammonMatch.fromRow,
-  keepsNames: true,
-);
-final _ResultTable<BackgammonMatchRequest> _backgammonRequests = (
-  name: 'match_requests',
-  matchType: 'backgammon',
-  fromRow: BackgammonMatchRequest.fromRow,
-  keepsNames: false,
-);
-final _ResultTable<SwuMatch> _swuMatches = (
-  name: 'matches',
-  matchType: 'swu',
-  fromRow: SwuMatch.fromRow,
-  keepsNames: true,
-);
-final _ResultTable<SwuMatchRequest> _swuRequests = (
-  name: 'match_requests',
-  matchType: 'swu',
-  fromRow: SwuMatchRequest.fromRow,
-  keepsNames: false,
-);
-
-/// Every column plus both players' display names: embedded under the side
-/// for requests, already a column of confirmed results.
-String _selectWithNames<T>(_ResultTable<T> table) {
-  if (table.keepsNames) return '*';
-  return '*, $player1:profiles!${table.name}_${player1}_id_fkey(display_name), '
-      '$player2:profiles!${table.name}_${player2}_id_fkey(display_name)';
-}
-
-/// A profile with its rating in every game.
+/// A profile with its rating in every mode.
 const _profileWithRatings = '*, ratings(*)';
 
+/// A confirmed result with its players. Each keeps a copy of the player's
+/// name, so the result outlives a deleted account.
+const _resultColumns = '*, match_players(*)';
+
+/// A request with its players and their live names (requests go with a
+/// deleted account).
+const _requestColumns = '*, match_request_players(*, profiles(display_name))';
+
 /// Tables whose changes tell a member something is waiting for them, in
-/// every game: every request change (new, answered, withdrawn) and every
-/// confirmed result. Kept in step with the publication in the realtime
-/// migration.
+/// every game: every request change (new, answered, withdrawn), every
+/// confirmation, and every confirmed result. Kept in step with the
+/// publication in the migrations.
 const _watched = [
   (table: 'match_requests', event: PostgresChangeEvent.all),
+  (table: 'match_request_players', event: PostgresChangeEvent.all),
   (table: 'matches', event: PostgresChangeEvent.insert),
 ];
 
@@ -235,9 +185,6 @@ class SupabaseLadderRepository extends LadderRepository {
     return _players = fetch;
   }
 
-  Future<List<Player>> _ladderBy(Comparator<Player> order) async =>
-      (await _allPlayers()).toList()..sort(order);
-
   Future<T> _guard<T>(Future<T> Function() run) async {
     try {
       return await run();
@@ -353,86 +300,8 @@ class SupabaseLadderRepository extends LadderRepository {
     notifyListeners();
   });
 
-  /// Newest first; only [playerId]'s when set, and only those whose
-  /// [orderColumn] is before [before] when set (the next page). Pending
-  /// requests are already limited to the signed-in member by RLS. Shared per
-  /// parameters until data changes, so switching tabs doesn't refetch.
-  Future<List<T>> _results<T>(
-    _ResultTable<T> table, {
-    required String orderColumn,
-    String? playerId,
-    int? limit,
-    DateTime? before,
-  }) => _queries.of(
-    // Games share a table, so the game is part of the key.
-    (table.name, table.matchType, playerId, limit, before),
-    () => _guard(() async {
-      var query = _client
-          .from(table.name)
-          .select(_selectWithNames(table))
-          .eq('match_type', table.matchType);
-      if (playerId != null) {
-        query = query.or(
-          '${player1}_id.eq.$playerId,${player2}_id.eq.$playerId',
-        );
-      }
-      final older = before == null
-          ? query
-          : query.lt(orderColumn, before.toUtc().toIso8601String());
-      final ordered = older.order(orderColumn, ascending: false);
-      final rows = await (limit == null ? ordered : ordered.limit(limit));
-      return rows.map(table.fromRow).toList();
-    }),
-  );
-
-  Future<T> _rowById<T>(_ResultTable<T> table, int id) async => table.fromRow(
-    await _client
-        .from(table.name)
-        .select(_selectWithNames(table))
-        .eq('id', id)
-        .single(),
-  );
-
-  /// Reports a result with `request_match` and returns the stored request
-  /// with names. [params] are the game's own: scores, and for chess the
-  /// color and clock.
-  Future<T> _request<T>(
-    _ResultTable<T> requests,
-    Map<String, dynamic> params, {
-    required bool rated,
-  }) => _guard(() async {
-    final inserted = await _client.rpc<Map<String, dynamic>>(
-      'request_match',
-      params: {'p_match_type': requests.matchType, 'p_rated': rated, ...params},
-    );
-    final request = await _rowById(requests, inserted['id'] as int);
-    _dataChanged();
-    return request;
-  });
-
-  /// Answers a request with `respond_to_match`; returns the confirmed
-  /// result, or null when the request was dropped.
-  Future<T?> _respond<T>(int requestId, bool accept, _ResultTable<T> matches) =>
-      _guard(() async {
-        final inserted = await _client.rpc<Map<String, dynamic>?>(
-          'respond_to_match',
-          params: {'p_request_id': requestId, 'p_accept': accept},
-        );
-        final matchId = inserted?['id'] as int?;
-        final match = matchId == null ? null : await _rowById(matches, matchId);
-        if (match != null) await _loadMe();
-        _dataChanged();
-        return match;
-      });
-
-  /// The reporter clears a declined request with `dismiss_declined_match`.
-  Future<void> _dismiss(int requestId) => _guard(() async {
-    await _client.rpc<void>(
-      'dismiss_declined_match',
-      params: {'p_request_id': requestId},
-    );
-    _dataChanged();
-  });
+  @override
+  Future<List<Player>> members() => _allPlayers();
 
   @override
   Future<Player> player(String id) async => (await _allPlayers()).firstWhere(
@@ -440,145 +309,112 @@ class SupabaseLadderRepository extends LadderRepository {
     orElse: () => throw const LadderException('That player no longer exists.'),
   );
 
+  /// Shared per parameters until data changes, so switching tabs doesn't
+  /// refetch.
   @override
-  Future<List<Player>> ladder() => _ladderBy(compareLadder);
-
-  @override
-  Future<List<ChessMatch>> matches({
+  Future<List<GameResult>> results(
+    MatchType type, {
+    GameMode? mode,
     String? playerId,
     int limit = 50,
     DateTime? before,
-  }) => _results(
-    _chessMatches,
-    orderColumn: 'played_at',
-    playerId: playerId,
-    limit: limit,
-    before: before,
+  }) => _queries.of(
+    ('matches', type, mode, playerId, limit, before),
+    () => _guard(() async {
+      // A member's results are found through a second, inner-joined copy of
+      // the players, so the first still lists all of them.
+      var query = _client
+          .from('matches')
+          .select(
+            playerId == null
+                ? _resultColumns
+                : '$_resultColumns, played_by:match_players!inner(player_id)',
+          )
+          .eq('match_type', type.name);
+      if (mode != null) query = query.eq('mode', mode.key);
+      if (playerId != null) query = query.eq('played_by.player_id', playerId);
+      if (before != null) {
+        query = query.lt('played_at', before.toUtc().toIso8601String());
+      }
+      final rows = await query
+          .order('played_at', ascending: false)
+          .limit(limit);
+      return rows.map(GameResult.fromRow).toList();
+    }),
+  );
+
+  /// Limited to the signed-in member's by row level security.
+  @override
+  Future<List<ResultRequest>> requests() => _queries.of(
+    ('match_requests',),
+    () => _guard(() async {
+      final rows = await _client
+          .from('match_requests')
+          .select(_requestColumns)
+          .order('created_at', ascending: false);
+      return rows.map(ResultRequest.fromRow).toList();
+    }),
   );
 
   @override
-  Future<MatchRequest> requestMatch({
-    required String opponentId,
-    required PieceColor myColor,
-    required Outcome myOutcome,
-    required ClockSetting clock,
-    bool rated = true,
-  }) => _request(_chessRequests, {
-    'p_opponent_id': opponentId,
-    'p_my_score': myOutcome.score,
-    'p_opponent_score': 1 - myOutcome.score,
-    'p_my_color': myColor.name,
-    'p_dgt_option': clock.preset.dgtOption,
-    'p_custom_base_minutes': clock.customBaseMinutes,
-    'p_custom_extra_seconds': clock.customExtraSeconds,
-  }, rated: rated);
+  Future<ResultRequest> reportResult(ResultReport report) => _guard(() async {
+    final clock = report.clock;
+    final inserted = await _client.rpc<Map<String, dynamic>>(
+      'request_match',
+      params: {
+        'p_match_type': report.mode.type.name,
+        'p_mode': report.mode.key,
+        'p_players': [
+          for (final s in report.seats)
+            {'player_id': s.playerId, 'side': s.side, 'score': s.score},
+        ],
+        'p_rated': report.rated,
+        'p_dgt_option': clock?.preset.dgtOption,
+        'p_custom_base_minutes': clock?.customBaseMinutes,
+        'p_custom_extra_seconds': clock?.customExtraSeconds,
+      },
+    );
+    final request = ResultRequest.fromRow(
+      await _client
+          .from('match_requests')
+          .select(_requestColumns)
+          .eq('id', inserted['id'] as int)
+          .single(),
+    );
+    _dataChanged();
+    return request;
+  });
 
   @override
-  Future<List<MatchRequest>> matchRequests() =>
-      _results(_chessRequests, orderColumn: 'created_at');
+  Future<GameResult?> respondToRequest(int requestId, {required bool accept}) =>
+      _guard(() async {
+        final inserted = await _client.rpc<Map<String, dynamic>?>(
+          'respond_to_match',
+          params: {'p_request_id': requestId, 'p_accept': accept},
+        );
+        final matchId = inserted?['id'] as int?;
+        final result = matchId == null
+            ? null
+            : GameResult.fromRow(
+                await _client
+                    .from('matches')
+                    .select(_resultColumns)
+                    .eq('id', matchId)
+                    .single(),
+              );
+        if (result != null) await _loadMe();
+        _dataChanged();
+        return result;
+      });
 
   @override
-  Future<ChessMatch?> respondToMatchRequest(
-    int requestId, {
-    required bool accept,
-  }) => _respond(requestId, accept, _chessMatches);
-
-  @override
-  Future<void> dismissMatchRequest(int requestId) => _dismiss(requestId);
-
-  @override
-  Future<List<Player>> backgammonLadder() => _ladderBy(compareBackgammonLadder);
-
-  @override
-  Future<List<BackgammonMatch>> backgammonMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  }) => _results(
-    _backgammonMatches,
-    orderColumn: 'played_at',
-    playerId: playerId,
-    limit: limit,
-    before: before,
-  );
-
-  @override
-  Future<BackgammonMatchRequest> requestBackgammonMatch({
-    required String opponentId,
-    required int matchLength,
-    required int myScore,
-    required int opponentScore,
-    bool rated = true,
-  }) {
-    // The database reads the match length off the winner's score.
-    if (!isFinalScore(matchLength, myScore, opponentScore)) {
-      return Future.error(
-        const LadderException(
-          'The winner\'s score must equal the match length',
-        ),
-      );
-    }
-    return _request(_backgammonRequests, {
-      'p_opponent_id': opponentId,
-      'p_my_score': myScore,
-      'p_opponent_score': opponentScore,
-    }, rated: rated);
-  }
-
-  @override
-  Future<List<BackgammonMatchRequest>> backgammonMatchRequests() =>
-      _results(_backgammonRequests, orderColumn: 'created_at');
-
-  @override
-  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
-    int requestId, {
-    required bool accept,
-  }) => _respond(requestId, accept, _backgammonMatches);
-
-  @override
-  Future<void> dismissBackgammonMatchRequest(int requestId) =>
-      _dismiss(requestId);
-
-  @override
-  Future<List<Player>> swuLadder() => _ladderBy(compareSwuLadder);
-
-  @override
-  Future<List<SwuMatch>> swuMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  }) => _results(
-    _swuMatches,
-    orderColumn: 'played_at',
-    playerId: playerId,
-    limit: limit,
-    before: before,
-  );
-
-  @override
-  Future<SwuMatchRequest> requestSwuMatch({
-    required String opponentId,
-    required int myGames,
-    required int opponentGames,
-    bool rated = true,
-  }) => _request(_swuRequests, {
-    'p_opponent_id': opponentId,
-    'p_my_score': myGames,
-    'p_opponent_score': opponentGames,
-  }, rated: rated);
-
-  @override
-  Future<List<SwuMatchRequest>> swuMatchRequests() =>
-      _results(_swuRequests, orderColumn: 'created_at');
-
-  @override
-  Future<SwuMatch?> respondToSwuMatchRequest(
-    int requestId, {
-    required bool accept,
-  }) => _respond(requestId, accept, _swuMatches);
-
-  @override
-  Future<void> dismissSwuMatchRequest(int requestId) => _dismiss(requestId);
+  Future<void> dismissRequest(int requestId) => _guard(() async {
+    await _client.rpc<void>(
+      'dismiss_declined_match',
+      params: {'p_request_id': requestId},
+    );
+    _dataChanged();
+  });
 
   @override
   Future<void> updateDisplayName(String displayName) => _guard(() async {

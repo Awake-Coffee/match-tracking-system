@@ -4,17 +4,58 @@ import 'package:awake_ladder/domain/elo.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Player _p(String id, int rating, {int gamesPlayed = 0, int? peakRating}) =>
-    Player(
-      id: id,
-      displayName: id,
+Standing _p(String id, int rating, {int gamesPlayed = 0, int? peakRating}) =>
+    Standing(
       rating: rating,
       peakRating: peakRating ?? math.max(rating, startingRating),
-      gamesPlayed: gamesPlayed,
-      wins: 0,
-      losses: 0,
-      draws: 0,
+      played: gamesPlayed,
     );
+
+/// A rated seat for [ratingChanges]: who, which side, what it scored.
+({String playerId, int side, num score, Standing standing}) _seat(
+  String id,
+  int side,
+  num score, {
+  int rating = startingRating,
+  int played = 0,
+}) => (
+  playerId: id,
+  side: side,
+  score: score,
+  standing: _p(id, rating, gamesPlayed: played),
+);
+
+GameResult _chess(
+  int id,
+  String white,
+  String black,
+  int whiteBefore,
+  int blackBefore,
+  int whiteDelta,
+) => GameResult(
+  id: id,
+  mode: GameMode.standardChess,
+  seats: [
+    RatedSeat(
+      playerId: white,
+      name: white,
+      side: 1,
+      score: 1,
+      ratingBefore: whiteBefore,
+      ratingDelta: whiteDelta,
+    ),
+    RatedSeat(
+      playerId: black,
+      name: black,
+      side: 2,
+      score: 0,
+      ratingBefore: blackBefore,
+      ratingDelta: -whiteDelta,
+    ),
+  ],
+  recordedBy: white,
+  playedAt: DateTime(2026),
+);
 
 void main() {
   group('fideRatingChange', () {
@@ -67,58 +108,62 @@ void main() {
     });
   });
 
-  group('MatchPreview', () {
+  group('ratingChanges', () {
     test('everyone starts at 1000 and a first win is worth 20', () {
-      final preview = MatchPreview(
-        me: _p('me', startingRating),
-        opponent: _p('them', startingRating),
-        outcome: Outcome.win,
+      expect(
+        ratingChanges(MatchType.chess, [
+          _seat('me', 1, 1),
+          _seat('them', 2, 0),
+        ]),
+        {'me': 20, 'them': -20},
       );
-      expect(preview.myRatingAfter, 1020);
-      expect(preview.opponentRatingAfter, 980);
     });
 
     test('each player moves by their own K-factor', () {
-      final preview = MatchPreview(
-        me: _p('me', startingRating),
-        opponent: _p('them', startingRating, gamesPlayed: 30),
-        outcome: Outcome.win,
+      expect(
+        ratingChanges(MatchType.chess, [
+          _seat('me', 1, 1),
+          _seat('them', 2, 0, played: 30),
+        ]),
+        {'me': 20, 'them': -10},
       );
-      expect(preview.myDelta, 20);
-      expect(preview.opponentDelta, -10);
+    });
+
+    // Same numbers as supabase/tests/game_modes_test.sql.
+    test('a free-for-all averages the change against every opponent', () {
+      expect(
+        ratingChanges(MatchType.swu, [
+          _seat('a', 1, 3),
+          _seat('b', 2, 2),
+          _seat('c', 3, 0),
+          _seat('d', 4, 0),
+        ]),
+        {'a': 20, 'b': 7, 'c': -13, 'd': -13},
+      );
+    });
+
+    test('teammates are not each other\'s opponents', () {
+      expect(
+        ratingChanges(MatchType.chess, [
+          _seat('a', 1, 1),
+          _seat('b', 1, 1),
+          _seat('c', 2, 0),
+          _seat('d', 2, 0),
+        ]),
+        {'a': 20, 'b': 20, 'c': -20, 'd': -20},
+      );
     });
   });
 
   test('ratingHistory replays a player through their games', () {
-    final m1 = ChessMatch(
-      id: 1,
-      whiteId: 'a',
-      blackId: 'b',
-      whiteName: 'A',
-      blackName: 'B',
-      result: MatchResult.white,
-      whiteRatingBefore: 1000,
-      blackRatingBefore: 1000,
-      whiteRatingDelta: 16,
-      blackRatingDelta: -16,
-      playedAt: DateTime(2026),
-    );
-    final m2 = ChessMatch(
-      id: 2,
-      whiteId: 'b',
-      blackId: 'a',
-      whiteName: 'B',
-      blackName: 'A',
-      result: MatchResult.white,
-      whiteRatingBefore: 984,
-      blackRatingBefore: 1016,
-      whiteRatingDelta: 17,
-      blackRatingDelta: -17,
-      playedAt: DateTime(2026),
-    );
-    expect(ratingHistory('a', [m1, m2]), [1000, 1016, 999]);
+    final m1 = _chess(1, 'a', 'b', 1000, 1000, 16);
+    final m2 = _chess(2, 'b', 'a', 984, 1016, 17);
+    expect(ratingHistory('a', [m1, m2], start: startingRating), [
+      1000,
+      1016,
+      999,
+    ]);
     expect(m2.outcomeFor('a'), Outcome.loss);
     expect(m2.colorOf('a'), PieceColor.black);
-    expect(m2.winnerId, 'b');
   });
 }
