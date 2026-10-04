@@ -156,6 +156,11 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                     SendForConfirmationButton(
                       error: error,
                       saving: saving,
+                      missing: [
+                        if (opponent == null) 'an opponent',
+                        if (outcome == null) 'a result',
+                        if (outcome != null && score == null) 'the games',
+                      ],
                       onPressed: opponent == null || score == null
                           ? null
                           : () => sendForConfirmation(

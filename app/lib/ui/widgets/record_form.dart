@@ -211,13 +211,15 @@ class _PreviewRow extends StatelessWidget {
   }
 }
 
-/// The form's error, if any, above its send button.
+/// The form's error, if any, above its send button, and under a disabled one
+/// what is still missing, so it never looks broken.
 class SendForConfirmationButton extends StatelessWidget {
   const SendForConfirmationButton({
     super.key,
     required this.error,
     required this.saving,
     required this.onPressed,
+    this.missing = const [],
   });
 
   final String? error;
@@ -225,6 +227,15 @@ class SendForConfirmationButton extends StatelessWidget {
 
   /// Null while the form is incomplete.
   final VoidCallback? onPressed;
+
+  /// What the form still needs, each with its article ("an opponent"), in
+  /// form order. Shown as "Pick an opponent and a time control".
+  final List<String> missing;
+
+  /// "a", "a and b", "a, b and c".
+  static String _list(List<String> items) => items.length < 2
+      ? items.join()
+      : '${items.sublist(0, items.length - 1).join(', ')} and ${items.last}';
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +260,14 @@ class SendForConfirmationButton extends StatelessWidget {
                 )
               : const Text('Send for confirmation'),
         ),
+        if (onPressed == null && !saving && missing.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Pick ${_list(missing)}',
+            textAlign: TextAlign.center,
+            style: d.body(14, color: d.muted),
+          ),
+        ],
       ],
     );
   }

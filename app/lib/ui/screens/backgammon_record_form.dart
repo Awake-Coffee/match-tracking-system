@@ -140,6 +140,10 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
           SendForConfirmationButton(
             error: error,
             saving: saving,
+            missing: [
+              if (opponent == null) 'an opponent',
+              if (!scored) 'a final score',
+            ],
             onPressed: opponent == null || !scored
                 ? null
                 : () => sendForConfirmation(

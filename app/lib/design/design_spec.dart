@@ -193,6 +193,11 @@ class DesignSpec {
           textStyle: body(15, weight: FontWeight.w600),
         ),
       ),
+      chipTheme: ChipThemeData(
+        shape: buttonShape(),
+        side: side,
+        labelStyle: body(14, weight: FontWeight.w600),
+      ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           shape: WidgetStatePropertyAll(buttonShape()),
