@@ -63,11 +63,13 @@ class _SignInScreenState extends State<SignInScreen> {
     } on LadderException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e, stack) {
-      // Shows in the console: non-network failures (e.g. a profile row that doesn't parse) land here too.
+      // Auth and database errors, including dropped connections, arrive as
+      // LadderException. Anything else is usually a tab running an older build
+      // than the database schema, which a reload fixes.
       debugPrint('Sign-in failed: $e\n$stack');
       if (mounted) {
         setState(
-          () => _error = 'Couldn\'t reach the server. Check your connection and try again.',
+          () => _error = 'Something went wrong. Reload the page and try again.',
         );
       }
     } finally {
