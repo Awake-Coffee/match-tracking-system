@@ -224,12 +224,14 @@ class DemoLadderRepository extends LadderRepository {
     return match;
   }
 
+  /// Names follow renames; a deleted member's stay as they were when the
+  /// account was deleted.
   ChessMatch _withCurrentNames(ChessMatch m) => ChessMatch(
     id: m.id,
     whiteId: m.whiteId,
     blackId: m.blackId,
-    whiteName: _players[m.whiteId]!.displayName,
-    blackName: _players[m.blackId]!.displayName,
+    whiteName: _players[m.whiteId]?.displayName ?? m.whiteName,
+    blackName: _players[m.blackId]?.displayName ?? m.blackName,
     result: m.result,
     clock: m.clock,
     rated: m.rated,
@@ -310,6 +312,27 @@ class DemoLadderRepository extends LadderRepository {
     _meId = null;
     _recovering = false;
     notifyListeners();
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final me = _requireMe();
+    // Confirmed results stay, under the name the member has now (as on the
+    // server, which keeps each result's names in step with renames).
+    _matches.setAll(0, _matches.map(_withCurrentNames).toList());
+    _backgammonMatches.setAll(
+      0,
+      _backgammonMatches.map(_backgammonWithCurrentNames).toList(),
+    );
+    _swuMatches.setAll(0, _swuMatches.map(_swuWithCurrentNames).toList());
+    _emails.removeWhere((_, id) => id == me.id);
+    _players.remove(me.id);
+    // Open requests go with the profile.
+    _requests.removeWhere((r) => r.involves(me.id));
+    _backgammonRequests.removeWhere((r) => r.involves(me.id));
+    _swuRequests.removeWhere((r) => r.involves(me.id));
+    _revision++;
+    await signOut();
   }
 
   @override
@@ -439,8 +462,8 @@ class DemoLadderRepository extends LadderRepository {
         id: m.id,
         winnerId: m.winnerId,
         loserId: m.loserId,
-        winnerName: _players[m.winnerId]!.displayName,
-        loserName: _players[m.loserId]!.displayName,
+        winnerName: _players[m.winnerId]?.displayName ?? m.winnerName,
+        loserName: _players[m.loserId]?.displayName ?? m.loserName,
         matchLength: m.matchLength,
         loserScore: m.loserScore,
         rated: m.rated,
@@ -627,8 +650,8 @@ class DemoLadderRepository extends LadderRepository {
     id: m.id,
     reporterId: m.reporterId,
     respondentId: m.respondentId,
-    reporterName: _players[m.reporterId]!.displayName,
-    respondentName: _players[m.respondentId]!.displayName,
+    reporterName: _players[m.reporterId]?.displayName ?? m.reporterName,
+    respondentName: _players[m.respondentId]?.displayName ?? m.respondentName,
     reporterGames: m.reporterGames,
     respondentGames: m.respondentGames,
     rated: m.rated,

@@ -80,6 +80,11 @@ abstract class LadderRepository extends ChangeNotifier {
 
   Future<void> signOut();
 
+  /// Deletes the signed-in member's account and signs them out: their login,
+  /// profile, rating and open requests go; confirmed results stay in the
+  /// history under the name they had when the account was deleted.
+  Future<void> deleteAccount();
+
   /// Every member, highest rating first.
   Future<List<Player>> ladder();
 

@@ -54,27 +54,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final depth = _depth;
     try {
       final members = await repo.ladder();
+      final memberIds = {for (final p in members) p.id};
       final tiles = switch (widget.game) {
         Game.chess => [
           for (final m in await repo.matches(
             playerId: playerId,
             limit: depth + 1,
           ))
-            MatchTile(match: m) as Widget,
+            MatchTile(match: m, memberIds: memberIds) as Widget,
         ],
         Game.backgammon => [
           for (final m in await repo.backgammonMatches(
             playerId: playerId,
             limit: depth + 1,
           ))
-            BackgammonMatchTile(match: m) as Widget,
+            BackgammonMatchTile(match: m, memberIds: memberIds) as Widget,
         ],
         Game.swu => [
           for (final m in await repo.swuMatches(
             playerId: playerId,
             limit: depth + 1,
           ))
-            SwuMatchTile(match: m) as Widget,
+            SwuMatchTile(match: m, memberIds: memberIds) as Widget,
         ],
       };
       return (

@@ -4,7 +4,8 @@ import 'package:awake_ladder/domain/swu.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Rows as PostgREST returns them from the shared `matches`, `match_requests`
-// and `ratings` tables: numeric scores arrive as doubles.
+// and `ratings` tables: numeric scores arrive as doubles. A result keeps its
+// own copy of the players' names; a request embeds their profiles.
 
 const _ana = 'ana-id';
 const _bo = 'bo-id';
@@ -17,8 +18,8 @@ Map<String, dynamic> _match(
   'id': 7,
   'player1_id': _ana,
   'player2_id': _bo,
-  'player1': {'display_name': 'Ana'},
-  'player2': {'display_name': 'Bo'},
+  'player1_name': 'Ana',
+  'player2_name': 'Bo',
   'player1_score': player1Score,
   'player2_score': player2Score,
   'rated': true,
