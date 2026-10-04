@@ -110,7 +110,9 @@ begin
   assert ana.draws = 1 and bo.draws = 1 and bo.played = 2, 'draw counted';
   assert (select count(*) from public.matches where match_type = 'swu') = 2,
     'only confirmed matches are rated';
-  assert (select count(*) from public.match_requests) = 0, 'withdrawn and declined requests are gone';
+  assert (select count(*) from public.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  -- Ana declined Bo's report, so only Bo still reads it.
+  assert (select count(*) from public.match_requests) = 0, 'the one who declined no longer sees the request';
   -- Every SWU rating is 1000 plus its match deltas (principle II).
   assert not exists (
     select 1 from public.ratings r

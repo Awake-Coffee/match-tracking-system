@@ -29,16 +29,20 @@ Player? _playerById(List<Player> players, String id) {
 }
 
 /// A reported result involving the signed-in member that still waits for
-/// the opponent, in either game.
+/// the opponent, or that the opponent declined, in any game.
 class PendingResult {
   const PendingResult({
     required this.headline,
     required this.detail,
+    required this.opponentName,
     required this.rated,
     required this.incoming,
+    this.declined = false,
     required this.reportedAt,
+    this.respondedAt,
     this.impact,
     required this.respond,
+    required this.dismiss,
   });
 
   factory PendingResult.chess(
@@ -48,6 +52,7 @@ class PendingResult {
     List<Player> players,
   ) {
     final incoming = r.awaits(meId);
+    final declined = r.declinedFor(meId);
     final myResult = switch (r.outcomeFor(meId)) {
       Outcome.win => 'you won',
       Outcome.loss => 'you lost',
@@ -55,18 +60,23 @@ class PendingResult {
     };
     final me = _playerById(players, meId);
     final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && me != null && opponent != null
+    final preview = r.rated && !declined && me != null && opponent != null
         ? MatchPreview(me: me, opponent: opponent, outcome: r.outcomeFor(meId))
         : null;
     return PendingResult(
       headline: incoming
           ? '${r.opponentName(meId)} says $myResult'
+          : declined
+          ? '${r.opponentName(meId)} declined your game'
           : 'Waiting for ${r.opponentName(meId)} to confirm',
       detail:
           'You had ${r.colorOf(meId).name}${incoming ? '' : ', $myResult'} · ${r.clock.label}',
+      opponentName: r.opponentName(meId),
       rated: r.rated,
       incoming: incoming,
+      declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (after: preview.myRatingAfter, delta: preview.myDelta),
@@ -74,6 +84,7 @@ class PendingResult {
         final match = await repo.respondToMatchRequest(r.id, accept: accept);
         return match == null ? null : _confirmedMessage('Game', match, meId);
       },
+      dismiss: () => repo.dismissMatchRequest(r.id),
     );
   }
 
@@ -84,11 +95,12 @@ class PendingResult {
     List<Player> players,
   ) {
     final incoming = r.awaits(meId);
+    final declined = r.declinedFor(meId);
     final myResult =
         '${r.wonBy(meId) ? 'you won' : 'you lost'} ${r.scoreFor(meId)}';
     final me = _playerById(players, meId);
     final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && me != null && opponent != null
+    final preview = r.rated && !declined && me != null && opponent != null
         ? BackgammonPreview(
             me: me,
             opponent: opponent,
@@ -99,11 +111,16 @@ class PendingResult {
     return PendingResult(
       headline: incoming
           ? '${r.opponentName(meId)} says $myResult'
+          : declined
+          ? '${r.opponentName(meId)} declined your match'
           : 'Waiting for ${r.opponentName(meId)} to confirm',
       detail: 'Match to ${r.matchLength}${incoming ? '' : ', $myResult'}',
+      opponentName: r.opponentName(meId),
       rated: r.rated,
       incoming: incoming,
+      declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (
@@ -117,6 +134,7 @@ class PendingResult {
         );
         return match == null ? null : _confirmedMessage('Match', match, meId);
       },
+      dismiss: () => repo.dismissBackgammonMatchRequest(r.id),
     );
   }
 
@@ -127,6 +145,7 @@ class PendingResult {
     List<Player> players,
   ) {
     final incoming = r.awaits(meId);
+    final declined = r.declinedFor(meId);
     final myResult = switch (r.outcomeFor(meId)) {
       Outcome.win => 'you won',
       Outcome.loss => 'you lost',
@@ -134,19 +153,24 @@ class PendingResult {
     };
     final me = _playerById(players, meId);
     final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && me != null && opponent != null
+    final preview = r.rated && !declined && me != null && opponent != null
         ? SwuPreview(me: me, opponent: opponent, outcome: r.outcomeFor(meId))
         : null;
     return PendingResult(
       headline: incoming
           ? '${r.opponentName(meId)} says $myResult ${r.scoreFor(meId)}'
+          : declined
+          ? '${r.opponentName(meId)} declined your match'
           : 'Waiting for ${r.opponentName(meId)} to confirm',
       detail: incoming
           ? 'Best of three'
           : 'Best of three, $myResult ${r.scoreFor(meId)}',
+      opponentName: r.opponentName(meId),
       rated: r.rated,
       incoming: incoming,
+      declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (
@@ -157,11 +181,15 @@ class PendingResult {
         final match = await repo.respondToSwuMatchRequest(r.id, accept: accept);
         return match == null ? null : _confirmedMessage('Match', match, meId);
       },
+      dismiss: () => repo.dismissSwuMatchRequest(r.id),
     );
   }
 
   final String headline;
   final String detail;
+
+  /// Who the member played, for the decline confirmation.
+  final String opponentName;
 
   /// False for a result that won't move ratings once confirmed.
   final bool rated;
@@ -170,8 +198,15 @@ class PendingResult {
   /// member reported it and can only withdraw it.
   final bool incoming;
 
+  /// The opponent declined a result the member reported; it stays until the
+  /// member [dismiss]es it.
+  final bool declined;
+
   /// When the result was reported.
   final DateTime reportedAt;
+
+  /// When the opponent declined it; null while it's still pending.
+  final DateTime? respondedAt;
 
   /// The member's rating after this result and the change, from the ladder
   /// as loaded; null when unrated or the players aren't on the ladder.
@@ -179,9 +214,36 @@ class PendingResult {
 
   /// Accepts or drops the result; returns the message to show, if any.
   final Future<String?> Function({required bool accept}) respond;
+
+  /// Clears a declined result.
+  final Future<void> Function() dismiss;
 }
 
-/// Confirm or decline results reported against you, withdraw your own.
+/// Asks before declining [name]'s result, because the decline can't be
+/// undone. True when the member goes ahead.
+Future<bool> confirmDecline(BuildContext context, String name) async {
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Decline $name\'s result?'),
+      content: Text('$name will be told, and the result won\'t count.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Decline'),
+        ),
+      ],
+    ),
+  );
+  return go ?? false;
+}
+
+/// Confirm or decline results reported against you, withdraw your own, and
+/// dismiss the ones your opponent declined.
 class PendingResultList extends StatelessWidget {
   const PendingResultList({super.key, required this.results});
 
@@ -217,11 +279,20 @@ class _PendingResultCard extends StatefulWidget {
 class _PendingResultCardState extends State<_PendingResultCard> {
   bool _busy = false;
 
+  /// Declining asks first; the other answers go straight through.
   Future<void> _respond({required bool accept}) async {
+    final r = widget.result;
+    if (!accept && r.incoming) {
+      if (!await confirmDecline(context, r.opponentName) || !mounted) return;
+    }
+    await _run(() => r.respond(accept: accept));
+  }
+
+  Future<void> _run(Future<String?> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      final message = await widget.result.respond(accept: accept);
+      final message = await action();
       if (message != null) {
         messenger.showSnackBar(SnackBar(content: Text(message)));
       }
@@ -239,8 +310,10 @@ class _PendingResultCardState extends State<_PendingResultCard> {
   }
 
   /// What confirming does to the member's rating, before they decide. Said
-  /// in the future tense for a result still waiting on the opponent.
+  /// in the future tense for a result still waiting on the opponent. A
+  /// declined result will never count, so it says nothing.
   Widget? _impactLine(BuildContext context, PendingResult r) {
+    if (r.declined) return null;
     final style = context.design.body(14, weight: FontWeight.w600);
     if (!r.rated) return Text('Ratings stay put', style: style);
     final impact = r.impact;
@@ -280,10 +353,11 @@ class _PendingResultCardState extends State<_PendingResultCard> {
             style: d.body(13, color: d.muted),
           ),
           const SizedBox(height: 2),
-          Text(
-            'Reported ${relativeAge(r.reportedAt)}',
-            style: d.body(13, color: d.muted),
-          ),
+          // A decline can surface hours later, so say when it happened.
+          Text(switch (r.respondedAt) {
+            final at? when r.declined => 'Declined ${relativeAge(at)}',
+            _ => 'Reported ${relativeAge(r.reportedAt)}',
+          }, style: d.body(13, color: d.muted)),
           if (_impactLine(context, r) case final line?) ...[
             const SizedBox(height: 8),
             line,
@@ -293,7 +367,19 @@ class _PendingResultCardState extends State<_PendingResultCard> {
             alignment: WrapAlignment.end,
             spacing: 8,
             runSpacing: 8,
-            children: r.incoming
+            children: r.declined
+                ? [
+                    FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() async {
+                              await r.dismiss();
+                              return null;
+                            }),
+                      child: const Text('Dismiss'),
+                    ),
+                  ]
+                : r.incoming
                 ? [
                     OutlinedButton(
                       onPressed: _busy ? null : () => _respond(accept: false),

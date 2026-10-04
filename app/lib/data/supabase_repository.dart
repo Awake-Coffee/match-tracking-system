@@ -377,6 +377,15 @@ class SupabaseLadderRepository extends LadderRepository {
         return match;
       });
 
+  /// The reporter clears a declined request with `dismiss_declined_match`.
+  Future<void> _dismiss(int requestId) => _guard(() async {
+    await _client.rpc<void>(
+      'dismiss_declined_match',
+      params: {'p_request_id': requestId},
+    );
+    _dataChanged();
+  });
+
   @override
   Future<Player> player(String id) async => (await _allPlayers()).firstWhere(
     (p) => p.id == id,
@@ -421,6 +430,9 @@ class SupabaseLadderRepository extends LadderRepository {
     int requestId, {
     required bool accept,
   }) => _respond(requestId, accept, _chessMatches);
+
+  @override
+  Future<void> dismissMatchRequest(int requestId) => _dismiss(requestId);
 
   @override
   Future<List<Player>> backgammonLadder() => _ladderBy(compareBackgammonLadder);
@@ -470,6 +482,10 @@ class SupabaseLadderRepository extends LadderRepository {
   }) => _respond(requestId, accept, _backgammonMatches);
 
   @override
+  Future<void> dismissBackgammonMatchRequest(int requestId) =>
+      _dismiss(requestId);
+
+  @override
   Future<List<Player>> swuLadder() => _ladderBy(compareSwuLadder);
 
   @override
@@ -502,6 +518,9 @@ class SupabaseLadderRepository extends LadderRepository {
     int requestId, {
     required bool accept,
   }) => _respond(requestId, accept, _swuMatches);
+
+  @override
+  Future<void> dismissSwuMatchRequest(int requestId) => _dismiss(requestId);
 
   @override
   Future<void> updateDisplayName(String displayName) => _guard(() async {

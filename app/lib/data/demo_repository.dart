@@ -134,6 +134,11 @@ class DemoLadderRepository extends LadderRepository {
       ? (whiteId: me, blackId: opponentId)
       : (whiteId: opponentId, blackId: me);
 
+  /// A pending request is read by both players, a declined one only by its
+  /// reporter (as the database's policies have it).
+  bool _visibleTo(String meId, RequestStatus status, String reporterId) =>
+      status == RequestStatus.pending || reporterId == meId;
+
   MatchRequest _addRequest({
     required String by,
     required String opponentId,
@@ -360,7 +365,12 @@ class DemoLadderRepository extends LadderRepository {
   @override
   Future<List<MatchRequest>> matchRequests() async {
     final me = _requireMe();
-    return _requests.reversed.where((r) => r.involves(me.id)).toList();
+    return _requests.reversed
+        .where(
+          (r) =>
+              r.involves(me.id) && _visibleTo(me.id, r.status, r.requestedBy),
+        )
+        .toList();
   }
 
   @override
@@ -370,7 +380,12 @@ class DemoLadderRepository extends LadderRepository {
   }) async {
     final me = _requireMe();
     final request = _requests
-        .where((r) => r.id == requestId && r.involves(me.id))
+        .where(
+          (r) =>
+              r.id == requestId &&
+              r.involves(me.id) &&
+              r.status == RequestStatus.pending,
+        )
         .firstOrNull;
     if (request == null) {
       throw const LadderException(
@@ -380,8 +395,14 @@ class DemoLadderRepository extends LadderRepository {
     if (accept && !request.awaits(me.id)) {
       throw const LadderException('Your opponent has to confirm this game.');
     }
-    _requests.remove(request);
     final reporter = request.requestedBy;
+    final index = _requests.indexOf(request);
+    // Declining tells the reporter; withdrawing just removes it.
+    if (!accept && reporter != me.id) {
+      _requests[index] = request.declined(DateTime.now());
+    } else {
+      _requests.removeAt(index);
+    }
     final match = accept
         ? _apply(
             me: reporter,
@@ -395,6 +416,18 @@ class DemoLadderRepository extends LadderRepository {
     _revision++;
     notifyListeners();
     return match;
+  }
+
+  @override
+  Future<void> dismissMatchRequest(int requestId) async {
+    final me = _requireMe();
+    final removed = _requests.length;
+    _requests.removeWhere((r) => r.id == requestId && r.declinedFor(me.id));
+    if (_requests.length == removed) {
+      throw const LadderException('That game is not waiting to be dismissed.');
+    }
+    _revision++;
+    notifyListeners();
   }
 
   BackgammonMatch _backgammonWithCurrentNames(BackgammonMatch m) =>
@@ -529,7 +562,10 @@ class DemoLadderRepository extends LadderRepository {
   Future<List<BackgammonMatchRequest>> backgammonMatchRequests() async {
     final me = _requireMe();
     return _backgammonRequests.reversed
-        .where((r) => r.involves(me.id))
+        .where(
+          (r) =>
+              r.involves(me.id) && _visibleTo(me.id, r.status, r.requestedBy),
+        )
         .toList();
   }
 
@@ -540,7 +576,12 @@ class DemoLadderRepository extends LadderRepository {
   }) async {
     final me = _requireMe();
     final request = _backgammonRequests
-        .where((r) => r.id == requestId && r.involves(me.id))
+        .where(
+          (r) =>
+              r.id == requestId &&
+              r.involves(me.id) &&
+              r.status == RequestStatus.pending,
+        )
         .firstOrNull;
     if (request == null) {
       throw const LadderException(
@@ -550,11 +591,30 @@ class DemoLadderRepository extends LadderRepository {
     if (accept && !request.awaits(me.id)) {
       throw const LadderException('Your opponent has to confirm this match.');
     }
-    _backgammonRequests.remove(request);
+    final index = _backgammonRequests.indexOf(request);
+    if (!accept && request.requestedBy != me.id) {
+      _backgammonRequests[index] = request.declined(DateTime.now());
+    } else {
+      _backgammonRequests.removeAt(index);
+    }
     final match = accept ? _applyBackgammon(request) : null;
     _revision++;
     notifyListeners();
     return match;
+  }
+
+  @override
+  Future<void> dismissBackgammonMatchRequest(int requestId) async {
+    final me = _requireMe();
+    final before = _backgammonRequests.length;
+    _backgammonRequests.removeWhere(
+      (r) => r.id == requestId && r.declinedFor(me.id),
+    );
+    if (_backgammonRequests.length == before) {
+      throw const LadderException('That match is not waiting to be dismissed.');
+    }
+    _revision++;
+    notifyListeners();
   }
 
   SwuMatch _swuWithCurrentNames(SwuMatch m) => SwuMatch(
@@ -670,7 +730,11 @@ class DemoLadderRepository extends LadderRepository {
   @override
   Future<List<SwuMatchRequest>> swuMatchRequests() async {
     final me = _requireMe();
-    return _swuRequests.reversed.where((r) => r.involves(me.id)).toList();
+    return _swuRequests.reversed
+        .where(
+          (r) => r.involves(me.id) && _visibleTo(me.id, r.status, r.reporterId),
+        )
+        .toList();
   }
 
   @override
@@ -680,7 +744,12 @@ class DemoLadderRepository extends LadderRepository {
   }) async {
     final me = _requireMe();
     final request = _swuRequests
-        .where((r) => r.id == requestId && r.involves(me.id))
+        .where(
+          (r) =>
+              r.id == requestId &&
+              r.involves(me.id) &&
+              r.status == RequestStatus.pending,
+        )
         .firstOrNull;
     if (request == null) {
       throw const LadderException(
@@ -690,11 +759,28 @@ class DemoLadderRepository extends LadderRepository {
     if (accept && !request.awaits(me.id)) {
       throw const LadderException('Your opponent has to confirm this match.');
     }
-    _swuRequests.remove(request);
+    final index = _swuRequests.indexOf(request);
+    if (!accept && request.reporterId != me.id) {
+      _swuRequests[index] = request.declined(DateTime.now());
+    } else {
+      _swuRequests.removeAt(index);
+    }
     final match = accept ? _applySwu(request) : null;
     _revision++;
     notifyListeners();
     return match;
+  }
+
+  @override
+  Future<void> dismissSwuMatchRequest(int requestId) async {
+    final me = _requireMe();
+    final before = _swuRequests.length;
+    _swuRequests.removeWhere((r) => r.id == requestId && r.declinedFor(me.id));
+    if (_swuRequests.length == before) {
+      throw const LadderException('That match is not waiting to be dismissed.');
+    }
+    _revision++;
+    notifyListeners();
   }
 
   @override

@@ -193,6 +193,8 @@ class SwuMatchRequest extends SwuResult {
     required super.respondentGames,
     super.rated,
     required this.createdAt,
+    this.status = RequestStatus.pending,
+    this.respondedAt,
   });
 
   /// The reporter is player1.
@@ -206,13 +208,39 @@ class SwuMatchRequest extends SwuResult {
     respondentGames: sideScore(row, player2).toInt(),
     rated: row['rated'] as bool,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    status: RequestStatus.values.byName(row['status'] as String),
+    respondedAt: parseTime(row['responded_at'] as String?),
   );
 
   final int id;
   final DateTime createdAt;
+  final RequestStatus status;
 
-  /// Whether [playerId] is the one who has to confirm or decline.
-  bool awaits(String playerId) => playerId == respondentId;
+  /// When the respondent declined; null while pending.
+  final DateTime? respondedAt;
+
+  /// Whether [playerId] is the one who has to confirm or decline it now.
+  bool awaits(String playerId) =>
+      status == RequestStatus.pending && playerId == respondentId;
+
+  /// Whether [playerId] reported this and the respondent said no.
+  bool declinedFor(String playerId) =>
+      status == RequestStatus.declined && playerId == reporterId;
+
+  /// This request after the respondent declined it at [at].
+  SwuMatchRequest declined(DateTime at) => SwuMatchRequest(
+    id: id,
+    reporterId: reporterId,
+    respondentId: respondentId,
+    reporterName: reporterName,
+    respondentName: respondentName,
+    reporterGames: reporterGames,
+    respondentGames: respondentGames,
+    rated: rated,
+    createdAt: createdAt,
+    status: RequestStatus.declined,
+    respondedAt: at,
+  );
 }
 
 /// The rating change a match would cause, before it's saved.

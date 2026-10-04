@@ -118,7 +118,8 @@ declare
   m public.matches := (select m from public.matches m order by id desc limit 1);
 begin
   assert (select count(*) from public.matches) = 2, 'only confirmed matches are rated';
-  assert (select count(*) from public.match_requests) = 0, 'withdrawn and declined requests are gone';
+  assert (select count(*) from public.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  assert (select count(*) from public.match_requests) = 1, 'withdrawing deletes, declining keeps the request for the reporter';
   assert m.player1_id = auth.uid() and m.player1_score = 1 and m.player2_score = 3
     and m.player1_rating_delta < 0, 'reporter can record a loss';
   assert (pg_temp.standing('Bg Ana', 'backgammon')).experience = 8, 'experience adds up';

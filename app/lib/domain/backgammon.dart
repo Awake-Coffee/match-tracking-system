@@ -191,6 +191,8 @@ class BackgammonMatchRequest extends BackgammonResult {
     super.rated,
     required this.requestedBy,
     required this.createdAt,
+    this.status = RequestStatus.pending,
+    this.respondedAt,
   });
 
   factory BackgammonMatchRequest.fromRow(Map<String, dynamic> row) {
@@ -206,15 +208,44 @@ class BackgammonMatchRequest extends BackgammonResult {
       rated: row['rated'] as bool,
       requestedBy: row['requested_by'] as String,
       createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+      status: RequestStatus.values.byName(row['status'] as String),
+      respondedAt: parseTime(row['responded_at'] as String?),
     );
   }
 
   final int id;
   final String requestedBy;
   final DateTime createdAt;
+  final RequestStatus status;
 
-  /// Whether [playerId] is the one who has to confirm or decline.
-  bool awaits(String playerId) => involves(playerId) && playerId != requestedBy;
+  /// When the opponent declined; null while pending.
+  final DateTime? respondedAt;
+
+  /// Whether [playerId] is the one who has to confirm or decline it now.
+  bool awaits(String playerId) =>
+      status == RequestStatus.pending &&
+      involves(playerId) &&
+      playerId != requestedBy;
+
+  /// Whether [playerId] reported this and the opponent said no.
+  bool declinedFor(String playerId) =>
+      status == RequestStatus.declined && playerId == requestedBy;
+
+  /// This request after the opponent declined it at [at].
+  BackgammonMatchRequest declined(DateTime at) => BackgammonMatchRequest(
+    id: id,
+    winnerId: winnerId,
+    loserId: loserId,
+    winnerName: winnerName,
+    loserName: loserName,
+    matchLength: matchLength,
+    loserScore: loserScore,
+    rated: rated,
+    requestedBy: requestedBy,
+    createdAt: createdAt,
+    status: RequestStatus.declined,
+    respondedAt: at,
+  );
 }
 
 /// The rating change a match would cause, before it's saved.
