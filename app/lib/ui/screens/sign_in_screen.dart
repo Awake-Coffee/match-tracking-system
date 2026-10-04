@@ -94,8 +94,10 @@ class _SignInScreenState extends State<SignInScreen> {
   List<Widget> _formFields(DesignSpec d) => [
     Text(
       _creating
-          ? 'Make a profile. You\'ll start at 1000 in chess and Star Wars: Unlimited, 1500 in backgammon.'
-          : 'Sign in to log games and see where you stand.',
+          ? 'Report the games you play at the café. Your opponent confirms '
+                'the result, and then both ratings move.'
+          : 'Sign in to the café\'s chess, backgammon and Star Wars: '
+                'Unlimited ladders.',
       style: d.body(16, color: d.muted),
     ),
     const SizedBox(height: 28),
@@ -267,7 +269,12 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('Chess, backgammon and SWU', style: d.display(46)),
+                      // Spelled out for newcomers; 34 keeps the longer name to
+                      // about three lines in the 320px a phone leaves.
+                      Text(
+                        'Chess, backgammon and Star Wars: Unlimited',
+                        style: d.display(34),
+                      ),
                       const SizedBox(height: 12),
                       if (confirming != null)
                         _ConfirmationPanel(

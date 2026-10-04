@@ -44,7 +44,11 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Chess, backgammon and SWU'), findsOneWidget);
+    expect(
+      find.text('Chess, backgammon and Star Wars: Unlimited'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ladders.'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Email'),
       anaEmail,
@@ -58,6 +62,34 @@ void main() {
 
     expect(find.text('The ladder'), findsOneWidget);
     expect(find.textContaining('You\'re '), findsOneWidget);
+  });
+
+  testWidgets('the sign-in copy explains the ladders in plain words at 360px', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('SWU'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('New here? Create a profile'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Report the games you play at the café. Your opponent confirms '
+        'the result, and then both ratings move.',
+      ),
+      findsOneWidget,
+    );
+    // The ladder summary tells new members their starting rating.
+    expect(find.textContaining('1000'), findsNothing);
+    expect(find.textContaining('1500'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   /// Opens the app signed out and submits the sign-up form for [email].
