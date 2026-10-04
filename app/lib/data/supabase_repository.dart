@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/backgammon.dart';
@@ -161,6 +162,9 @@ class SupabaseLadderRepository extends LadderRepository {
       email: email.trim(),
       password: password,
       data: {'display_name': displayName.trim()},
+      // Without it the confirmation link opens Supabase's Site URL, whatever
+      // host the member signed up on. Must be in the project's Redirect URLs.
+      emailRedirectTo: kIsWeb ? '${Uri.base.origin}/' : null,
     );
     if (res.session == null) {
       throw const LadderException(
