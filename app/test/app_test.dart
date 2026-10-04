@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
@@ -676,13 +674,15 @@ void main() {
     });
 
     testWidgets('a short history is padded with the defaults', (tester) async {
-      // Ana has played one clock; three defaults fill the row to four.
+      // Ana has played one clock; three defaults fill the row to four. The
+      // opponent chip for Bogdan sits above them.
       await open(tester, await anaAndBogdan());
       final labels = tester
           .widgetList<ChoiceChip>(find.byType(ChoiceChip))
           .map((c) => (c.label as Text).data)
           .toList();
       expect(labels, [
+        'Bogdan',
         'Sudden death 5 min',
         'Fischer 5 min + 3 s',
         'Fischer 10 min + 10 s',
@@ -716,33 +716,23 @@ void main() {
       expect(find.byType(DropdownMenu<TimeControl>), findsNothing);
     });
 
-    testWidgets('the stored clock is chosen before the games load', (
+    testWidgets('the stored clock leads the clocks of past games', (
       tester,
     ) async {
-      final repo = _SlowGames();
+      final repo = _CountedGames();
       await anaAndBogdan(into: repo);
       SharedPreferences.setMockInitialValues({
         'last_clock.${repo.me!.id}': '21,7,4',
       });
-      final games = repo.hold = Completer();
       await open(tester, repo);
 
       expect(
         tester.widget<ChoiceChip>(chip('Fischer 7 min + 4 s')).selected,
         isTrue,
       );
-      expect(chip('Sudden death 5 min'), findsNothing);
-
-      // A default chip tapped while the games load keeps its place.
-      await tapVisible(tester, chip('Fischer 15 min + 10 s'));
-      games.complete();
-      await tester.pumpAndSettle();
-
       expect(chip('Sudden death 5 min'), findsOneWidget);
-      expect(
-        tester.widget<ChoiceChip>(chip('Fischer 15 min + 10 s')).selected,
-        isTrue,
-      );
+      // One fetch of Ana's games feeds both the opponent and the clock chips.
+      expect(repo.ownGamesFetches, 1);
     });
   });
 
@@ -776,6 +766,188 @@ void main() {
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
     expect(find.text('Pick the games'), findsOneWidget);
+  });
+
+  group('recent opponents', () {
+    Finder chip(String name) => find.widgetWithText(ChoiceChip, name);
+    final recentLabel = find.text('Recent opponents');
+    final picker = find.byType(DropdownMenu<String>);
+    String fieldText(WidgetTester tester) => tester
+        .widget<TextField>(
+          find.descendant(of: picker, matching: find.byType(TextField)),
+        )
+        .controller!
+        .text;
+
+    Future<void> open(
+      WidgetTester tester,
+      DemoLadderRepository repo,
+      String location,
+    ) async {
+      _phone(tester);
+      await tester.pumpWidget(
+        AwakeApp(repository: repo, initialLocation: location),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// Ana plus five others; unless [report] is false, she reports SWU matches
+    /// against Bea, Cal, Dan, Eve and Fay, then Cal again, all still pending.
+    Future<DemoLadderRepository> regulars({bool report = true}) async {
+      final repo = DemoLadderRepository();
+      await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+      await repo.signOut();
+      final ids = <String>[];
+      for (final name in ['Bea', 'Cal', 'Dan', 'Eve', 'Fay']) {
+        await repo.signUp(
+          email: '$name@example.com',
+          password: 'x',
+          displayName: name,
+        );
+        ids.add(repo.me!.id);
+        await repo.signOut();
+      }
+      await repo.signIn(email: anaEmail, password: 'x');
+      for (final i in report ? [0, 1, 2, 3, 4, 1] : const <int>[]) {
+        await repo.requestSwuMatch(
+          opponentId: ids[i],
+          myGames: 2,
+          opponentGames: 0,
+        );
+      }
+      return repo;
+    }
+
+    for (final (game, location) in [
+      ('chess', '/record'),
+      ('backgammon', '/backgammon/record'),
+      ('SWU', '/swu/record'),
+    ]) {
+      testWidgets('the $game form offers them and a chip picks one', (
+        tester,
+      ) async {
+        final repo = await anaAndBogdanWithSwu();
+        await open(tester, repo, location);
+
+        expect(recentLabel, findsOneWidget);
+        expect(chip('Bogdan'), findsOneWidget);
+        expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isFalse);
+        expect(fieldText(tester), isEmpty);
+
+        await tester.tap(chip('Bogdan'));
+        await tester.pumpAndSettle();
+
+        expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+        expect(fieldText(tester), 'Bogdan');
+      });
+    }
+
+    testWidgets('picking from the menu highlights the matching chip', (
+      tester,
+    ) async {
+      await open(tester, await anaAndBogdan(), '/record');
+
+      await tester.tap(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Bogdan'));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+    });
+
+    testWidgets('a pre-chosen opponent starts highlighted', (tester) async {
+      await open(tester, await anaAndBogdan(), '/record?opponent=demo-2');
+
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+    });
+
+    testWidgets('they are the latest four, newest first, each once', (
+      tester,
+    ) async {
+      await open(tester, await regulars(), '/swu/record');
+
+      final names = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((c) => (c.label as Text).data)
+          .toList();
+      // Reported Bea, Cal, Dan, Eve, Fay, then Cal again: Bea falls off.
+      expect(names, ['Cal', 'Fay', 'Eve', 'Dan']);
+    });
+
+    testWidgets('confirmed and pending results merge by time; declined do not '
+        'count', (tester) async {
+      final repo = await regulars(report: false);
+      final ids = {for (final p in await repo.ladder()) p.displayName: p.id};
+      Future<void> report(String name) => repo.requestSwuMatch(
+        opponentId: ids[name]!,
+        myGames: 2,
+        opponentGames: 0,
+      );
+      Future<void> answer(String name, {required bool accept}) async {
+        await repo.signIn(email: '$name@example.com', password: 'x');
+        final request = (await repo.swuMatchRequests()).single;
+        await repo.respondToSwuMatchRequest(request.id, accept: accept);
+        await repo.signIn(email: anaEmail, password: 'x');
+      }
+
+      await report('Cal'); // pending
+      await report('Bea');
+      await answer('Bea', accept: true); // confirmed, newer than Cal's
+      await report('Eve'); // pending, newest that counts
+      await report('Dan');
+      await answer('Dan', accept: false); // declined
+      await open(tester, repo, '/swu/record');
+
+      final names = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((c) => (c.label as Text).data)
+          .toList();
+      expect(names, ['Eve', 'Bea', 'Cal']);
+    });
+
+    testWidgets('tapping the chosen chip again restores its name', (
+      tester,
+    ) async {
+      await open(tester, await anaAndBogdan(), '/record');
+      await tester.tap(chip('Bogdan'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(of: picker, matching: find.byType(TextField)),
+        'Bo',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(chip('Bogdan'));
+      await tester.pumpAndSettle();
+
+      expect(fieldText(tester), 'Bogdan');
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+    });
+
+    testWidgets('a member with no history sees no extras', (tester) async {
+      final repo = DemoLadderRepository();
+      await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+      await repo.signOut();
+      await repo.signUp(
+        email: bogdanEmail,
+        password: 'x',
+        displayName: 'Bogdan',
+      );
+      for (final location in ['/record', '/backgammon/record', '/swu/record']) {
+        await open(tester, repo, location);
+        expect(recentLabel, findsNothing, reason: location);
+        expect(chip('Ana'), findsNothing, reason: location);
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    testWidgets('games in another game do not count', (tester) async {
+      // Bogdan and Ana have only played chess so far.
+      final repo = await anaAndBogdan();
+      await open(tester, repo, '/swu/record');
+
+      expect(recentLabel, findsNothing);
+    });
   });
 
   testWidgets('confirming a game reported against you rates it', (
@@ -1710,12 +1882,13 @@ void main() {
 }
 
 /// A demo ladder whose game history waits on [hold], like a slow connection.
-class _SlowGames extends DemoLadderRepository {
-  Completer<void>? hold;
+class _CountedGames extends DemoLadderRepository {
+  /// How many times a member's own chess games were fetched.
+  int ownGamesFetches = 0;
 
   @override
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) async {
-    await hold?.future;
+  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) {
+    if (playerId != null) ownGamesFetches++;
     return super.matches(playerId: playerId, limit: limit);
   }
 }

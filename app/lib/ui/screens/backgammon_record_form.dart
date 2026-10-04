@@ -15,11 +15,15 @@ class BackgammonRecordForm extends StatefulWidget {
     required this.me,
     required this.players,
     this.initialOpponentId,
+    this.recentOpponentIds = const [],
   });
 
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
+
+  /// Who the member played lately in this game, most recent first.
+  final List<String> recentOpponentIds;
 
   @override
   State<BackgammonRecordForm> createState() => _BackgammonRecordFormState();
@@ -69,6 +73,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             players: widget.players,
             meId: widget.me.id,
             selectedId: _opponentId,
+            recentIds: widget.recentOpponentIds,
             onSelected: (id) => setState(() => _opponentId = id),
           ),
           const SizedBox(height: 24),
