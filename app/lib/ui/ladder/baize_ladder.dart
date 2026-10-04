@@ -5,8 +5,8 @@ import '../../design/designs.dart';
 import '../../domain/models.dart';
 import 'ladder_view.dart';
 
-/// Baize: every player who has played is a board point, ivory and oxblood in turn. The
-/// longer the point, the higher the backgammon rating.
+/// Baize: every player who has played is a board point, ivory and oxblood
+/// in turn. The longer the point, the higher the backgammon rating.
 class BaizeLadder extends StatelessWidget {
   const BaizeLadder({super.key, required this.data});
 

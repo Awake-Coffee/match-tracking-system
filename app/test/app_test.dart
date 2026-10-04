@@ -1414,6 +1414,13 @@ void main() {
       expect(cleo, findsOneWidget);
       expect(find.text('Not yet played'), findsOneWidget);
       expect(find.text('3'), findsNothing);
+      // The route draws no rank numbers at all, so check what screen readers
+      // hear, which every ladder labels the same way.
+      expect(find.bySemanticsLabel(RegExp(r'^Cleo, rating')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^\d+(st|nd|rd|th), Cleo')),
+        findsNothing,
+      );
       expect(find.textContaining('of 2 with'), findsOneWidget);
       await tester.ensureVisible(cleo);
       await tester.pumpAndSettle();
@@ -1440,6 +1447,59 @@ void main() {
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
     await expectUnranked(RouteLadder);
+  });
+
+  testWidgets('every ladder renders when nobody has played yet', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
+    await repo.signUp(
+      email: 'cleo@example.com',
+      password: 'x',
+      displayName: 'Cleo',
+    );
+    await repo.signOut();
+    await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    Future<void> expectAllWaiting(Type ladder) async {
+      expect(find.byType(ladder), findsOneWidget);
+      expect(find.textContaining('You start at'), findsOneWidget);
+      final cleo = find.descendant(
+        of: find.byType(ladder),
+        matching: find.text('Cleo'),
+      );
+      await tester.scrollUntilVisible(cleo, 200, scrollable: _list);
+      expect(find.text('Not yet played'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Cleo, rating')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Ana \(you\), rating')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp(r'^\d+(st|nd|rd|th), ')),
+        findsNothing,
+      );
+    }
+
+    // No empty top-eight board: the summary leads straight to the group.
+    expect(find.text('No games yet.'), findsOneWidget);
+    expect(find.textContaining('top eight'), findsNothing);
+    await expectAllWaiting(PawnsLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Backgammon'));
+    await tester.pumpAndSettle();
+    await expectAllWaiting(BaizeLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Star Wars: Unlimited'));
+    await tester.pumpAndSettle();
+    await expectAllWaiting(RouteLadder);
   });
 
   testWidgets('a recorded backgammon match waits for the opponent', (

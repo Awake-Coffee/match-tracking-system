@@ -41,44 +41,50 @@ class PawnsLadder extends StatelessWidget {
             style: d.body(16, color: d.muted),
           ),
           const SizedBox(height: 24),
-          // Pawns are a tap shortcut; the list below carries the same players for
-          // screen readers.
-          ExcludeSemantics(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(6, 14, 6, 10),
-              decoration: BoxDecoration(
-                color: d.surface,
-                border: Border.all(color: d.ink, width: 2),
-                borderRadius: d.borderRadius,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (final p in players.take(_pawnsInARank))
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => data.onOpen(p),
-                        child: _Pawn(
-                          player: p,
-                          fill:
-                              0.5 +
-                              (p.rating - startingRating) / (2.2 * maxDrift),
-                          isMe: p.id == data.meId,
+          // Nobody has played yet: an empty board would read as a broken top
+          // eight, so go straight to the members waiting to play.
+          if (players.isEmpty)
+            Text('No games yet.', style: d.body(13, color: d.muted))
+          else ...[
+            // Pawns are a tap shortcut; the list below carries the same players
+            // for screen readers.
+            ExcludeSemantics(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(6, 14, 6, 10),
+                decoration: BoxDecoration(
+                  color: d.surface,
+                  border: Border.all(color: d.ink, width: 2),
+                  borderRadius: d.borderRadius,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (final p in players.take(_pawnsInARank))
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => data.onOpen(p),
+                          child: _Pawn(
+                            player: p,
+                            fill:
+                                0.5 +
+                                (p.rating - startingRating) / (2.2 * maxDrift),
+                            isMe: p.id == data.meId,
+                          ),
                         ),
                       ),
-                    ),
-                  // Keep pawn width constant on short ladders.
-                  for (var i = players.length; i < _pawnsInARank; i++)
-                    const Spacer(),
-                ],
+                    // Keep pawn width constant on short ladders.
+                    for (var i = players.length; i < _pawnsInARank; i++)
+                      const Spacer(),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Awake\'s top eight. The fuller the pawn, the higher the rating.',
-            style: d.body(13, color: d.muted),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Awake\'s top eight. The fuller the pawn, the higher the rating.',
+              style: d.body(13, color: d.muted),
+            ),
+          ],
           const SizedBox(height: 20),
           for (final (i, p) in players.indexed)
             LadderRowTap(
