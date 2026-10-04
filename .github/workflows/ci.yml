@@ -107,5 +107,16 @@ jobs:
             "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
           echo "Auth URLs set from supabase/auth.json"
 
+      # Straight to the API: `vercel promote` looks up the token's user first,
+      # which 404s for the non-user token CI deploys with.
       - name: Serve the new app
-        run: npx --yes vercel@62.2.0 promote "${{ steps.app.outputs.url }}" --yes --token "$VERCEL_TOKEN"
+        env:
+          APP_URL: ${{ steps.app.outputs.url }}
+        run: |
+          api="https://api.vercel.com"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          deployment_id=$(curl -sS --fail-with-body -H "$auth" \
+            "$api/v13/deployments/${APP_URL#https://}?teamId=$VERCEL_ORG_ID" | jq -r .id)
+          curl -sS --fail-with-body -o /dev/null -X POST -H "$auth" \
+            "$api/v10/projects/$VERCEL_PROJECT_ID/promote/$deployment_id?teamId=$VERCEL_ORG_ID"
+          echo "Promoted $APP_URL ($deployment_id)"
