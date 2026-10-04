@@ -95,7 +95,9 @@ begin
   assert ana.swu_rating = 1018 and bo.swu_rating = 982, 'a draw moves the favourite down';
   assert ana.swu_draws = 1 and bo.swu_draws = 1 and bo.swu_matches_played = 2, 'draw counted';
   assert (select count(*) from public.swu_matches) = 2, 'only confirmed matches are rated';
-  assert (select count(*) from public.swu_match_requests) = 0, 'withdrawn and declined requests are gone';
+  assert (select count(*) from public.swu_match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  -- Ana declined Bo's report, so only Bo still reads it.
+  assert (select count(*) from public.swu_match_requests) = 0, 'the one who declined no longer sees the request';
   -- Every SWU rating is 1000 plus its match deltas (principle II).
   assert not exists (
     select 1 from public.profiles p

@@ -95,7 +95,8 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1
 do $$
 begin
   assert (select count(*) from public.backgammon_matches) = 2, 'only confirmed matches are rated';
-  assert (select count(*) from public.backgammon_match_requests) = 0, 'withdrawn and declined requests are gone';
+  assert (select count(*) from public.backgammon_match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  assert (select count(*) from public.backgammon_match_requests) = 1, 'withdrawing deletes, declining keeps the request for the reporter';
   assert (select winner_id from public.backgammon_matches order by id desc limit 1)
     = '00000000-0000-0000-0000-0000000000b1', 'reporter can record a loss';
   -- Every backgammon rating is 1500 plus its match deltas (principle II).

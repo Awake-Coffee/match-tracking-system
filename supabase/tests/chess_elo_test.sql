@@ -109,7 +109,8 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 
 do $$
 begin
-  assert (select count(*) from public.match_requests) = 0, 'withdrawn and declined requests are gone';
+  assert (select count(*) from public.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
+  assert (select count(*) from public.match_requests) = 1, 'withdrawing deletes, declining keeps the request for the reporter';
   assert (select count(*) from public.matches) = 1, 'declined games are not rated';
   assert (select rating from public.profiles where display_name = 'Ana') = 1020, 'rating unchanged';
 end $$;
