@@ -1424,7 +1424,10 @@ void main() {
 
       // Ana (1020) lost to Bogdan (980) on the board.
       expect(find.text('Bogdan says you lost'), findsOneWidget);
-      expect(find.text('Confirm and you go to 998 ('), findsOneWidget);
+      expect(
+        find.textContaining('Confirm and you go to 998 ('),
+        findsOneWidget,
+      );
       expect(find.text('−22'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
 
@@ -1443,7 +1446,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Waiting for Ana to confirm'), findsOneWidget);
-      expect(find.text('Once confirmed you go to 1002 ('), findsOneWidget);
+      expect(
+        find.textContaining('Once confirmed you go to 1002 ('),
+        findsOneWidget,
+      );
       expect(find.text('+22'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
     });
@@ -1464,7 +1470,7 @@ void main() {
       await tester.pumpWidget(AwakeApp(repository: repo));
       await tester.pumpAndSettle();
 
-      expect(find.text('Ratings stay put.'), findsOneWidget);
+      expect(find.text('Ratings stay put'), findsOneWidget);
       expect(find.textContaining(' you go to '), findsOneWidget);
       expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     });
@@ -1482,7 +1488,10 @@ void main() {
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
       expect(find.text('Bogdan says you lost 1-3'), findsOneWidget);
-      expect(find.text('Confirm and you go to 1504 ('), findsOneWidget);
+      expect(
+        find.textContaining('Confirm and you go to 1504 ('),
+        findsOneWidget,
+      );
       expect(find.text('−18'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
@@ -1494,7 +1503,10 @@ void main() {
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();
       expect(find.text('Bogdan says you lost 0-2'), findsOneWidget);
-      expect(find.text('Confirm and you go to 998 ('), findsOneWidget);
+      expect(
+        find.textContaining('Confirm and you go to 998 ('),
+        findsOneWidget,
+      );
       expect(find.text('−22'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
@@ -1521,7 +1533,7 @@ void main() {
               body: PendingResultList(
                 results: [
                   card(const Duration(hours: 2, minutes: 5)),
-                  card(const Duration(hours: 30)),
+                  card(const Duration(minutes: 45)),
                 ],
               ),
             ),
@@ -1530,8 +1542,11 @@ void main() {
       );
 
       expect(find.text('Reported 2 h ago'), findsOneWidget);
-      expect(find.text('Reported yesterday'), findsOneWidget);
-      expect(find.text('Confirm and you go to 984 ('), findsNWidgets(2));
+      expect(find.text('Reported 45 min ago'), findsOneWidget);
+      expect(
+        find.textContaining('Confirm and you go to 984 ('),
+        findsNWidgets(2),
+      );
       expect(find.text('−16'), findsNWidgets(2));
     });
   });

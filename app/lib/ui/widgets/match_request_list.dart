@@ -242,19 +242,26 @@ class _PendingResultCardState extends State<_PendingResultCard> {
   /// in the future tense for a result still waiting on the opponent.
   Widget? _impactLine(BuildContext context, PendingResult r) {
     final style = context.design.body(14, weight: FontWeight.w600);
-    if (!r.rated) return Text('Ratings stay put.', style: style);
+    if (!r.rated) return Text('Ratings stay put', style: style);
     final impact = r.impact;
     if (impact == null) return null;
     final lead = r.incoming
         ? 'Confirm and you go to'
         : 'Once confirmed you go to';
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text('$lead ${impact.after} (', style: style),
-        DeltaText(impact.delta),
-        Text(')', style: style),
-      ],
+    // One paragraph, so it wraps as a sentence and reads as one.
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: '$lead ${impact.after} ('),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: DeltaText(impact.delta),
+          ),
+          const TextSpan(text: ')'),
+        ],
+      ),
     );
   }
 
