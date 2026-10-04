@@ -22,9 +22,19 @@ class DemoLadderRepository extends LadderRepository {
   int _nextRequestId = 1;
   String? _meId;
   int _revision = 0;
+  bool _recovering = false;
 
   @override
   Player? get me => _meId == null ? null : _players[_meId];
+
+  @override
+  String? get email => _emails.entries
+      .where((e) => e.value == _meId)
+      .map((e) => e.key)
+      .firstOrNull;
+
+  @override
+  bool get passwordRecoveryPending => _recovering;
 
   @override
   int get revision => _revision;
@@ -44,6 +54,23 @@ class DemoLadderRepository extends LadderRepository {
 
   /// When set, [resendSignUpConfirmation] throws it, as a refused send would.
   LadderException? resendError;
+
+  /// Addresses [sendPasswordReset] was asked to email, oldest first.
+  final List<String> passwordResets = [];
+
+  /// When set, [sendPasswordReset] throws it, as a refused send would.
+  LadderException? passwordResetError;
+
+  /// Addresses whose password [updatePassword] has changed, oldest first.
+  final List<String> passwordChanges = [];
+
+  /// Opens the app as the emailed reset link would: signs [email] in and
+  /// waits for a new password.
+  Future<void> openRecoveryLink(String email) async {
+    await signIn(email: email, password: 'recovery-link');
+    _recovering = true;
+    notifyListeners();
+  }
 
   @override
   String? get modeNote =>
@@ -235,8 +262,29 @@ class DemoLadderRepository extends LadderRepository {
   }
 
   @override
+  Future<void> sendPasswordReset(String email) async {
+    final error = passwordResetError;
+    if (error != null) throw error;
+    if (!email.contains('@')) {
+      throw const LadderException('Enter an email address.');
+    }
+    passwordResets.add(email.trim().toLowerCase());
+  }
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    _requireMe();
+    final tooShort = validateNewPassword(newPassword);
+    if (tooShort != null) throw LadderException(tooShort);
+    passwordChanges.add(email!);
+    _recovering = false;
+    notifyListeners();
+  }
+
+  @override
   Future<void> signOut() async {
     _meId = null;
+    _recovering = false;
     notifyListeners();
   }
 

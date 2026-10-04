@@ -32,6 +32,15 @@ abstract class LadderRepository extends ChangeNotifier {
 
   bool get isSignedIn => me != null;
 
+  /// The signed-in member's sign-in email, or null when signed out. Profiles
+  /// don't carry it; it belongs to the auth account.
+  String? get email;
+
+  /// True from the moment the app is opened from a password-recovery link
+  /// until the member saves a new password or signs out. The member is
+  /// signed in by the link, but only to choose a new password.
+  bool get passwordRecoveryPending;
+
   /// Bumped whenever ratings, matches or pending games change.
   int get revision;
 
@@ -52,6 +61,14 @@ abstract class LadderRepository extends ChangeNotifier {
 
   /// Sends the sign-up confirmation email to [email] again.
   Future<void> resendSignUpConfirmation(String email);
+
+  /// Emails a link to [email] for choosing a new password. Says nothing about
+  /// whether an account exists, so it can't be used to probe for members.
+  Future<void> sendPasswordReset(String email);
+
+  /// Sets the signed-in member's password: from Settings, or after opening a
+  /// recovery link. Ends [passwordRecoveryPending].
+  Future<void> updatePassword(String newPassword);
 
   Future<void> signOut();
 
@@ -177,3 +194,7 @@ String? validateDisplayName(String? value) {
   if (name.length > 32) return 'Use 32 characters or fewer';
   return null;
 }
+
+/// Same rule for choosing a password at sign-up, in Settings and on reset.
+String? validateNewPassword(String? value) =>
+    (value == null || value.length < 8) ? 'Use at least 8 characters' : null;

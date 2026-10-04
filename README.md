@@ -43,11 +43,13 @@ make dev    # debug build with hot reload
 make test   # Flutter tests + SQL tests (needs Postgres binaries on PATH)
 ```
 
-Sign-up confirmation emails link back to the host the member signed up on.
+Sign-up confirmation and password-reset emails link back to the host the
+member used: confirmations to `/`, reset links to `/reset-password`.
 Supabase only allows hosts listed under Authentication → URL Configuration:
 set the Site URL to `https://awake-chess-ladder.vercel.app` and add
 `https://awake-chess-ladder.vercel.app/**` and `http://localhost:8080/**`
-to the Redirect URLs.
+to the Redirect URLs (the wildcard covers `/reset-password`; if you list URLs
+one by one, add `<host>/reset-password` for each host).
 
 ## Database changes
 

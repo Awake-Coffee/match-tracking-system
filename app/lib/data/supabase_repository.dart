@@ -70,8 +70,15 @@ const _watched = [
 class SupabaseLadderRepository extends LadderRepository {
   SupabaseLadderRepository(this._client) {
     _authSub = _client.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery) {
+        // The link has already signed the member in; the router sends them to
+        // choose a password before anything else.
+        _recovering = true;
+        notifyListeners();
+      }
       if (state.event == AuthChangeEvent.signedOut) {
         _me = null;
+        _recovering = false;
         _live.stop();
         notifyListeners();
         // initialSession is left to restore(), so startup fetches the profile once.
@@ -86,6 +93,7 @@ class SupabaseLadderRepository extends LadderRepository {
   final SupabaseClient _client;
   late final StreamSubscription<AuthState> _authSub;
   Player? _me;
+  bool _recovering = false;
   int _revision = 0;
   Future<List<Player>>? _players;
   late final _live = LiveUpdates(onChanged: _dataChanged, subscribe: _listen);
@@ -95,6 +103,12 @@ class SupabaseLadderRepository extends LadderRepository {
 
   @override
   int get revision => _revision;
+
+  @override
+  String? get email => _client.auth.currentUser?.email;
+
+  @override
+  bool get passwordRecoveryPending => _recovering;
 
   /// Loads the profile for an existing session (call once at startup).
   Future<void> restore() async {
@@ -204,6 +218,15 @@ class SupabaseLadderRepository extends LadderRepository {
   /// host the member signed up on. Must be in the project's Redirect URLs.
   String? get _confirmationRedirect => kIsWeb ? '${Uri.base.origin}/' : null;
 
+  /// Where the password-reset link lands. Must be in the Redirect URLs too.
+  String? get _recoveryRedirect =>
+      kIsWeb ? '${Uri.base.origin}/reset-password' : null;
+
+  /// Auth emails to one address are rate limited; the raw "only request this
+  /// after N seconds" reads as alarming.
+  bool _isEmailRateLimit(AuthException e) =>
+      e.statusCode == '429' || e.code == 'over_email_send_rate_limit';
+
   @override
   Future<void> resendSignUpConfirmation(String email) => _guard(() async {
     try {
@@ -213,9 +236,8 @@ class SupabaseLadderRepository extends LadderRepository {
         emailRedirectTo: _confirmationRedirect,
       );
     } on AuthException catch (e) {
-      // The sign-up email counts too, so an early resend is refused; the raw
-      // "only request this after N seconds" reads as alarming.
-      if (e.statusCode == '429' || e.code == 'over_email_send_rate_limit') {
+      // The sign-up email counts too, so an early resend is refused.
+      if (_isEmailRateLimit(e)) {
         throw const LadderException('Give it a minute, then try again.');
       }
       rethrow;
@@ -223,9 +245,34 @@ class SupabaseLadderRepository extends LadderRepository {
   });
 
   @override
+  Future<void> sendPasswordReset(String email) => _guard(() async {
+    try {
+      await _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: _recoveryRedirect,
+      );
+    } on AuthException catch (e) {
+      if (_isEmailRateLimit(e)) {
+        throw const LadderException('Give it a minute, then try again.');
+      }
+      rethrow;
+    }
+  });
+
+  @override
+  Future<void> updatePassword(String newPassword) => _guard(() async {
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+    // The recovery event can beat the profile fetch; the ladder needs it.
+    if (_me == null) await _loadMe();
+    _recovering = false;
+    notifyListeners();
+  });
+
+  @override
   Future<void> signOut() => _guard(() async {
     await _client.auth.signOut();
     _me = null;
+    _recovering = false;
     notifyListeners();
   });
 

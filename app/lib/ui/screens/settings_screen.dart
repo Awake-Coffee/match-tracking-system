@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../data/ladder_repository.dart';
+import '../../design/design_scope.dart';
 import '../app_scope.dart';
+import '../widgets/password_field.dart';
 import '../widgets/surface.dart';
 
 const _rowHeight = 56.0;
@@ -44,10 +46,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final repo = context.repo;
+    final d = context.design;
+    final email = repo.email;
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
-        const ScreenTitle('Settings'),
+        ScreenTitle(
+          'Settings',
+          subtitle: email == null ? null : 'Signed in as $email',
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Form(
@@ -81,7 +88,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Change password', style: d.display(22)),
+              const SizedBox(height: 16),
+              NewPasswordForm(
+                submitLabel: 'Change password',
+                onSubmit: (password) async {
+                  await repo.updatePassword(password);
+                  _toast('Password updated.');
+                },
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
           child: OutlinedButton(
             onPressed: () => repo.signOut(),
             child: const Text('Sign out'),
