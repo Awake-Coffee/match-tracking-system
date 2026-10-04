@@ -55,9 +55,11 @@ mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
   }
 }
 
-/// Searchable list of everyone but the signed-in member, with their rating
-/// in the game being recorded.
-class OpponentPicker extends StatelessWidget {
+/// The member's few most recent opponents as one-tap chips, above a
+/// searchable list of everyone but the signed-in member with their rating in
+/// the game being recorded. The café is a group of regulars, so most reports
+/// need no typing.
+class OpponentPicker extends StatefulWidget {
   const OpponentPicker({
     super.key,
     required this.game,
@@ -65,7 +67,11 @@ class OpponentPicker extends StatelessWidget {
     required this.meId,
     required this.selectedId,
     required this.onSelected,
+    this.recentIds = const [],
   });
+
+  /// How many recent opponents get a chip.
+  static const maxRecent = 4;
 
   final Game game;
   final List<Player> players;
@@ -73,27 +79,72 @@ class OpponentPicker extends StatelessWidget {
   final String? selectedId;
   final ValueChanged<String?> onSelected;
 
+  /// Who the member played or has a pending result with, most recent first.
+  final List<String> recentIds;
+
+  @override
+  State<OpponentPicker> createState() => _OpponentPickerState();
+}
+
+class _OpponentPickerState extends State<OpponentPicker> {
+  /// Bumped when a chip picks the opponent, so the menu re-reads the choice.
+  int _epoch = 0;
+
+  void _pickRecent(String id) {
+    if (id == widget.selectedId) return;
+    setState(() => _epoch++);
+    widget.onSelected(id);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final opponents = players.where((p) => p.id != meId).toList()
+    final d = context.design;
+    final opponents = widget.players.where((p) => p.id != widget.meId).toList()
       ..sort(
         (a, b) =>
             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
       );
-    return DropdownMenu<String>(
-      initialSelection: selectedId,
-      expandedInsets: EdgeInsets.zero,
-      enableFilter: true,
-      requestFocusOnTap: true,
-      hintText: 'Search players',
-      onSelected: onSelected,
-      dropdownMenuEntries: [
-        for (final p in opponents)
-          DropdownMenuEntry(
-            value: p.id,
-            label: p.displayName,
-            trailingIcon: Text('${game.ratingOf(p)}'),
+    final recent = [
+      for (final id in widget.recentIds)
+        ?opponents.where((p) => p.id == id).firstOrNull,
+    ].take(OpponentPicker.maxRecent).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (recent.isNotEmpty) ...[
+          Text('Recent opponents', style: d.body(13, color: d.muted)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final p in recent)
+                ChoiceChip(
+                  label: Text(p.displayName),
+                  selected: p.id == widget.selectedId,
+                  onSelected: (_) => _pickRecent(p.id),
+                ),
+            ],
           ),
+          const SizedBox(height: 12),
+        ],
+        DropdownMenu<String>(
+          key: ValueKey(_epoch),
+          initialSelection: widget.selectedId,
+          expandedInsets: EdgeInsets.zero,
+          enableFilter: true,
+          requestFocusOnTap: true,
+          hintText: 'Search players',
+          onSelected: widget.onSelected,
+          dropdownMenuEntries: [
+            for (final p in opponents)
+              DropdownMenuEntry(
+                value: p.id,
+                label: p.displayName,
+                trailingIcon: Text('${widget.game.ratingOf(p)}'),
+              ),
+          ],
+        ),
       ],
     );
   }

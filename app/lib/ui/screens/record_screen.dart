@@ -23,8 +23,17 @@ class RecordScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final noun = game.resultNoun;
     return LoadView(
-      load: game.ladderOf,
-      builder: (context, players, _) {
+      load: (repo) async {
+        final meId = repo.me?.id;
+        final recent = meId == null
+            ? Future.value(const <String>[])
+            : game.recentOpponentsOf(repo, meId);
+        final players = game.ladderOf(repo);
+        return (players: await players, recentIds: await recent);
+      },
+      builder: (context, data, _) {
+        final players = data.players;
+        final recentIds = data.recentIds;
         final meId = context.repo.me?.id;
         final me = players.where((p) => p.id == meId).firstOrNull;
         final initialOpponentId =
@@ -51,16 +60,19 @@ class RecordScreen extends StatelessWidget {
                   me: me,
                   players: players,
                   initialOpponentId: initialOpponentId,
+                  recentOpponentIds: recentIds,
                 ),
                 Game.backgammon => BackgammonRecordForm(
                   me: me,
                   players: players,
                   initialOpponentId: initialOpponentId,
+                  recentOpponentIds: recentIds,
                 ),
                 Game.swu => SwuRecordForm(
                   me: me,
                   players: players,
                   initialOpponentId: initialOpponentId,
+                  recentOpponentIds: recentIds,
                 ),
               },
           ],
@@ -75,11 +87,13 @@ class _ChessRecordForm extends StatefulWidget {
     required this.me,
     required this.players,
     this.initialOpponentId,
+    this.recentOpponentIds = const [],
   });
 
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
+  final List<String> recentOpponentIds;
 
   @override
   State<_ChessRecordForm> createState() => _ChessRecordFormState();
@@ -184,6 +198,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             players: widget.players,
             meId: widget.me.id,
             selectedId: _opponentId,
+            recentIds: widget.recentOpponentIds,
             onSelected: (id) => setState(() => _opponentId = id),
           ),
           const SizedBox(height: 24),

@@ -676,13 +676,15 @@ void main() {
     });
 
     testWidgets('a short history is padded with the defaults', (tester) async {
-      // Ana has played one clock; three defaults fill the row to four.
+      // Ana has played one clock; three defaults fill the row to four. The
+      // opponent chip for Bogdan sits above them.
       await open(tester, await anaAndBogdan());
       final labels = tester
           .widgetList<ChoiceChip>(find.byType(ChoiceChip))
           .map((c) => (c.label as Text).data)
           .toList();
       expect(labels, [
+        'Bogdan',
         'Sudden death 5 min',
         'Fischer 5 min + 3 s',
         'Fischer 10 min + 10 s',
@@ -724,6 +726,8 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'last_clock.${repo.me!.id}': '21,7,4',
       });
+      // The record screen's own opponent lookup goes first, unheld.
+      repo.unheld = 1;
       final games = repo.hold = Completer();
       await open(tester, repo);
 
@@ -776,6 +780,138 @@ void main() {
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
     expect(find.text('Pick the games'), findsOneWidget);
+  });
+
+  group('recent opponents', () {
+    Finder chip(String name) => find.widgetWithText(ChoiceChip, name);
+    final recentLabel = find.text('Recent opponents');
+    final picker = find.byType(DropdownMenu<String>);
+    String fieldText(WidgetTester tester) => tester
+        .widget<TextField>(
+          find.descendant(of: picker, matching: find.byType(TextField)),
+        )
+        .controller!
+        .text;
+
+    Future<void> open(
+      WidgetTester tester,
+      DemoLadderRepository repo,
+      String location,
+    ) async {
+      _phone(tester);
+      await tester.pumpWidget(
+        AwakeApp(repository: repo, initialLocation: location),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// Ana plus five others; she reports SWU matches against Bea, Cal, Dan, Eve
+    /// and Fay, then Cal again, all still pending.
+    Future<DemoLadderRepository> regulars() async {
+      final repo = DemoLadderRepository();
+      await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+      await repo.signOut();
+      final ids = <String>[];
+      for (final name in ['Bea', 'Cal', 'Dan', 'Eve', 'Fay']) {
+        await repo.signUp(
+          email: '$name@example.com',
+          password: 'x',
+          displayName: name,
+        );
+        ids.add(repo.me!.id);
+        await repo.signOut();
+      }
+      await repo.signIn(email: anaEmail, password: 'x');
+      for (final i in [0, 1, 2, 3, 4, 1]) {
+        await repo.requestSwuMatch(
+          opponentId: ids[i],
+          myGames: 2,
+          opponentGames: 0,
+        );
+      }
+      return repo;
+    }
+
+    for (final (game, location) in [
+      ('chess', '/record'),
+      ('backgammon', '/backgammon/record'),
+      ('SWU', '/swu/record'),
+    ]) {
+      testWidgets('the $game form offers them and a chip picks one', (
+        tester,
+      ) async {
+        final repo = await anaAndBogdanWithSwu();
+        await open(tester, repo, location);
+
+        expect(recentLabel, findsOneWidget);
+        expect(chip('Bogdan'), findsOneWidget);
+        expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isFalse);
+        expect(fieldText(tester), isEmpty);
+
+        await tester.tap(chip('Bogdan'));
+        await tester.pumpAndSettle();
+
+        expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+        expect(fieldText(tester), 'Bogdan');
+      });
+    }
+
+    testWidgets('picking from the menu highlights the matching chip', (
+      tester,
+    ) async {
+      await open(tester, await anaAndBogdan(), '/record');
+
+      await tester.tap(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Bogdan'));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+    });
+
+    testWidgets('a pre-chosen opponent starts highlighted', (tester) async {
+      await open(tester, await anaAndBogdan(), '/record?opponent=demo-2');
+
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
+    });
+
+    testWidgets('they are the latest four, newest first, each once', (
+      tester,
+    ) async {
+      await open(tester, await regulars(), '/swu/record');
+
+      final names = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((c) => (c.label as Text).data)
+          .toList();
+      // Reported Bea, Cal, Dan, Eve, Fay, then Cal again: Bea falls off.
+      expect(names, ['Cal', 'Fay', 'Eve', 'Dan']);
+    });
+
+    testWidgets('a member with no history sees no extras', (tester) async {
+      final repo = DemoLadderRepository();
+      await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+      await repo.signOut();
+      await repo.signUp(
+        email: bogdanEmail,
+        password: 'x',
+        displayName: 'Bogdan',
+      );
+      for (final location in ['/record', '/backgammon/record', '/swu/record']) {
+        await open(tester, repo, location);
+        expect(recentLabel, findsNothing, reason: location);
+        expect(chip('Ana'), findsNothing, reason: location);
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    testWidgets('games in another game do not count', (tester) async {
+      // Bogdan and Ana have only played chess so far.
+      final repo = await anaAndBogdan();
+      await open(tester, repo, '/swu/record');
+
+      expect(recentLabel, findsNothing);
+    });
   });
 
   testWidgets('confirming a game reported against you rates it', (
@@ -1713,9 +1849,16 @@ void main() {
 class _SlowGames extends DemoLadderRepository {
   Completer<void>? hold;
 
+  /// How many requests for games are answered at once before [hold] applies.
+  int unheld = 0;
+
   @override
   Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) async {
-    await hold?.future;
+    if (unheld > 0) {
+      unheld--;
+    } else {
+      await hold?.future;
+    }
     return super.matches(playerId: playerId, limit: limit);
   }
 }

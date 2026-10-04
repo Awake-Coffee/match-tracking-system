@@ -101,6 +101,42 @@ enum Game {
     swu => repo.swuLadder(),
   };
 
+  /// The members [meId] has played or has a pending result with in this game,
+  /// most recent first, each once. A shortcut for the record form, so a failed
+  /// load reads as no history rather than blocking it.
+  Future<List<String>> recentOpponentsOf(
+    LadderRepository repo,
+    String meId,
+  ) async {
+    try {
+      return distinctNewestFirst(switch (this) {
+        chess => [
+          for (final m in await repo.matches(playerId: meId))
+            (id: m.opponentId(meId), at: m.playedAt),
+          for (final r in await repo.matchRequests())
+            if (r.involves(meId) && r.status == RequestStatus.pending)
+              (id: r.opponentId(meId), at: r.createdAt),
+        ],
+        backgammon => [
+          for (final m in await repo.backgammonMatches(playerId: meId))
+            (id: m.opponentId(meId), at: m.playedAt),
+          for (final r in await repo.backgammonMatchRequests())
+            if (r.involves(meId) && r.status == RequestStatus.pending)
+              (id: r.opponentId(meId), at: r.createdAt),
+        ],
+        swu => [
+          for (final m in await repo.swuMatches(playerId: meId))
+            (id: m.opponentId(meId), at: m.playedAt),
+          for (final r in await repo.swuMatchRequests())
+            if (r.involves(meId) && r.status == RequestStatus.pending)
+              (id: r.opponentId(meId), at: r.createdAt),
+        ],
+      });
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Results reported against [meId] that wait for their confirmation.
   Future<int> awaitingCountOf(LadderRepository repo, String meId) async =>
       switch (this) {
@@ -110,4 +146,15 @@ enum Game {
         ),
         swu => (await repo.swuMatchRequests()).where((r) => r.awaits(meId)),
       }.length;
+}
+
+/// The ids of [games] by time, newest first, each once. Ties keep their given
+/// order, so confirmed and pending games merge predictably.
+List<String> distinctNewestFirst(Iterable<({String id, DateTime at})> games) {
+  final indexed = games.indexed.toList()
+    ..sort((a, b) {
+      final byTime = b.$2.at.compareTo(a.$2.at);
+      return byTime != 0 ? byTime : a.$1.compareTo(b.$1);
+    });
+  return {for (final (_, g) in indexed) g.id}.toList();
 }
