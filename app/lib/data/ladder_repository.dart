@@ -29,12 +29,8 @@ abstract class LadderRepository extends ChangeNotifier {
   /// Short description shown on the sign-in screen, or null for production.
   String? get modeNote => null;
 
-  /// Drops cached data so the next load hits the backend (pull-to-refresh,
-  /// retry).
-  void refresh() {}
-
-  /// Refetches everything on screen, as if data had changed: the manual
-  /// refresh for screens where pull-to-refresh isn't available (mouse).
+  /// Drops cached data and refetches everything on screen, as if data had
+  /// changed: pull-to-refresh, retry and the Refresh button.
   void reload();
 
   Future<void> signIn({required String email, required String password});

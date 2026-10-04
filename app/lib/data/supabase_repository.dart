@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/backgammon.dart';
 import '../domain/models.dart';
 import '../domain/swu.dart';
 import 'ladder_repository.dart';
+import 'live_updates.dart';
 
 /// A table of one game's results: its name, the two player columns
 /// (`<side>_id`) and how to read a row.
@@ -67,20 +67,12 @@ const _watched = [
   (table: 'swu_matches', event: PostgresChangeEvent.insert),
 ];
 
-/// Fallback for when Realtime is down or its socket silently died.
-const _pollEvery = Duration(seconds: 60);
-
-/// Events arriving together (a confirmation inserts a result and deletes its
-/// request) reload screens once.
-const _eventBurst = Duration(milliseconds: 300);
-
-class SupabaseLadderRepository extends LadderRepository
-    with WidgetsBindingObserver {
+class SupabaseLadderRepository extends LadderRepository {
   SupabaseLadderRepository(this._client) {
     _authSub = _client.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.signedOut) {
         _me = null;
-        _goOffline();
+        _live.stop();
         notifyListeners();
         // initialSession is left to restore(), so startup fetches the profile once.
       } else if (state.event != AuthChangeEvent.initialSession &&
@@ -96,10 +88,7 @@ class SupabaseLadderRepository extends LadderRepository
   Player? _me;
   int _revision = 0;
   Future<List<Player>>? _players;
-  RealtimeChannel? _channel;
-  Timer? _poll;
-  Timer? _burst;
-  bool _visible = true;
+  late final _live = LiveUpdates(onChanged: _dataChanged, subscribe: _listen);
 
   @override
   Player? get me => _me;
@@ -123,54 +112,23 @@ class SupabaseLadderRepository extends LadderRepository
     _me = row == null ? null : Player.fromRow(row);
     // A new account isn't in the cached members yet.
     _players = null;
-    if (_me != null) _goLive();
+    if (_me != null) _live.start();
     notifyListeners();
   }
 
-  /// While signed in, hears about other members' results and requests the
-  /// moment they happen (Realtime), refetches when the app returns to the
-  /// foreground, and polls as a fallback. Safe to call repeatedly.
-  void _goLive() {
-    if (_channel != null) return;
-    WidgetsBinding.instance.addObserver(this);
-    var channel = _client.channel('ladder-changes');
+  /// Hears of other members' results and requests the moment they happen.
+  VoidCallback _listen(VoidCallback onEvent) {
+    final channel = _client.channel('ladder-changes');
     for (final (:table, :event) in _watched) {
-      channel = channel.onPostgresChanges(
+      channel.onPostgresChanges(
         event: event,
         schema: 'public',
         table: table,
-        callback: (_) => _changedElsewhere(),
+        callback: (_) => onEvent(),
       );
     }
-    _channel = channel.subscribe();
-    _poll = Timer.periodic(_pollEvery, (_) {
-      if (_visible) _dataChanged();
-    });
-  }
-
-  void _goOffline() {
-    final channel = _channel;
-    if (channel == null) return;
-    WidgetsBinding.instance.removeObserver(this);
-    _poll?.cancel();
-    _burst?.cancel();
-    _channel = _poll = _burst = null;
-    unawaited(_client.removeChannel(channel));
-  }
-
-  void _changedElsewhere() {
-    _burst?.cancel();
-    _burst = Timer(_eventBurst, _dataChanged);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _visible = switch (state) {
-      AppLifecycleState.resumed || AppLifecycleState.inactive => true,
-      _ => false,
-    };
-    // Events missed while away are gone, so catch up on return.
-    if (state == AppLifecycleState.resumed) _dataChanged();
+    channel.subscribe();
+    return () => unawaited(_client.removeChannel(channel));
   }
 
   /// Ratings, matches or pending games changed: screens reload, members refetch.
@@ -179,9 +137,6 @@ class SupabaseLadderRepository extends LadderRepository
     _players = null;
     notifyListeners();
   }
-
-  @override
-  void refresh() => _players = null;
 
   @override
   void reload() => _dataChanged();
@@ -464,7 +419,7 @@ class SupabaseLadderRepository extends LadderRepository
 
   @override
   void dispose() {
-    _goOffline();
+    _live.stop();
     _authSub.cancel();
     super.dispose();
   }
