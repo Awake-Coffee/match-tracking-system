@@ -30,18 +30,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _toast(String message) =>
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
-
   Future<void> _saveName() async {
     if (!_form.currentState!.validate()) return;
+    // Captured before the await: the screen may be gone when it returns.
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _savingName = true);
     try {
       await context.repo.updateDisplayName(_name.text);
-      _toast('Name saved.');
+      messenger.showSnackBar(const SnackBar(content: Text('Name saved.')));
     } on LadderException catch (e) {
-      _toast(e.message);
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _savingName = false);
     }
@@ -148,8 +146,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               NewPasswordForm(
                 submitLabel: 'Change password',
                 onSubmit: (password) async {
+                  final messenger = ScaffoldMessenger.of(context);
                   await repo.updatePassword(password);
-                  _toast('Password updated.');
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Password updated.')),
+                  );
                 },
               ),
             ],
