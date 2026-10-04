@@ -1535,7 +1535,8 @@ void main() {
             _ => fail('expected Ana and Bogdan on the ${g.label} ladder'),
           },
       };
-      expect(lead[Game.chess], 41);
+      // Pinned, so a slip in the +1 rule or the ordering fails every ladder.
+      expect(lead, {Game.chess: 41, Game.backgammon: 45, Game.swu: 41});
       for (final g in Game.values) {
         expect(await chaseOf(repo, g, bogdanId), '${lead[g]} to pass Ana');
       }
@@ -1565,9 +1566,7 @@ void main() {
       await expectChase(RouteLadder, Game.swu);
     });
 
-    testWidgets('the leader, the unplayed and a signed-out viewer get none', (
-      tester,
-    ) async {
+    test('the leader, the unplayed and a signed-out viewer get none', () async {
       final repo = await anaAndBogdanWithSwu();
       final anaId = repo.me!.id;
       await repo.signOut();
