@@ -55,6 +55,9 @@ void main() {
     baize.background,
     3,
   );
+  test('Baize chase line is large text', () {
+    expect(baize.chase().fontSize, greaterThanOrEqualTo(24));
+  });
 
   // Holotable's route dots and gap labels sit on both arenas.
   aa('Holotable gap label on space', holotable.accent, holotable.background);

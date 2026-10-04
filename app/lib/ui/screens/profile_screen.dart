@@ -283,10 +283,7 @@ class _Profile extends StatelessWidget {
                 ),
                 Text('${record.rating}', style: d.display(64, height: 1.05)),
                 if (record.chase case final chase?)
-                  Text(
-                    chase,
-                    style: d.body(15, color: d.accent, weight: FontWeight.w700),
-                  ),
+                  Text(chase, style: d.chase()),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 24,

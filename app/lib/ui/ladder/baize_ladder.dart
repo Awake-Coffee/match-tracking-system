@@ -33,8 +33,7 @@ class BaizeLadder extends StatelessWidget {
           ),
           if (data.chase case final chase?) ...[
             const SizedBox(height: 6),
-            // Gold on felt is AA only as large text: keep this style large.
-            Text(chase, style: d.display(26, color: d.accent)),
+            Text(chase, style: d.chase()),
           ],
           const SizedBox(height: 18),
           for (final (i, p) in players.indexed)
