@@ -305,7 +305,7 @@ class _ResultRow extends StatelessWidget {
       child: _NameLink(
         name: name,
         style: bold.copyWith(decoration: TextDecoration.underline),
-        onOpen: () => context.push(path),
+        onOpen: () => context.go(path),
       ),
     );
   }
@@ -349,7 +349,7 @@ class _ResultRow extends StatelessWidget {
     final path = opponentPath;
 
     return InkWell(
-      onTap: path == null ? null : () => context.push(path),
+      onTap: path == null ? null : () => context.go(path),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(

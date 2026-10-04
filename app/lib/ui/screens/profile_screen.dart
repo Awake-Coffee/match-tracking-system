@@ -7,6 +7,7 @@ import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
 import '../../domain/swu.dart';
 import '../game.dart';
+import '../navigation.dart';
 import '../ladder/ladder_view.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_tile.dart';
@@ -259,13 +260,13 @@ class _Profile extends StatelessWidget {
                 IconButton(
                   tooltip: 'Settings',
                   icon: const Icon(Icons.settings_outlined),
-                  onPressed: () => context.push(game.path('settings')),
+                  onPressed: () => context.go(game.path('settings')),
                 )
-              else if (context.canPop())
+              else
                 IconButton(
                   tooltip: 'Back',
                   icon: const Icon(Icons.close),
-                  onPressed: () => context.pop(),
+                  onPressed: () => goBack(context, fallback: game.path()),
                 ),
             ],
           ),

@@ -23,12 +23,23 @@ typedef _History = ({
 /// Every result in the game, newest first, a page at a time, optionally for
 /// one member.
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, required this.game});
+  const HistoryScreen({super.key, required this.game, this.playerId});
 
   /// How many results a page holds.
   static const pageSize = 50;
 
   final Game game;
+
+  /// The member whose results are shown, from the `player` query, so a
+  /// filtered history is a link of its own; null is everyone.
+  final String? playerId;
+
+  /// The route of [game]'s history for [playerId].
+  static String path(Game game, String? playerId) => game.path(
+    playerId == null
+        ? 'history'
+        : 'history?player=${Uri.encodeQueryComponent(playerId)}',
+  );
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -36,7 +47,7 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   /// The member whose results were asked for; null is everyone.
-  String? _playerId;
+  String? get _playerId => widget.playerId;
 
   /// How many results were asked for: a page, and a page more for each
   /// "Load more". Every load, background ones included, fetches this many
@@ -46,6 +57,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   /// What is on screen, to fall back to when a new filter or page fails.
   _History? _shown;
+
+  @override
+  void didUpdateWidget(HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A new member's results start from their first page; going back to
+    // what is shown (a failed filter undone) keeps the pages loaded.
+    if (widget.playerId != oldWidget.playerId) {
+      final shown = _shown;
+      _depth = shown != null && shown.playerId == widget.playerId
+          ? shown.depth
+          : HistoryScreen.pageSize;
+    }
+  }
 
   /// [_depth] results for [_playerId], one extra to learn whether older ones
   /// remain.
@@ -108,10 +132,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
     );
-    setState(() {
-      _playerId = shown.playerId;
-      _depth = shown.depth;
-    });
+    setState(() => _depth = shown.depth);
+    // Puts the address back in place, not as a new step in the history.
+    if (playerId != shown.playerId) {
+      Router.neglect(
+        context,
+        () => context.go(HistoryScreen.path(widget.game, shown.playerId)),
+      );
+    }
   }
 
   @override
@@ -151,10 +179,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     selectedId: _playerId,
                     onSelected: (id) {
                       if (id == _playerId) return;
-                      setState(() {
-                        _playerId = id;
-                        _depth = HistoryScreen.pageSize;
-                      });
+                      context.go(HistoryScreen.path(game, id));
                     },
                   ),
                   // Holds its height so the list doesn't jump when it goes.
