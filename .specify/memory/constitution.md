@@ -10,8 +10,8 @@ client-side Elo implementation exists solely to *preview* a result and
 must produce the same numbers as the database.
 
 ### II. Every rating point is traceable
-A player's rating is the starting rating (1000) plus the sum of the
-deltas of the matches they played. Each match row stores both players'
+A player's rating in a game is that game's starting rating plus the sum
+of the deltas of the results they played in it. Each match row stores both players'
 ratings before the game and the delta applied to each, so any rating can be
 audited and the full history replayed.
 
@@ -33,11 +33,11 @@ not require touching screen logic. Each game has its own design (chess:
 Roast pawns, backgammon: Baize, Star Wars: Unlimited: Holotable).
 
 ### VI. Start narrow
-Chess, backgammon and Star Wars: Unlimited are supported. Each game has
-its own ratings, results tables and RPCs; rating math and UI are shared
-only where games already need the same thing (SWU reuses the FIDE math).
-No speculative multi-game abstractions are built for games that aren't
-played yet.
+Chess, backgammon and Star Wars: Unlimited are supported. The games share
+one `ratings` table, one `match_requests` and one `matches` table and one
+pair of RPCs, told apart by a `match_type`; each game keeps its own score
+rules, rating math and UI (SWU reuses the FIDE math). No speculative
+abstractions are built for games that aren't played yet.
 
 ## Technology Constraints
 
@@ -64,4 +64,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-04
+**Version**: 1.4.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-05
