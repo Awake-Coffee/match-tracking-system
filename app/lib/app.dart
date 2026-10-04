@@ -44,7 +44,9 @@ class _AwakeAppState extends State<AwakeApp> {
       if (_repo.passwordRecoveryPending) {
         return onReset ? null : '/reset-password';
       }
-      if (onReset) return '/';
+      // Signed in without a pending recovery (a reload, or a restored tab,
+      // forgets the flag): stay, since the member may not know their password.
+      if (onReset) return _repo.isSignedIn ? null : '/sign-in';
       if (!_repo.isSignedIn) return onSignIn ? null : '/sign-in';
       if (onSignIn) return '/';
       return null;

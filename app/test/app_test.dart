@@ -357,16 +357,105 @@ void main() {
     expect(find.text('Choose a new password'), findsOneWidget);
   });
 
-  testWidgets('the reset page without a recovery link is not reachable', (
+  testWidgets('a recovery link opened while sign-in is showing', (
     tester,
   ) async {
     _phone(tester);
     final repo = await anaAndBogdan();
+    await repo.signOut();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+
+    // Supabase can replay the recovery event after the router has started.
+    await repo.openRecoveryLink(anaEmail);
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsOneWidget);
+  });
+
+  testWidgets('a broken recovery link explains itself and asks again', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    repo.openBrokenRecoveryLink();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    final error = find.text(brokenResetLinkMessage);
+    expect(error, findsOneWidget);
+    expect(
+      tester.widget<Text>(error).style?.color,
+      tester.element(error).design.loss,
+    );
+    final email = find.widgetWithText(TextFormField, 'Email');
+    expect(email, findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Password'), findsNothing);
+
+    await tester.enterText(email, anaEmail);
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordResets, [anaEmail]);
+    expect(repo.authLinkError, isNull);
+    expect(find.text(brokenResetLinkMessage), findsNothing);
+    expect(
+      find.textContaining('on this device, in this browser'),
+      findsOneWidget,
+    );
+
+    // "Use a different email" returns to the reset form, not sign-in.
+    await tester.tap(find.text('Use a different email'));
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(FilledButton, 'Send reset link'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a broken recovery link can be left for sign-in', (tester) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..openBrokenRecoveryLink();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Back to sign in'));
+    await tester.pumpAndSettle();
+    expect(repo.authLinkError, isNull);
+    expect(find.text(brokenResetLinkMessage), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
+
+  testWidgets('the reset page signed out goes to sign-in', (tester) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
     await tester.pumpWidget(
       AwakeApp(repository: repo, initialLocation: '/reset-password'),
     );
     await tester.pumpAndSettle();
     expect(find.text('Choose a new password'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
+
+  testWidgets('a reloaded reset page keeps its form, then goes to the ladder', (
+    tester,
+  ) async {
+    _phone(tester);
+    // Signed in by the recovery link, but the reload forgot the recovery.
+    final repo = await anaAndBogdan();
+    expect(repo.passwordRecoveryPending, isFalse);
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/reset-password'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsOneWidget);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'longenough');
+    await tester.enterText(fields.at(1), 'longenough');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordChanges, [anaEmail]);
     expect(find.text('The ladder'), findsOneWidget);
   });
 

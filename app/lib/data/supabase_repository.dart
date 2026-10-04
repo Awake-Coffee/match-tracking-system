@@ -74,6 +74,7 @@ class SupabaseLadderRepository extends LadderRepository {
         // The link has already signed the member in; the router sends them to
         // choose a password before anything else.
         _recovering = true;
+        _authLinkError = null;
         notifyListeners();
       }
       if (state.event == AuthChangeEvent.signedOut) {
@@ -87,13 +88,45 @@ class SupabaseLadderRepository extends LadderRepository {
           _me?.id != state.session!.user.id) {
         unawaited(_loadMe());
       }
-    });
+    }, onError: _authLinkFailed);
+  }
+
+  /// supabase_flutter turns a reset link it can't use (expired, already used,
+  /// or missing its PKCE code verifier because it was opened in another
+  /// browser) into an error on the auth stream, which replays it to us.
+  /// Other auth errors (a refresh failing offline) are not about a link.
+  void _authLinkFailed(Object error) {
+    if (error is! AuthException || error is AuthRetryableFetchException) return;
+    if (!_openedFromResetLink) return;
+    _authLinkError = brokenResetLinkMessage;
+    notifyListeners();
+  }
+
+  /// Whether this page load is the reset link's redirect: its path plus the
+  /// auth parameters supabase_flutter reads (cleared only on success). Read
+  /// at startup, before the router rewrites the address.
+  final bool _openedFromResetLink = kIsWeb && _isResetRedirect(Uri.base);
+
+  static bool _isResetRedirect(Uri url) {
+    if (url.path != '/reset-password') return false;
+    // Keys only, undecoded: a malformed value must not break startup.
+    final keys = '${url.query}&${url.fragment}'
+        .split('&')
+        .map((pair) => pair.split('=').first)
+        .toSet();
+    return const [
+      'code',
+      'error',
+      'error_code',
+      'error_description',
+    ].any(keys.contains);
   }
 
   final SupabaseClient _client;
   late final StreamSubscription<AuthState> _authSub;
   Player? _me;
   bool _recovering = false;
+  String? _authLinkError;
   int _revision = 0;
   Future<List<Player>>? _players;
   late final _live = LiveUpdates(onChanged: _dataChanged, subscribe: _listen);
@@ -109,6 +142,16 @@ class SupabaseLadderRepository extends LadderRepository {
 
   @override
   bool get passwordRecoveryPending => _recovering;
+
+  @override
+  String? get authLinkError => _authLinkError;
+
+  @override
+  void clearAuthLinkError() {
+    if (_authLinkError == null) return;
+    _authLinkError = null;
+    notifyListeners();
+  }
 
   /// Loads the profile for an existing session (call once at startup).
   Future<void> restore() async {

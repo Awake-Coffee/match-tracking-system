@@ -51,6 +51,11 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     final repo = context.repo;
+    // Asking for a fresh link is moving on from the broken one.
+    if (repo.authLinkError != null) {
+      _resetting = true;
+      repo.clearAuthLinkError();
+    }
     try {
       if (_resetting) {
         await repo.sendPasswordReset(_email.text);
@@ -174,8 +179,10 @@ class _SignInScreenState extends State<SignInScreen> {
     ),
   ];
 
-  /// The email form that asks for a password-reset link.
-  List<Widget> _resetFields(DesignSpec d) => [
+  /// The email form that asks for a password-reset link. [linkError] says why
+  /// the link the app was opened from didn't work; the member came for a new
+  /// password, so the form is ready for the next request.
+  List<Widget> _resetFields(DesignSpec d, String? linkError) => [
     Text(
       'Enter the email you signed up with and we\'ll send you a link to '
       'choose a new password.',
@@ -184,6 +191,7 @@ class _SignInScreenState extends State<SignInScreen> {
     const SizedBox(height: 28),
     TextFormField(
       controller: _email,
+      autofocus: linkError != null,
       decoration: const InputDecoration(labelText: 'Email'),
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.done,
@@ -192,10 +200,10 @@ class _SignInScreenState extends State<SignInScreen> {
       validator: (v) =>
           (v == null || !v.contains('@')) ? 'Enter an email address' : null,
     ),
-    if (_error != null) ...[
+    if ((_error ?? linkError) case final error?) ...[
       const SizedBox(height: 16),
       Text(
-        _error!,
+        error,
         style: d.body(15, color: d.loss, weight: FontWeight.w600),
       ),
     ],
@@ -217,20 +225,24 @@ class _SignInScreenState extends State<SignInScreen> {
   ];
 
   /// Leaves the confirmation or reset panel for the sign-in form, email filled in.
-  void _backToSignIn() => setState(() {
-    _email.text = _confirming ?? _resetSent ?? _email.text;
-    _password.clear();
-    _confirming = null;
-    _resetSent = null;
-    _resetting = false;
-    _creating = false;
-    _error = null;
-  });
+  void _backToSignIn() {
+    context.repo.clearAuthLinkError();
+    setState(() {
+      _email.text = _confirming ?? _resetSent ?? _email.text;
+      _password.clear();
+      _confirming = null;
+      _resetSent = null;
+      _resetting = false;
+      _creating = false;
+      _error = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final note = context.repo.modeNote;
+    final linkError = context.repo.authLinkError;
     final confirming = _confirming;
     final resetSent = _resetSent;
     return Scaffold(
@@ -268,8 +280,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           onBack: _backToSignIn,
                           onTryAgain: () => setState(() => _resetSent = null),
                         )
-                      else if (_resetting)
-                        ..._resetFields(d)
+                      else if (_resetting || linkError != null)
+                        ..._resetFields(d, linkError)
                       else
                         ..._formFields(d),
                       if (note != null) ...[
@@ -338,8 +350,8 @@ class _ResetSentPanel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Open it to choose a new password. It can take a minute, '
-                'and may land in spam.',
+                'Open it on this device, in this browser, to choose a new '
+                'password. It can take a minute, and may land in spam.',
                 style: d.body(15, color: d.muted),
               ),
             ],

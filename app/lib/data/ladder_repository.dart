@@ -41,6 +41,14 @@ abstract class LadderRepository extends ChangeNotifier {
   /// signed in by the link, but only to choose a new password.
   bool get passwordRecoveryPending;
 
+  /// Why the password-reset link the app was just opened from didn't work
+  /// (expired, already used, or opened in another browser), or null. Without
+  /// it the member lands on a plain sign-in form with no idea why.
+  String? get authLinkError;
+
+  /// Forgets [authLinkError] once the member has moved on from it.
+  void clearAuthLinkError();
+
   /// Bumped whenever ratings, matches or pending games change.
   int get revision;
 
@@ -194,6 +202,12 @@ String? validateDisplayName(String? value) {
   if (name.length > 32) return 'Use 32 characters or fewer';
   return null;
 }
+
+/// Shown when a reset link fails. Both causes look the same from here, and
+/// the cure for both is a fresh link opened where it was asked for.
+const brokenResetLinkMessage =
+    'That link has expired or was opened in a different browser. '
+    'Ask for a new one.';
 
 /// Same rule for choosing a password at sign-up, in Settings and on reset.
 String? validateNewPassword(String? value) =>
