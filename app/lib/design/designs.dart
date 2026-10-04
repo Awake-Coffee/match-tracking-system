@@ -39,6 +39,8 @@ const baize = DesignSpec(
   bodyFamily: 'Work Sans',
   displayWeight: FontWeight.w800,
   radius: 6,
+  // Gold on felt is AA only as large text.
+  chaseDisplaySize: 26,
 );
 
 /// The two colors of Baize's board points, alternating down the ladder.

@@ -8,8 +8,7 @@ import '../app_scope.dart';
 import '../game.dart';
 import 'surface.dart';
 
-/// Sending a reported result to the opponent, shared by the chess and
-/// backgammon record forms.
+/// Sending a reported result to the opponent, shared by the record forms.
 mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
   bool saving = false;
   String? error;

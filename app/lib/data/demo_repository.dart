@@ -20,6 +20,10 @@ class DemoLadderRepository extends LadderRepository {
   final List<SwuMatch> _swuMatches = [];
   final List<SwuMatchRequest> _swuRequests = [];
   int _nextRequestId = 1;
+
+  /// Never reused: a deleted member's id stays on their results, so a
+  /// length-based id would hand it to the next sign-up.
+  int _nextPlayerId = 1;
   String? _meId;
   int _revision = 0;
   bool _recovering = false;
@@ -97,7 +101,7 @@ class DemoLadderRepository extends LadderRepository {
       'works, and games are kept only in this browser tab.';
 
   Player _addPlayer(String name, String email) {
-    final id = 'demo-${_players.length + 1}';
+    final id = 'demo-${_nextPlayerId++}';
     final player = Player(
       id: id,
       displayName: _uniqueName(name),

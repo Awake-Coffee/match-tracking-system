@@ -52,10 +52,7 @@ class RouteLadder extends StatelessWidget {
               ),
               if (data.chase case final chase?) ...[
                 const SizedBox(height: 6),
-                Text(
-                  chase,
-                  style: d.number(15, color: d.accent, weight: FontWeight.w700),
-                ),
+                Text(chase, style: d.chase()),
               ],
             ],
           ),

@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -243,7 +242,7 @@ class SwuMatchTile extends StatelessWidget {
 /// so in place of the changes. From a player's view the whole row opens the
 /// opponent; from the club's view each name opens that player, so the
 /// sentence still reads as one.
-class _ResultRow extends StatefulWidget {
+class _ResultRow extends StatelessWidget {
   const _ResultRow.forPlayer({
     this.leading,
     required this.verb,
@@ -295,77 +294,51 @@ class _ResultRow extends StatefulWidget {
   final String? firstPath;
   final String? secondPath;
 
-  @override
-  State<_ResultRow> createState() => _ResultRowState();
-}
-
-class _ResultRowState extends State<_ResultRow> {
-  /// Tap handlers for the names in the club sentence. Made once and reading
-  /// the paths at tap time, so a rebuild mid-tap (a reload, a new page)
-  /// doesn't cancel the gesture.
-  late final _firstTap = TapGestureRecognizer()
-    ..onTap = () => _open(widget.firstPath);
-  late final _secondTap = TapGestureRecognizer()
-    ..onTap = () => _open(widget.secondPath);
-
-  void _open(String? path) {
-    if (path != null) context.push(path);
-  }
-
-  @override
-  void dispose() {
-    _firstTap.dispose();
-    _secondTap.dispose();
-    super.dispose();
-  }
-
-  /// A bold name that [tap] opens when [path] is set, or plain bold.
-  TextSpan _name(
-    String name,
-    String? path,
-    TapGestureRecognizer tap,
-    TextStyle bold,
-  ) {
+  /// A bold name, linked to [path] when it is set. A link is an inline
+  /// widget rather than a tappable span so it can take keyboard focus.
+  InlineSpan _name(BuildContext context, String name, String? path) {
+    final bold = context.design.body(16, weight: FontWeight.w700);
     if (path == null) return TextSpan(text: name, style: bold);
-    return TextSpan(
-      text: name,
-      style: bold.copyWith(decoration: TextDecoration.underline),
-      recognizer: tap,
-      mouseCursor: SystemMouseCursors.click,
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.baseline,
+      baseline: TextBaseline.alphabetic,
+      child: _NameLink(
+        name: name,
+        style: bold.copyWith(decoration: TextDecoration.underline),
+        onOpen: () => context.push(path),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final w = widget;
     final d = context.design;
-    final bold = d.body(16, weight: FontWeight.w700);
-    final first = w.firstName;
+    final first = firstName;
     final headline = Text.rich(
       TextSpan(
         children: [
           if (first != null) ...[
-            _name(first, w.firstPath, _firstTap, bold),
-            TextSpan(text: ' ${w.verb} '),
+            _name(context, first, firstPath),
+            TextSpan(text: ' $verb '),
           ] else
-            TextSpan(text: '${w.verb} '),
-          _name(w.secondName, w.secondPath, _secondTap, bold),
+            TextSpan(text: '$verb '),
+          _name(context, secondName, secondPath),
         ],
       ),
       style: d.body(16),
     );
-    final after = w.ratingAfter;
-    final second = w.secondDelta;
-    final trailing = w.rated
+    final after = ratingAfter;
+    final second = secondDelta;
+    final trailing = rated
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: after != null
                 ? [
-                    DeltaText(w.firstDelta, size: 16),
+                    DeltaText(firstDelta, size: 16),
                     Text('$after', style: d.number(13, color: d.muted)),
                   ]
                 : [
-                    DeltaText(w.firstDelta, size: 15),
+                    DeltaText(firstDelta, size: 15),
                     DeltaText(second!, size: 15),
                   ],
           )
@@ -373,7 +346,7 @@ class _ResultRowState extends State<_ResultRow> {
             'Unrated',
             style: d.body(13, color: d.muted, weight: FontWeight.w600),
           );
-    final path = w.opponentPath;
+    final path = opponentPath;
 
     return InkWell(
       onTap: path == null ? null : () => context.push(path),
@@ -381,7 +354,7 @@ class _ResultRowState extends State<_ResultRow> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
           children: [
-            if (w.leading case final leading?) ...[
+            if (leading case final leading?) ...[
               leading,
               const SizedBox(width: 14),
             ],
@@ -391,13 +364,81 @@ class _ResultRowState extends State<_ResultRow> {
                 children: [
                   headline,
                   const SizedBox(height: 2),
-                  Text(w.detail, style: d.body(13, color: d.muted)),
+                  Text(detail, style: d.body(13, color: d.muted)),
                 ],
               ),
             ),
             const SizedBox(width: 12),
             trailing,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A player's name inside a result sentence that opens their profile: a link
+/// to screen readers, reachable with Tab, opened by a tap, Enter or Space,
+/// and ringed in the design's accent while keyboard focus is on it.
+class _NameLink extends StatefulWidget {
+  const _NameLink({
+    required this.name,
+    required this.style,
+    required this.onOpen,
+  });
+
+  final String name;
+  final TextStyle style;
+  final VoidCallback onOpen;
+
+  @override
+  State<_NameLink> createState() => _NameLinkState();
+}
+
+class _NameLinkState extends State<_NameLink> {
+  /// True only for keyboard focus, so a click leaves no ring behind.
+  bool _ring = false;
+
+  void _open() => widget.onOpen();
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Semantics(
+      link: true,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (shown) => setState(() => _ring = shown),
+        // The web build maps Enter to ButtonActivateIntent and Space to
+        // ActivateIntent; other platforms map both to ActivateIntent.
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => _open(),
+          ),
+          ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+            onInvoke: (_) => _open(),
+          ),
+        },
+        child: GestureDetector(
+          onTap: _open,
+          // Drawn outside the name, so the ring moves nothing in the line.
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _ring ? d.accent : Colors.transparent,
+                width: 2,
+                strokeAlign: BorderSide.strokeAlignOutside,
+              ),
+              borderRadius: d.borderRadius,
+            ),
+            // The sentence around it already scales this inline widget.
+            child: Text(
+              widget.name,
+              style: widget.style,
+              textScaler: TextScaler.noScaling,
+            ),
+          ),
         ),
       ),
     );

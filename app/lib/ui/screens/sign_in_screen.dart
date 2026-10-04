@@ -10,6 +10,11 @@ import '../app_scope.dart';
 import '../widgets/password_field.dart';
 import '../widgets/surface.dart';
 
+/// Headline size under the "Awake Coffee" eyebrow on the signed-out screens:
+/// 34 rather than 46 so the spelled-out games name wraps to about the old
+/// headline's height on a phone.
+const authHeadlineSize = 34.0;
+
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
@@ -271,12 +276,10 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // Spelled out for newcomers; 34 rather than 46 so the
-                      // longer name wraps to about the old headline's height
-                      // on a phone.
+                      // Spelled out for newcomers.
                       Text(
                         'Chess, backgammon and Star Wars: Unlimited',
-                        style: d.display(34),
+                        style: d.display(authHeadlineSize),
                       ),
                       const SizedBox(height: 12),
                       if (confirming != null)

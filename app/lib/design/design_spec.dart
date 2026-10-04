@@ -21,6 +21,7 @@ class DesignSpec {
     this.displayWeight = FontWeight.w400,
     this.radius = 8,
     this.lineWidth = 1,
+    this.chaseDisplaySize,
   });
 
   final Brightness brightness;
@@ -43,6 +44,10 @@ class DesignSpec {
   final FontWeight displayWeight;
   final double radius;
   final double lineWidth;
+
+  /// Set when the accent clears AA on the background only as large text:
+  /// the chase line then uses the display face at this size.
+  final double? chaseDisplaySize;
 
   TextStyle display(
     double size, {
@@ -85,6 +90,15 @@ class DesignSpec {
               ? display(size, color: color, weight: weight)
               : body(size, color: color, weight: weight))
           .copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+
+  /// The "10 to pass Irina" line, the same wherever the ladder shows it.
+  TextStyle chase() {
+    final large = chaseDisplaySize;
+    return (large == null
+            ? body(15, color: accent, weight: FontWeight.w700)
+            : display(large, color: accent))
+        .copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+  }
 
   static TextStyle _font(String family, TextStyle style) =>
       style.copyWith(fontFamily: family);

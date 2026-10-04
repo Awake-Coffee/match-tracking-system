@@ -42,10 +42,7 @@ class PawnsLadder extends StatelessWidget {
           ),
           if (data.chase case final chase?) ...[
             const SizedBox(height: 6),
-            Text(
-              chase,
-              style: d.body(16, color: d.accent, weight: FontWeight.w700),
-            ),
+            Text(chase, style: d.chase()),
           ],
           const SizedBox(height: 24),
           // Nobody has played yet: an empty board would read as a broken top
