@@ -19,7 +19,10 @@ Future<void> main() async {
       publishableKey: AppConfig.supabaseKey,
     );
     final supabase = SupabaseLadderRepository(Supabase.instance.client);
-    await supabase.restore();
+    // A failed restore must not block runApp, or the HTML splash never goes away.
+    await supabase.restore().catchError(
+      (Object e) => debugPrint('Session restore failed: $e'),
+    );
     repository = supabase;
   } else {
     repository = DemoLadderRepository();

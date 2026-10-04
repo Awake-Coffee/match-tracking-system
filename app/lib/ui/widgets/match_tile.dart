@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../design/design_scope.dart';
+import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
+import '../game.dart';
 import 'surface.dart';
 
 String relativeDate(DateTime when, {DateTime? now}) {
@@ -44,94 +46,182 @@ class MatchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = context.design;
     final m = match;
     final me = perspectiveId != null && m.involves(perspectiveId!)
         ? perspectiveId
         : null;
+    final when = relativeDate(m.playedAt);
+    final clock = m.clock;
+    final detail = me != null
+        ? 'Played ${m.colorOf(me).name}, $when'
+        : '${m.whiteName} had white, $when';
+    final leading = _PieceDot(
+      color: me != null ? m.colorOf(me) : PieceColor.white,
+    );
+    final fullDetail = clock == null ? detail : '$detail · ${clock.label}';
 
-    final Widget headline;
-    final Widget trailing;
     if (me != null) {
       final verb = switch (m.outcomeFor(me)) {
         Outcome.win => 'Won against',
         Outcome.loss => 'Lost to',
         Outcome.draw => 'Drew with',
       };
-      headline = Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: '$verb '),
-            TextSpan(
-              text: m.opponentName(me),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-        style: d.body(16),
-      );
-      trailing = Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          DeltaText(m.deltaFor(me), size: 16),
-          Text('${m.ratingAfterFor(me)}', style: d.number(13, color: d.muted)),
-        ],
-      );
-    } else {
-      final bold = d.body(16, weight: FontWeight.w700);
-      headline = Text.rich(
-        m.result == MatchResult.draw
-            ? TextSpan(
-                children: [
-                  TextSpan(text: m.whiteName, style: bold),
-                  const TextSpan(text: ' drew with '),
-                  TextSpan(text: m.blackName, style: bold),
-                ],
-              )
-            : TextSpan(
-                children: [
-                  TextSpan(text: m.winnerName, style: bold),
-                  const TextSpan(text: ' beat '),
-                  TextSpan(text: m.loserName, style: bold),
-                ],
-              ),
-        style: d.body(16),
-      );
-      // Winner's change first; for a draw, white first.
-      final firstId = m.winnerId ?? m.whiteId;
-      trailing = Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          DeltaText(m.deltaFor(firstId), size: 15),
-          DeltaText(-m.deltaFor(firstId), size: 15),
-        ],
+      return _ResultRow.forPlayer(
+        leading: leading,
+        verb: verb,
+        opponentName: m.opponentName(me),
+        opponentPath: '/players/${m.opponentId(me)}',
+        detail: fullDetail,
+        delta: m.deltaFor(me),
+        ratingAfter: m.ratingAfterFor(me),
       );
     }
+    // Winner's change first; for a draw, white first.
+    final firstId = m.winnerId ?? m.whiteId;
+    final secondId = firstId == m.whiteId ? m.blackId : m.whiteId;
+    return _ResultRow.forClub(
+      leading: leading,
+      firstName: m.winnerName ?? m.whiteName,
+      verb: m.result == MatchResult.draw ? 'drew with' : 'beat',
+      secondName: m.loserName ?? m.blackName,
+      detail: fullDetail,
+      firstDelta: m.deltaFor(firstId),
+      secondDelta: m.deltaFor(secondId),
+    );
+  }
+}
 
-    final when = relativeDate(m.playedAt);
-    final detail = me != null
-        ? 'Played ${m.colorOf(me).name}, $when'
-        : '${m.whiteName} had white, $when';
-    final clock = m.clock;
-    final detailWithClock = clock == null ? detail : '$detail · ${clock.label}';
+/// One backgammon match in a list, from the club's or a player's view like
+/// [MatchTile].
+class BackgammonMatchTile extends StatelessWidget {
+  const BackgammonMatchTile({
+    super.key,
+    required this.match,
+    this.perspectiveId,
+  });
+
+  final BackgammonMatch match;
+  final String? perspectiveId;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = match;
+    final me = perspectiveId != null && m.involves(perspectiveId!)
+        ? perspectiveId
+        : null;
+    final detail =
+        '${m.scoreFor(me)} in a match to ${m.matchLength}, '
+        '${relativeDate(m.playedAt)}';
+    if (me != null) {
+      return _ResultRow.forPlayer(
+        verb: m.wonBy(me) ? 'Won against' : 'Lost to',
+        opponentName: m.opponentName(me),
+        opponentPath: '${Game.backgammon.path('players')}/${m.opponentId(me)}',
+        detail: detail,
+        delta: m.deltaFor(me),
+        ratingAfter: m.ratingAfterFor(me),
+      );
+    }
+    return _ResultRow.forClub(
+      firstName: m.winnerName,
+      verb: 'beat',
+      secondName: m.loserName,
+      detail: detail,
+      firstDelta: m.winnerRatingDelta,
+      secondDelta: m.loserRatingDelta,
+    );
+  }
+}
+
+/// The row both tiles share: "Won against **Bo**" with your change and new
+/// rating, or "**Ana** beat **Bo**" with both changes.
+class _ResultRow extends StatelessWidget {
+  const _ResultRow.forPlayer({
+    this.leading,
+    required this.verb,
+    required String opponentName,
+    required String this.opponentPath,
+    required this.detail,
+    required int delta,
+    required int this.ratingAfter,
+  }) : firstName = null,
+       secondName = opponentName,
+       firstDelta = delta,
+       secondDelta = null;
+
+  const _ResultRow.forClub({
+    this.leading,
+    required String this.firstName,
+    required this.verb,
+    required this.secondName,
+    required this.detail,
+    required this.firstDelta,
+    required int this.secondDelta,
+  }) : opponentPath = null,
+       ratingAfter = null;
+
+  final Widget? leading;
+
+  /// Null from a player's view, where the sentence starts with [verb].
+  final String? firstName;
+  final String verb;
+  final String secondName;
+  final String detail;
+  final int firstDelta;
+  final int? secondDelta;
+  final int? ratingAfter;
+
+  /// Where tapping the row goes: the opponent's profile, from a player's view.
+  final String? opponentPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    final bold = d.body(16, weight: FontWeight.w700);
+    final first = firstName;
+    final headline = Text.rich(
+      TextSpan(
+        children: [
+          if (first != null) ...[
+            TextSpan(text: first, style: bold),
+            TextSpan(text: ' $verb '),
+          ] else
+            TextSpan(text: '$verb '),
+          TextSpan(text: secondName, style: bold),
+        ],
+      ),
+      style: d.body(16),
+    );
+    final after = ratingAfter;
+    final second = secondDelta;
+    final trailing = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: after != null
+          ? [
+              DeltaText(firstDelta, size: 16),
+              Text('$after', style: d.number(13, color: d.muted)),
+            ]
+          : [DeltaText(firstDelta, size: 15), DeltaText(second!, size: 15)],
+    );
+    final path = opponentPath;
 
     return InkWell(
-      onTap: me == null
-          ? null
-          : () => context.push('/players/${m.opponentId(me)}'),
+      onTap: path == null ? null : () => context.push(path),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
           children: [
-            _PieceDot(color: me != null ? m.colorOf(me) : PieceColor.white),
-            const SizedBox(width: 14),
+            if (leading case final leading?) ...[
+              leading,
+              const SizedBox(width: 14),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   headline,
                   const SizedBox(height: 2),
-                  Text(detailWithClock, style: d.body(13, color: d.muted)),
+                  Text(detail, style: d.body(13, color: d.muted)),
                 ],
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../domain/backgammon.dart';
 import '../domain/models.dart';
 
 /// Thrown with a message that can be shown to the member as-is.
@@ -65,6 +66,35 @@ abstract class LadderRepository extends ChangeNotifier {
     required bool accept,
   });
 
+  /// Every member, best backgammon rating first.
+  Future<List<Player>> backgammonLadder();
+
+  /// Newest first. When [playerId] is set, only that member's matches.
+  Future<List<BackgammonMatch>> backgammonMatches({
+    String? playerId,
+    int limit = 50,
+  });
+
+  /// Reports a match the signed-in member played. It is rated only once the
+  /// opponent accepts it with [respondToBackgammonMatchRequest].
+  Future<BackgammonMatchRequest> requestBackgammonMatch({
+    required String opponentId,
+    required int matchLength,
+    required int myScore,
+    required int opponentScore,
+  });
+
+  /// Matches involving the signed-in member that wait for confirmation,
+  /// newest first.
+  Future<List<BackgammonMatchRequest>> backgammonMatchRequests();
+
+  /// The opponent accepts ([accept]) and gets the rated match back, or either
+  /// player drops the request and gets null.
+  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
+    int requestId, {
+    required bool accept,
+  });
+
   Future<void> updateDisplayName(String displayName);
 }
 
@@ -74,8 +104,22 @@ int compareLadder(Player a, Player b) {
   if (byRating != 0) return byRating;
   final byGames = b.gamesPlayed.compareTo(a.gamesPlayed);
   if (byGames != 0) return byGames;
-  return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+  return _compareNames(a, b);
 }
+
+/// Backgammon ladder order: rating, then more matches played, then name.
+int compareBackgammonLadder(Player a, Player b) {
+  final byRating = b.backgammon.rating.compareTo(a.backgammon.rating);
+  if (byRating != 0) return byRating;
+  final byMatches = b.backgammon.matchesPlayed.compareTo(
+    a.backgammon.matchesPlayed,
+  );
+  if (byMatches != 0) return byMatches;
+  return _compareNames(a, b);
+}
+
+int _compareNames(Player a, Player b) =>
+    a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
 
 String? validateDisplayName(String? value) {
   final name = value?.trim() ?? '';

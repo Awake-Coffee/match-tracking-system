@@ -2,12 +2,17 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../domain/backgammon.dart';
 import '../domain/models.dart';
 import 'ladder_repository.dart';
 
 String _matchSelect(String table) =>
     '*, white:profiles!${table}_white_id_fkey(display_name), '
     'black:profiles!${table}_black_id_fkey(display_name)';
+
+String _backgammonSelect(String table) =>
+    '*, winner:profiles!${table}_winner_id_fkey(display_name), '
+    'loser:profiles!${table}_loser_id_fkey(display_name)';
 
 class SupabaseLadderRepository extends LadderRepository {
   SupabaseLadderRepository(this._client) {
@@ -187,6 +192,92 @@ class SupabaseLadderRepository extends LadderRepository {
     _revision++;
     notifyListeners();
     return row == null ? null : ChessMatch.fromRow(row);
+  });
+
+  @override
+  Future<List<Player>> backgammonLadder() => _guard(() async {
+    final rows = await _client
+        .from('profiles')
+        .select()
+        .order('bg_rating', ascending: false)
+        .order('bg_matches_played', ascending: false)
+        .order('display_name');
+    return rows.map(Player.fromRow).toList();
+  });
+
+  @override
+  Future<List<BackgammonMatch>> backgammonMatches({
+    String? playerId,
+    int limit = 50,
+  }) => _guard(() async {
+    var query = _client
+        .from('backgammon_matches')
+        .select(_backgammonSelect('backgammon_matches'));
+    if (playerId != null) {
+      query = query.or('winner_id.eq.$playerId,loser_id.eq.$playerId');
+    }
+    final rows = await query.order('played_at', ascending: false).limit(limit);
+    return rows.map(BackgammonMatch.fromRow).toList();
+  });
+
+  @override
+  Future<BackgammonMatchRequest> requestBackgammonMatch({
+    required String opponentId,
+    required int matchLength,
+    required int myScore,
+    required int opponentScore,
+  }) => _guard(() async {
+    final inserted = await _client.rpc<Map<String, dynamic>>(
+      'request_backgammon_match',
+      params: {
+        'p_opponent_id': opponentId,
+        'p_match_length': matchLength,
+        'p_my_score': myScore,
+        'p_opponent_score': opponentScore,
+      },
+    );
+    final row = await _client
+        .from('backgammon_match_requests')
+        .select(_backgammonSelect('backgammon_match_requests'))
+        .eq('id', inserted['id'] as int)
+        .single();
+    _revision++;
+    notifyListeners();
+    return BackgammonMatchRequest.fromRow(row);
+  });
+
+  @override
+  Future<List<BackgammonMatchRequest>> backgammonMatchRequests() =>
+      _guard(() async {
+        // RLS only returns the signed-in member's own pending matches.
+        final rows = await _client
+            .from('backgammon_match_requests')
+            .select(_backgammonSelect('backgammon_match_requests'))
+            .order('created_at', ascending: false);
+        return rows.map(BackgammonMatchRequest.fromRow).toList();
+      });
+
+  @override
+  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
+    int requestId, {
+    required bool accept,
+  }) => _guard(() async {
+    final inserted = await _client.rpc<Map<String, dynamic>?>(
+      'respond_to_backgammon_match',
+      params: {'p_request_id': requestId, 'p_accept': accept},
+    );
+    final matchId = inserted?['id'] as int?;
+    final row = matchId == null
+        ? null
+        : await _client
+              .from('backgammon_matches')
+              .select(_backgammonSelect('backgammon_matches'))
+              .eq('id', matchId)
+              .single();
+    if (row != null) await _loadMe();
+    _revision++;
+    notifyListeners();
+    return row == null ? null : BackgammonMatch.fromRow(row);
   });
 
   @override

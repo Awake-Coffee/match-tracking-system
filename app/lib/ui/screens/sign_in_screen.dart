@@ -85,11 +85,11 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('Chess ladder', style: d.display(46)),
+                      Text('Chess and backgammon', style: d.display(46)),
                       const SizedBox(height: 12),
                       Text(
                         _creating
-                            ? 'Make a profile. You\'ll start at 1000 and climb with every game.'
+                            ? 'Make a profile. You\'ll start at 1000 in chess and 1500 in backgammon.'
                             : 'Sign in to log games and see where you stand.',
                         style: d.body(16, color: d.muted),
                       ),

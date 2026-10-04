@@ -29,12 +29,14 @@ depends on them.
 ### V. Design is a swappable layer
 Screens read colors, type, shape and leaderboard layout from a
 `DesignSpec`. No screen hardcodes a color or font. Adding a design must
-not require touching screen logic.
+not require touching screen logic. Each game has its own design (chess:
+Roast pawns, backgammon: Baize).
 
 ### VI. Start narrow
-Only chess is supported today. The schema keeps a `game` column so other
-tabletop games can be added later, but no speculative multi-game
-abstractions are built now.
+Chess and backgammon are supported. Each game has its own ratings,
+results tables and RPCs; shared UI is extracted only where both games
+already need it. No speculative multi-game abstractions are built for
+games that aren't played yet.
 
 ## Technology Constraints
 
@@ -61,4 +63,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-03
+**Version**: 1.2.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-04

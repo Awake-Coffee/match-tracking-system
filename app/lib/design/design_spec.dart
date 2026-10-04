@@ -238,26 +238,10 @@ class DesignSpec {
           borderSide: BorderSide(color: loss, width: lineWidth + 1.5),
         ),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: accent,
-        indicatorShape: buttonShape(),
-        height: 68,
-        labelTextStyle: WidgetStateProperty.resolveWith(
-          (s) => body(
-            12,
-            weight: s.contains(WidgetState.selected)
-                ? FontWeight.w700
-                : FontWeight.w500,
-            color: s.contains(WidgetState.selected) ? ink : muted,
-          ),
-        ),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (s) => IconThemeData(
-            color: s.contains(WidgetState.selected) ? onAccent : muted,
-          ),
-        ),
+      badgeTheme: BadgeThemeData(
+        backgroundColor: loss,
+        textColor: onAccent,
+        textStyle: body(10, weight: FontWeight.w700),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: ink,
