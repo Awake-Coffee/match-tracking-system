@@ -36,7 +36,8 @@ class _LoadViewState<T> extends State<LoadView<T>> {
   }
 
   Future<void> _reload() async {
-    final future = widget.load(context.repo);
+    final repo = context.repo..refresh();
+    final future = widget.load(repo);
     setState(() => _future = future);
     try {
       await future;

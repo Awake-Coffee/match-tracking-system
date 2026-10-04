@@ -4,6 +4,7 @@ import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
+import '../../domain/swu.dart';
 import 'surface.dart';
 
 /// A reported result involving the signed-in member that still waits for
@@ -63,6 +64,35 @@ class PendingResult {
           r.id,
           accept: accept,
         );
+        return match == null
+            ? null
+            : 'Match confirmed. You\'re now ${match.ratingAfterFor(meId)} '
+                  '(${formatDelta(match.deltaFor(meId))}).';
+      },
+    );
+  }
+
+  factory PendingResult.swu(
+    LadderRepository repo,
+    String meId,
+    SwuMatchRequest r,
+  ) {
+    final incoming = r.awaits(meId);
+    final myResult = switch (r.outcomeFor(meId)) {
+      Outcome.win => 'you won',
+      Outcome.loss => 'you lost',
+      Outcome.draw => 'you drew',
+    };
+    return PendingResult(
+      headline: incoming
+          ? '${r.opponentName(meId)} says $myResult ${r.scoreFor(meId)}'
+          : 'Waiting for ${r.opponentName(meId)} to confirm',
+      detail: incoming
+          ? 'Best of three'
+          : 'Best of three, $myResult ${r.scoreFor(meId)}',
+      incoming: incoming,
+      respond: ({required accept}) async {
+        final match = await repo.respondToSwuMatchRequest(r.id, accept: accept);
         return match == null
             ? null
             : 'Match confirmed. You\'re now ${match.ratingAfterFor(meId)} '

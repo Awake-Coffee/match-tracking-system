@@ -1,8 +1,10 @@
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/domain/models.dart';
+import 'package:awake_ladder/domain/swu.dart';
 import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
 import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
+import 'package:awake_ladder/ui/ladder/route_ladder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -30,7 +32,7 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Chess and backgammon'), findsOneWidget);
+    expect(find.text('Chess, backgammon and SWU'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Email'),
       anaEmail,
@@ -383,6 +385,139 @@ void main() {
     final bogdan = find
         .descendant(
           of: find.byType(BaizeLadder),
+          matching: find.textContaining('Bogdan'),
+        )
+        .first;
+    await tester.ensureVisible(bogdan);
+    await tester.pumpAndSettle();
+    await tester.tap(bogdan);
+    await tester.pumpAndSettle();
+    expect(find.text('Record a match with Bogdan'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Lost to Ana'),
+      200,
+      scrollable: _list,
+    );
+  });
+
+  testWidgets('the SWU ladder is a route across the starting line', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Star Wars: Unlimited'));
+    await tester.pumpAndSettle();
+
+    final route = find.byType(RouteLadder);
+    expect(find.text('The route'), findsOneWidget);
+    expect(find.text('Bogdan says you lost 0-2'), findsOneWidget);
+    // Ana won 2-1 from 1000 each: she's in space, Bogdan below the start.
+    expect(
+      find.descendant(of: route, matching: find.text('1020')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: route, matching: find.text('980')),
+      findsOneWidget,
+    );
+    expect(find.text('Start 1000'), findsOneWidget);
+    expect(find.text('Ground arena'), findsOneWidget);
+    expect(find.text('−40'), findsOneWidget);
+  });
+
+  testWidgets('a recorded SWU match waits for the opponent', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(
+      AwakeApp(
+        repository: repo,
+        initialLocation: '/swu/record?opponent=demo-2',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    expect(find.text('2-1'), findsNothing);
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(send).onPressed, isNull);
+    await tester.tap(find.text('2-1'));
+    await tester.pumpAndSettle();
+    expect(find.text('1000 to '), findsNWidgets(2));
+    expect(find.text('+20'), findsOneWidget);
+
+    // A draw is always 1-1, so it's picked for you.
+    await tester.tap(find.text('Draw'));
+    await tester.pumpAndSettle();
+    expect(find.text('±0'), findsNWidgets(2));
+
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('1-0 on time'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
+    expect(find.text('The route'), findsOneWidget);
+    expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
+    expect(find.text('Best of three, you won 1-0'), findsOneWidget);
+    expect(repo.me!.swu.rating, swuStartingRating);
+  });
+
+  testWidgets('confirming an SWU match rates it', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(repo.me!.swu.rating, lessThan(1020));
+    expect(repo.me!.swu.losses, 1);
+    expect(
+      find.textContaining(
+        'Match confirmed. You\'re now ${repo.me!.swu.rating}',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Bogdan says you lost 0-2'), findsNothing);
+  });
+
+  testWidgets('every SWU screen renders at 360px', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    for (final tab in ['Record', 'History', 'You']) {
+      await tester.tap(find.text(tab).last);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Star Wars: Unlimited rating'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Won against Bogdan'),
+      200,
+      scrollable: _list,
+    );
+
+    await tester.tap(find.text('Ladder').last);
+    await tester.pumpAndSettle();
+    final bogdan = find
+        .descendant(
+          of: find.byType(RouteLadder),
           matching: find.textContaining('Bogdan'),
         )
         .first;

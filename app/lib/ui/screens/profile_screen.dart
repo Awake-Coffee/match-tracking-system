@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../design/design_scope.dart';
 import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
+import '../../domain/swu.dart';
 import '../game.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_tile.dart';
@@ -35,6 +36,10 @@ class ProfileScreen extends StatelessWidget {
           Game.backgammon => _GameRecord.backgammon(
             player,
             await repo.backgammonMatches(playerId: playerId, limit: 500),
+          ),
+          Game.swu => _GameRecord.swu(
+            player,
+            await repo.swuMatches(playerId: playerId, limit: 500),
           ),
         };
       },
@@ -115,6 +120,39 @@ class _GameRecord {
       tiles: [
         for (final m in matches.take(20))
           BackgammonMatchTile(match: m, perspectiveId: p.id),
+      ],
+    );
+  }
+
+  /// [matches] newest first.
+  factory _GameRecord.swu(Player p, List<SwuMatch> matches) {
+    final oldestFirst = matches.reversed.toList();
+    final history = ratingHistory(p.id, oldestFirst, start: swuStartingRating);
+    final swu = p.swu;
+    return _GameRecord(
+      player: p,
+      rating: swu.rating,
+      stats: [
+        ('Matches', swu.matchesPlayed),
+        ('Won', swu.wins),
+        ('Lost', swu.losses),
+        ('Drawn', swu.draws),
+        ('Peak', swu.peakRating),
+      ],
+      history: history,
+      describePoint: (i) {
+        final m = oldestFirst[i - 1];
+        final verb = switch (m.outcomeFor(p.id)) {
+          Outcome.win => 'Beat',
+          Outcome.loss => 'Lost to',
+          Outcome.draw => 'Drew with',
+        };
+        return 'Match $i: $verb ${m.opponentName(p.id)} ${m.scoreFor(p.id)}\n'
+            '${history[i]} (${formatDelta(m.deltaFor(p.id))})';
+      },
+      tiles: [
+        for (final m in matches.take(20))
+          SwuMatchTile(match: m, perspectiveId: p.id),
       ],
     );
   }

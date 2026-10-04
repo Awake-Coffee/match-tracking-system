@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../domain/backgammon.dart';
 import '../domain/elo.dart';
 import '../domain/models.dart';
+import '../domain/swu.dart';
 import 'ladder_repository.dart';
 
 /// In-memory ladder used when no Supabase project is configured.
@@ -16,6 +17,8 @@ class DemoLadderRepository extends LadderRepository {
   final List<MatchRequest> _requests = [];
   final List<BackgammonMatch> _backgammonMatches = [];
   final List<BackgammonMatchRequest> _backgammonRequests = [];
+  final List<SwuMatch> _swuMatches = [];
+  final List<SwuMatchRequest> _swuRequests = [];
   int _nextRequestId = 1;
   String? _meId;
   int _revision = 0;
@@ -431,6 +434,139 @@ class DemoLadderRepository extends LadderRepository {
     }
     _backgammonRequests.remove(request);
     final match = accept ? _applyBackgammon(request) : null;
+    _revision++;
+    notifyListeners();
+    return match;
+  }
+
+  SwuMatch _swuWithCurrentNames(SwuMatch m) => SwuMatch(
+    id: m.id,
+    reporterId: m.reporterId,
+    respondentId: m.respondentId,
+    reporterName: _players[m.reporterId]!.displayName,
+    respondentName: _players[m.respondentId]!.displayName,
+    reporterGames: m.reporterGames,
+    respondentGames: m.respondentGames,
+    reporterRatingBefore: m.reporterRatingBefore,
+    respondentRatingBefore: m.respondentRatingBefore,
+    reporterRatingDelta: m.reporterRatingDelta,
+    respondentRatingDelta: m.respondentRatingDelta,
+    playedAt: m.playedAt,
+  );
+
+  SwuMatch _applySwu(SwuMatchRequest request) {
+    final reporter = _players[request.reporterId]!;
+    final respondent = _players[request.respondentId]!;
+    final reporterOutcome = request.outcomeFor(reporter.id);
+    final respondentOutcome = request.outcomeFor(respondent.id);
+    final reporterDelta = fideRatingChange(
+      reporter.swu,
+      respondent.swu,
+      reporterOutcome.score,
+    );
+    final respondentDelta = fideRatingChange(
+      respondent.swu,
+      reporter.swu,
+      respondentOutcome.score,
+    );
+    _players[reporter.id] = reporter.copyWith(
+      swu: reporter.swu.afterMatch(
+        delta: reporterDelta,
+        outcome: reporterOutcome,
+      ),
+    );
+    _players[respondent.id] = respondent.copyWith(
+      swu: respondent.swu.afterMatch(
+        delta: respondentDelta,
+        outcome: respondentOutcome,
+      ),
+    );
+    final match = SwuMatch(
+      id: _swuMatches.length + 1,
+      reporterId: reporter.id,
+      respondentId: respondent.id,
+      reporterName: reporter.displayName,
+      respondentName: respondent.displayName,
+      reporterGames: request.reporterGames,
+      respondentGames: request.respondentGames,
+      reporterRatingBefore: reporter.swu.rating,
+      respondentRatingBefore: respondent.swu.rating,
+      reporterRatingDelta: reporterDelta,
+      respondentRatingDelta: respondentDelta,
+      playedAt: DateTime.now(),
+    );
+    _swuMatches.add(match);
+    return match;
+  }
+
+  @override
+  Future<List<Player>> swuLadder() async =>
+      _players.values.toList()..sort(compareSwuLadder);
+
+  @override
+  Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50}) async =>
+      _swuMatches.reversed
+          .where((m) => playerId == null || m.involves(playerId))
+          .take(limit)
+          .map(_swuWithCurrentNames)
+          .toList();
+
+  @override
+  Future<SwuMatchRequest> requestSwuMatch({
+    required String opponentId,
+    required int myGames,
+    required int opponentGames,
+  }) async {
+    final me = _requireMe();
+    if (opponentId == me.id) {
+      throw const LadderException('Choose an opponent other than yourself.');
+    }
+    final opponent = _players[opponentId];
+    if (opponent == null) throw const LadderException('Opponent not found.');
+    if (!isSwuScore(myGames, opponentGames)) {
+      throw const LadderException('A best of three ends 2-0, 2-1, 1-0 or 1-1.');
+    }
+    final request = SwuMatchRequest(
+      id: _nextRequestId++,
+      reporterId: me.id,
+      respondentId: opponent.id,
+      reporterName: me.displayName,
+      respondentName: opponent.displayName,
+      reporterGames: myGames,
+      respondentGames: opponentGames,
+      createdAt: DateTime.now(),
+    );
+    _swuRequests.add(request);
+    _revision++;
+    notifyListeners();
+    return request;
+  }
+
+  @override
+  Future<List<SwuMatchRequest>> swuMatchRequests() async {
+    final me = _requireMe();
+    return _swuRequests.reversed.where((r) => r.involves(me.id)).toList();
+  }
+
+  @override
+  Future<SwuMatch?> respondToSwuMatchRequest(
+    int requestId, {
+    required bool accept,
+  }) async {
+    final me = _requireMe();
+    final request = _swuRequests
+        .where((r) => r.id == requestId && r.involves(me.id))
+        .firstOrNull;
+    if (request == null) {
+      throw const LadderException(
+        'That match is no longer waiting for confirmation.',
+      );
+    }
+    if (accept && !request.awaits(me.id)) {
+      throw const LadderException('Your opponent has to confirm this match.');
+    }
+    _swuRequests.remove(request);
+    final match = accept ? _applySwu(request) : null;
     _revision++;
     notifyListeners();
     return match;

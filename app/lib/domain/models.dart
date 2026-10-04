@@ -1,5 +1,6 @@
 import 'backgammon.dart';
 import 'elo.dart';
+import 'swu.dart';
 
 enum PieceColor { white, black }
 
@@ -16,7 +17,7 @@ enum Outcome {
 /// How a game ended, from the board's point of view (as stored).
 enum MatchResult { white, black, draw }
 
-class Player {
+class Player implements FideRated {
   const Player({
     required this.id,
     required this.displayName,
@@ -27,6 +28,7 @@ class Player {
     required this.losses,
     required this.draws,
     this.backgammon = const BackgammonStats(),
+    this.swu = const SwuStats(),
   });
 
   factory Player.fromRow(Map<String, dynamic> row) => Player(
@@ -39,12 +41,16 @@ class Player {
     losses: row['losses'] as int,
     draws: row['draws'] as int,
     backgammon: BackgammonStats.fromRow(row),
+    swu: SwuStats.fromRow(row),
   );
 
   final String id;
   final String displayName;
+  @override
   final int rating;
+  @override
   final int peakRating;
+  @override
   final int gamesPlayed;
   final int wins;
   final int losses;
@@ -52,6 +58,9 @@ class Player {
 
   /// The member's separate backgammon rating and record.
   final BackgammonStats backgammon;
+
+  /// The member's separate Star Wars: Unlimited rating and record.
+  final SwuStats swu;
 
   Player copyWith({
     String? displayName,
@@ -62,6 +71,7 @@ class Player {
     int? losses,
     int? draws,
     BackgammonStats? backgammon,
+    SwuStats? swu,
   }) => Player(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -72,6 +82,7 @@ class Player {
     losses: losses ?? this.losses,
     draws: draws ?? this.draws,
     backgammon: backgammon ?? this.backgammon,
+    swu: swu ?? this.swu,
   );
 }
 
@@ -237,7 +248,7 @@ abstract class GameReport {
 String joinedName(Map<String, dynamic> row, String side) =>
     (row[side] as Map?)?['display_name'] as String? ?? '';
 
-/// A rated chess game or backgammon match, as a player's rating line sees it.
+/// A rated chess game, backgammon or SWU match, as a player's rating line sees it.
 abstract interface class RatedGame {
   int ratingBeforeFor(String playerId);
   int ratingAfterFor(String playerId);

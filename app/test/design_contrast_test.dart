@@ -21,8 +21,13 @@ void aa(String what, Color fg, Color bg, [double min = 4.5]) {
 }
 
 void main() {
-  // SC-005 / SC-104: both designs meet WCAG AA for the text they draw.
-  for (final (name, d) in [('Roast pawns', roastPawns), ('Baize', baize)]) {
+  // SC-005 / SC-104 / SC-203: every design meet WCAG AA for the text they draw.
+  for (final (name, d) in [
+    ('Roast pawns', roastPawns),
+    ('Baize', baize),
+    ('Holotable', holotable),
+    ('Holotable ground', holotableGround),
+  ]) {
     group(name, () {
       aa('ink on background', d.ink, d.background);
       aa('ink on surface', d.ink, d.surface);
@@ -43,4 +48,12 @@ void main() {
   aa('Baize rank on oxblood chip', baize.ink, baizeOxbloodPoint);
   aa('Baize rank on ivory chip', baize.surface, baizeIvoryPoint);
   aa('Baize selected match length', baize.surface, baize.ink);
+
+  // Holotable's route dots and gap labels sit on both arenas.
+  aa('Holotable gap label on space', holotable.accent, holotable.background);
+  aa(
+    'Holotable gap label on ground',
+    holotableGround.accent,
+    holotableGround.background,
+  );
 }
