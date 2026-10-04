@@ -1,12 +1,11 @@
 {
-    "name": "awake_ladder",
-    "short_name": "awake_ladder",
+    "name": "Awake Ladder",
+    "short_name": "Awake Ladder",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#2A1810",
+    "theme_color": "#2A1810",
+    "description": "Awake Coffee's chess, backgammon and Star Wars: Unlimited ladders.",
     "prefer_related_applications": false,
     "icons": [
         {
