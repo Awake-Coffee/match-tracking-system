@@ -2309,8 +2309,12 @@ class _CountedGames extends DemoLadderRepository {
   int ownGamesFetches = 0;
 
   @override
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) {
+  Future<List<ChessMatch>> matches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  }) {
     if (playerId != null) ownGamesFetches++;
-    return super.matches(playerId: playerId, limit: limit);
+    return super.matches(playerId: playerId, limit: limit, before: before);
   }
 }
