@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.6 # matches app/.metadata and scripts/vercel-build.sh
@@ -31,7 +31,7 @@ jobs:
     name: SQL tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # The runner image ships PostgreSQL server binaries; run.sh finds them.
       - run: supabase/tests/run.sh
 
@@ -41,7 +41,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: List migrations this PR would apply to production
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
