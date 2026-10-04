@@ -1,8 +1,13 @@
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/domain/models.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const anaEmail = 'ana@example.com';
 const bogdanEmail = 'bogdan@example.com';
+
+/// The header's game picker. Its tooltip names the game in full on phones,
+/// where the header shows only the short name, so match on the prefix.
+final switchGame = find.byTooltip(RegExp(r'^Switch game'));
 
 /// A demo ladder that behaves like a backend shared with other devices:
 /// changes can land there without this client hearing of them, and the

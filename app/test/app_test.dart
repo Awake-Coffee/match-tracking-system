@@ -1088,7 +1088,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Rating over time'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();
@@ -1521,7 +1521,7 @@ void main() {
     // Pending chess game on the Ladder tab, pending match on the picker.
     expect(_awaitingBadge('1'), findsNWidgets(2));
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     expect(find.text('YOUR LADDERS'), findsOneWidget);
     expect(find.text('1 to confirm'), findsNWidgets(2));
@@ -1551,7 +1551,7 @@ void main() {
     // The picker keeps the tab.
     await tester.tap(find.text('History').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chess'));
     await tester.pumpAndSettle();
@@ -1607,7 +1607,7 @@ void main() {
 
     await expectUnranked(PawnsLadder);
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     // Each card counts the two ranked members, not Cleo.
     expect(find.textContaining('1st of 2', findRichText: true), findsWidgets);
@@ -1616,7 +1616,7 @@ void main() {
     await tester.pumpAndSettle();
     await expectUnranked(BaizeLadder);
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
@@ -1663,13 +1663,13 @@ void main() {
     expect(find.textContaining('top eight'), findsNothing);
     await expectAllWaiting(PawnsLadder);
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();
     await expectAllWaiting(BaizeLadder);
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
@@ -1726,12 +1726,12 @@ void main() {
       }
 
       await expectChase(PawnsLadder, Game.chess);
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
       await expectChase(BaizeLadder, Game.backgammon);
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();
@@ -2016,7 +2016,7 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
@@ -2100,6 +2100,56 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Bogdan says you lost 0-2'), findsNothing);
+  });
+
+  testWidgets('the phone header shows a short game name at full size', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    final name = find.descendant(of: switchGame, matching: find.text('SWU'));
+    expect(name, findsOneWidget);
+    expect(find.text('Star Wars: Unlimited'), findsNothing);
+    // Hovering still names the game in full.
+    expect(
+      find.byTooltip('Switch game (Star Wars: Unlimited)'),
+      findsOneWidget,
+    );
+    // The header's FittedBox leaves it unscaled: painted width is its width.
+    expect(
+      tester.getTopRight(name).dx - tester.getTopLeft(name).dx,
+      tester.getSize(name).width,
+    );
+    // Screen readers still hear the full name.
+    expect(
+      find.bySemanticsLabel(RegExp('Star Wars: Unlimited')),
+      findsOneWidget,
+    );
+
+    // The picker cards keep the full name.
+    await tester.tap(switchGame);
+    await tester.pumpAndSettle();
+    expect(find.text('Star Wars: Unlimited'), findsOneWidget);
+    expect(find.text('Backgammon'), findsOneWidget);
+  });
+
+  testWidgets('the wide header keeps the full game name', (tester) async {
+    _phone(tester, width: 1200);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Star Wars: Unlimited'), findsOneWidget);
+    expect(find.text('SWU'), findsNothing);
+    // The name is on screen, so the tooltip need not repeat it.
+    expect(find.byTooltip('Switch game'), findsOneWidget);
   });
 
   testWidgets('every SWU screen renders at 360px', (tester) async {
@@ -2211,7 +2261,7 @@ void main() {
       await tester.pumpWidget(AwakeApp(repository: repo));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
@@ -2226,7 +2276,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.me!.backgammon.rating, 1504);
 
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();
@@ -2327,7 +2377,7 @@ void main() {
       await tester.pumpWidget(AwakeApp(repository: repo));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
@@ -2337,7 +2387,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your match'), findsNothing);
 
-      await tester.tap(find.byTooltip('Switch game'));
+      await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();

@@ -17,6 +17,7 @@ const _marksFont = 'GameMarks';
 enum Game {
   chess(
     label: 'Chess',
+    shortLabel: 'Chess',
     mark: IconData(0x265E, fontFamily: _marksFont),
     routePrefix: '',
     design: roastPawns,
@@ -26,6 +27,7 @@ enum Game {
   ),
   backgammon(
     label: 'Backgammon',
+    shortLabel: 'Backgammon',
     mark: IconData(0x2685, fontFamily: _marksFont),
     routePrefix: '/backgammon',
     design: baize,
@@ -35,6 +37,7 @@ enum Game {
   ),
   swu(
     label: 'Star Wars: Unlimited',
+    shortLabel: 'SWU',
     mark: IconData(0x2726, fontFamily: _marksFont),
     routePrefix: '/swu',
     design: holotable,
@@ -45,6 +48,7 @@ enum Game {
 
   const Game({
     required this.label,
+    required this.shortLabel,
     required this.mark,
     required this.routePrefix,
     required this.design,
@@ -54,6 +58,10 @@ enum Game {
   });
 
   final String label;
+
+  /// [label] where space is tight (the phone header), so a long name needn't
+  /// be scaled down to fit. Anything that announces the game uses [label].
+  final String shortLabel;
 
   /// The game's mark on its tile in the game picker.
   final IconData mark;
