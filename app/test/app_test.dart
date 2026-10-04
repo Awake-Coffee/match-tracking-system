@@ -604,6 +604,16 @@ void main() {
 
       expect(find.textContaining('Pick'), findsNothing);
       expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
+
+      // The choice must reach the stored report: White, the old default,
+      // would pass every test that only checks the button.
+      final anaId = repo.me!.id;
+      await tapVisible(tester, send);
+      final sent = (await repo.matchRequests()).singleWhere(
+        (r) => r.requestedBy == anaId,
+      );
+      expect(sent.colorOf(anaId), PieceColor.black);
+      expect(sent.outcomeFor(anaId), Outcome.win);
     });
 
     testWidgets('choosing a chip enables the button and clears the hint', (
