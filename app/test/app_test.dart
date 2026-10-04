@@ -2102,6 +2102,52 @@ void main() {
     expect(find.text('Bogdan says you lost 0-2'), findsNothing);
   });
 
+  testWidgets('the phone header shows a short game name at full size', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    final name = find.descendant(
+      of: find.byTooltip('Switch game'),
+      matching: find.text('SWU'),
+    );
+    expect(name, findsOneWidget);
+    expect(find.text('Star Wars: Unlimited'), findsNothing);
+    // The header's FittedBox leaves it unscaled: painted width is its width.
+    expect(
+      tester.getTopRight(name).dx - tester.getTopLeft(name).dx,
+      tester.getSize(name).width,
+    );
+    // Screen readers still hear the full name.
+    expect(
+      find.bySemanticsLabel(RegExp('Star Wars: Unlimited')),
+      findsOneWidget,
+    );
+
+    // The picker cards keep the full name.
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    expect(find.text('Star Wars: Unlimited'), findsOneWidget);
+    expect(find.text('Backgammon'), findsOneWidget);
+  });
+
+  testWidgets('the wide header keeps the full game name', (tester) async {
+    _phone(tester, width: 1200);
+    final repo = await anaAndBogdanWithSwu();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/swu'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Star Wars: Unlimited'), findsOneWidget);
+    expect(find.text('SWU'), findsNothing);
+  });
+
   testWidgets('every SWU screen renders at 360px', (tester) async {
     _phone(tester);
     final repo = await anaAndBogdanWithSwu();

@@ -225,7 +225,14 @@ class _GamePicker extends StatelessWidget {
             children: [
               _GameTile(game: current),
               const SizedBox(width: 10),
-              Text(current.label, style: d.display(24)),
+              // The phone header is tight: "Star Wars: Unlimited" at 24pt would
+              // be scaled down, so it shows the short name. Screen readers
+              // still hear the full one.
+              Text(
+                wide ? current.label : current.shortLabel,
+                style: d.display(24),
+                semanticsLabel: current.label,
+              ),
               Icon(Icons.expand_more, color: d.muted),
               // Results waiting for the member in the other games.
               if (awaitingElsewhere > 0) Badge.count(count: awaitingElsewhere),
