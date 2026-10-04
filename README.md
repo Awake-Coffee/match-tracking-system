@@ -43,6 +43,12 @@ make dev    # debug build with hot reload
 make test   # Flutter tests + SQL tests (needs Postgres binaries on PATH)
 ```
 
+Sign-up confirmation emails link back to the host the member signed up on.
+Supabase only allows hosts listed under Authentication → URL Configuration:
+set the Site URL to `https://awake-chess-ladder.vercel.app` and add
+`https://awake-chess-ladder.vercel.app/**` and `http://localhost:8080/**`
+to the Redirect URLs.
+
 ## Database changes
 
 Add a new file in `supabase/migrations/`, cover it in a
