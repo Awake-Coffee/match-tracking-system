@@ -22,28 +22,35 @@ class LadderScreen extends StatelessWidget {
   ) async {
     final meId = repo.me!.id;
     return switch (game) {
-      Game.chess => (
-        await repo.ladder(),
-        [
-          for (final r in await repo.matchRequests())
-            PendingResult.chess(repo, meId, r),
-        ],
+      Game.chess => await _withPending(
+        repo.ladder,
+        repo.matchRequests,
+        (players, r) => PendingResult.chess(repo, meId, r, players),
       ),
-      Game.backgammon => (
-        await repo.backgammonLadder(),
-        [
-          for (final r in await repo.backgammonMatchRequests())
-            PendingResult.backgammon(repo, meId, r),
-        ],
+      Game.backgammon => await _withPending(
+        repo.backgammonLadder,
+        repo.backgammonMatchRequests,
+        (players, r) => PendingResult.backgammon(repo, meId, r, players),
       ),
-      Game.swu => (
-        await repo.swuLadder(),
-        [
-          for (final r in await repo.swuMatchRequests())
-            PendingResult.swu(repo, meId, r),
-        ],
+      Game.swu => await _withPending(
+        repo.swuLadder,
+        repo.swuMatchRequests,
+        (players, r) => PendingResult.swu(repo, meId, r, players),
       ),
     };
+  }
+
+  /// The ladder and the cards for its pending results, which preview their
+  /// rating change against those same players. Fetched one after the other
+  /// so a failed ladder fetch never leaves the requests future unawaited.
+  Future<(List<Player>, List<PendingResult>)> _withPending<R>(
+    Future<List<Player>> Function() ladder,
+    Future<List<R>> Function() requests,
+    PendingResult Function(List<Player> players, R request) card,
+  ) async {
+    final players = await ladder();
+    final rs = await requests();
+    return (players, [for (final r in rs) card(players, r)]);
   }
 
   @override

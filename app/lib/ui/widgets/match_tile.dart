@@ -37,6 +37,25 @@ String relativeDate(DateTime when, {DateTime? now}) {
   return '${when.day} ${months[when.month - 1]}';
 }
 
+/// How long ago [when] was, for things that just happened: "just now",
+/// "5 min ago", "2 h ago", "yesterday", then days and dates like
+/// [relativeDate].
+String relativeAge(DateTime when, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  final elapsed = current.difference(when);
+  if (elapsed.inMinutes < 1) return 'just now';
+  if (elapsed.inHours < 1) return '${elapsed.inMinutes} min ago';
+  if (elapsed.inHours < 24) return '${elapsed.inHours} h ago';
+  final days = DateTime(
+    current.year,
+    current.month,
+    current.day,
+  ).difference(DateTime(when.year, when.month, when.day)).inDays;
+  if (days <= 1) return 'yesterday';
+  if (days < 7) return '$days days ago';
+  return relativeDate(when, now: current);
+}
+
 /// One game in a list. From the club's view it reads "Ana beat Bo"; from a
 /// player's view ([perspectiveId]) it reads "Won against Bo".
 class MatchTile extends StatelessWidget {
