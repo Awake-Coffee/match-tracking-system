@@ -18,13 +18,14 @@ class SwuStats implements FideRated {
     this.draws = 0,
   });
 
+  /// A member's SWU row in `ratings`.
   factory SwuStats.fromRow(Map<String, dynamic> row) => SwuStats(
-    rating: row['swu_rating'] as int,
-    peakRating: row['swu_peak_rating'] as int,
-    matchesPlayed: row['swu_matches_played'] as int,
-    wins: row['swu_wins'] as int,
-    losses: row['swu_losses'] as int,
-    draws: row['swu_draws'] as int,
+    rating: row['rating'] as int,
+    peakRating: row['peak_rating'] as int,
+    matchesPlayed: row['played'] as int,
+    wins: row['wins'] as int,
+    losses: row['losses'] as int,
+    draws: row['draws'] as int,
   );
 
   @override
@@ -52,7 +53,7 @@ class SwuStats implements FideRated {
 }
 
 /// Whether a best of three can end with these games won: 2-0, 2-1, 1-0 when
-/// time runs out, or 1-1. Mirrors `public.is_swu_score`.
+/// time runs out, or 1-1. Mirrors `public.is_valid_score` for 'swu'.
 bool isSwuScore(int gamesA, int gamesB) =>
     gamesA >= 0 &&
     gamesA <= 2 &&
@@ -144,19 +145,20 @@ class SwuMatch extends SwuResult implements RatedGame {
     required this.playedAt,
   });
 
+  /// The reporter is player1.
   factory SwuMatch.fromRow(Map<String, dynamic> row) => SwuMatch(
     id: row['id'] as int,
-    reporterId: row['reporter_id'] as String,
-    respondentId: row['respondent_id'] as String,
-    reporterName: joinedName(row, 'reporter'),
-    respondentName: joinedName(row, 'respondent'),
-    reporterGames: row['reporter_games'] as int,
-    respondentGames: row['respondent_games'] as int,
+    reporterId: row['player1_id'] as String,
+    respondentId: row['player2_id'] as String,
+    reporterName: joinedName(row, player1),
+    respondentName: joinedName(row, player2),
+    reporterGames: sideScore(row, player1).toInt(),
+    respondentGames: sideScore(row, player2).toInt(),
     rated: row['rated'] as bool,
-    reporterRatingBefore: row['reporter_rating_before'] as int,
-    respondentRatingBefore: row['respondent_rating_before'] as int,
-    reporterRatingDelta: row['reporter_rating_delta'] as int,
-    respondentRatingDelta: row['respondent_rating_delta'] as int,
+    reporterRatingBefore: row['player1_rating_before'] as int,
+    respondentRatingBefore: row['player2_rating_before'] as int,
+    reporterRatingDelta: row['player1_rating_delta'] as int,
+    respondentRatingDelta: row['player2_rating_delta'] as int,
     playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
   );
 
@@ -195,14 +197,15 @@ class SwuMatchRequest extends SwuResult {
     this.respondedAt,
   });
 
+  /// The reporter is player1.
   factory SwuMatchRequest.fromRow(Map<String, dynamic> row) => SwuMatchRequest(
     id: row['id'] as int,
-    reporterId: row['reporter_id'] as String,
-    respondentId: row['respondent_id'] as String,
-    reporterName: joinedName(row, 'reporter'),
-    respondentName: joinedName(row, 'respondent'),
-    reporterGames: row['reporter_games'] as int,
-    respondentGames: row['respondent_games'] as int,
+    reporterId: row['player1_id'] as String,
+    respondentId: row['player2_id'] as String,
+    reporterName: joinedName(row, player1),
+    respondentName: joinedName(row, player2),
+    reporterGames: sideScore(row, player1).toInt(),
+    respondentGames: sideScore(row, player2).toInt(),
     rated: row['rated'] as bool,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
     status: RequestStatus.values.byName(row['status'] as String),
