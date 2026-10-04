@@ -53,8 +53,11 @@ class PawnsLadder extends StatelessWidget {
           if (players.isEmpty)
             Text('No games yet.', style: d.body(13, color: d.muted))
           else ...[
-            // Pawns are a tap shortcut; the list below carries the same players
-            // for screen readers.
+            // Pawns are a shortcut for tap and keyboard users (each one is a
+            // focusable button, Enter or Space opens the profile). They stay
+            // out of the semantics tree on purpose: the list below carries the
+            // same players with rank and record, and announcing both would
+            // read every player twice.
             ExcludeSemantics(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(6, 14, 6, 10),
@@ -68,8 +71,9 @@ class PawnsLadder extends StatelessWidget {
                   children: [
                     for (final p in players.take(_pawnsInARank))
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () => data.onOpen(p),
+                        child: _PawnButton(
+                          label: '${p.displayName}, rating ${p.rating}',
+                          onOpen: () => data.onOpen(p),
                           child: _Pawn(
                             player: p,
                             fill:
@@ -102,6 +106,62 @@ class PawnsLadder extends StatelessWidget {
             ),
           UnplayedGroup(data: data),
         ],
+      ),
+    );
+  }
+}
+
+/// Makes a pawn a keyboard-reachable button: it takes Tab focus, Enter or
+/// Space opens the profile, and a ring in the design's accent shows where
+/// focus is. The tooltip names the player and rating on hover and long-press.
+class _PawnButton extends StatefulWidget {
+  const _PawnButton({
+    required this.label,
+    required this.onOpen,
+    required this.child,
+  });
+
+  final String label;
+  final VoidCallback onOpen;
+  final Widget child;
+
+  @override
+  State<_PawnButton> createState() => _PawnButtonState();
+}
+
+class _PawnButtonState extends State<_PawnButton> {
+  /// True only for keyboard focus, so a mouse click leaves no ring behind.
+  bool _ring = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Tooltip(
+      message: widget.label,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (v) => setState(() => _ring = v),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onOpen();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          onTap: widget.onOpen,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _ring ? d.accent : Colors.transparent,
+                width: 2.5,
+              ),
+              borderRadius: d.borderRadius,
+            ),
+            child: widget.child,
+          ),
+        ),
       ),
     );
   }

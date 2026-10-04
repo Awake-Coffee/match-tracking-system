@@ -1,14 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../design/design_scope.dart';
 import '../../design/design_spec.dart';
 
 /// Rating after each game as a single 2px line with a light wash, a ringed
 /// end marker labelled with the current rating, and a crosshair tooltip on
-/// hover or drag. Single series, so the section title names it (no legend);
-/// the recent games list below is the table view.
+/// hover or drag. It is also a keyboard control: once focused, left and right
+/// arrows step the active point, Home and End jump to the first and last, and
+/// the point is announced to screen readers. Single series, so the section
+/// title names it (no legend); the recent games list below is the table view.
 class RatingChart extends StatefulWidget {
   const RatingChart({super.key, required this.points, required this.describe});
 
@@ -24,6 +27,16 @@ class RatingChart extends StatefulWidget {
 
 class _RatingChartState extends State<RatingChart> {
   int? _active;
+  final _focus = FocusNode(debugLabel: 'Rating chart');
+
+  /// Keyboard focus is showing, so draw the ring.
+  bool _ring = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
 
   void _track(Offset local, Size size) {
     final n = widget.points.length;
@@ -33,39 +46,96 @@ class _RatingChartState extends State<RatingChart> {
     setState(() => _active = (t * (n - 1)).round());
   }
 
-  void _clear() => setState(() => _active = null);
+  /// Pointer left or lifted. While the chart has keyboard focus the point
+  /// stays, so the tooltip and announcement don't vanish under the user.
+  void _clear() => setState(() => _active = _focus.hasFocus ? _active : null);
+
+  void _onFocusChange(bool focused) => setState(() {
+    // Start on the latest rating, the number the chart is labelled with.
+    if (focused) _active ??= widget.points.length - 1;
+    if (!focused) _active = null;
+    _ring =
+        focused &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+  });
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final last = widget.points.length - 1;
+    final key = event.logicalKey;
+    final from = _active ?? last;
+    final int to;
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      to = from - 1;
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      to = from + 1;
+    } else if (key == LogicalKeyboardKey.home) {
+      to = 0;
+    } else if (key == LogicalKeyboardKey.end) {
+      to = last;
+    } else {
+      return KeyEventResult.ignored;
+    }
+    setState(() => _active = to.clamp(0, last));
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final points = widget.points;
+    // A new history can be shorter than the point the keyboard was on.
+    final active = _active?.clamp(0, points.length - 1);
     return Semantics(
       label:
           'Rating over ${points.length - 1} games, from ${points.first} '
           'to ${points.last}, peak ${points.reduce(math.max)}',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, 180);
-          return MouseRegion(
-            onHover: (e) => _track(e.localPosition, size),
-            onExit: (_) => _clear(),
-            child: GestureDetector(
-              onPanDown: (e) => _track(e.localPosition, size),
-              onPanUpdate: (e) => _track(e.localPosition, size),
-              onPanEnd: (_) => _clear(),
-              onPanCancel: _clear,
-              child: CustomPaint(
-                size: size,
-                painter: _RatingPainter(
-                  points: points,
-                  design: d,
-                  active: _active,
-                  tooltip: _active == null ? null : widget.describe(_active!),
-                ),
-              ),
+      hint: 'Use left and right arrow keys to move between games',
+      // The active point is the value and a live region, so each arrow press
+      // is announced without moving the screen reader's cursor.
+      value: active == null
+          ? null
+          : widget.describe(active).replaceAll('\n', ', '),
+      liveRegion: active != null,
+      focusable: true,
+      focused: _focus.hasFocus,
+      child: Focus(
+        focusNode: _focus,
+        onKeyEvent: _onKey,
+        onFocusChange: _onFocusChange,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: _ring ? d.accent : Colors.transparent,
+              width: 2,
             ),
-          );
-        },
+            borderRadius: d.borderRadius,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, 180);
+              return MouseRegion(
+                onHover: (e) => _track(e.localPosition, size),
+                onExit: (_) => _clear(),
+                child: GestureDetector(
+                  onPanDown: (e) => _track(e.localPosition, size),
+                  onPanUpdate: (e) => _track(e.localPosition, size),
+                  onPanEnd: (_) => _clear(),
+                  onPanCancel: _clear,
+                  child: CustomPaint(
+                    size: size,
+                    painter: _RatingPainter(
+                      points: points,
+                      design: d,
+                      active: active,
+                      tooltip: active == null ? null : widget.describe(active),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
