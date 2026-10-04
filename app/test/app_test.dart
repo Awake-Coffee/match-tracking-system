@@ -1370,7 +1370,7 @@ void main() {
     expect(find.text('1500 to '), findsNWidgets(2));
     expect(find.text('+22'), findsOneWidget);
 
-    // Nobody can win a match to 3 with 5 points: scores clamp to the length.
+    // A shorter match moves ratings less.
     await tester.tap(find.bySemanticsLabel('Match to 3'));
     await tester.pumpAndSettle();
     expect(find.text('+17'), findsOneWidget);
@@ -1415,12 +1415,30 @@ void main() {
     await tester.ensureVisible(points(4));
     await tester.tap(points(4));
     await tester.pumpAndSettle();
-    // A shorter match cannot keep a loser's score that would have won it.
+    // A shorter match drops a loser's score that would have won it and asks
+    // again rather than quietly picking another.
     await tester.tap(find.bySemanticsLabel('Match to 3'));
     await tester.pumpAndSettle();
     expect(points(4), findsNothing);
-    expect(tester.widget<ChoiceChip>(points(2)).selected, isTrue);
+    for (final n in [0, 1, 2]) {
+      expect(tester.widget<ChoiceChip>(points(n)).selected, isFalse);
+    }
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick the loser\'s points'), findsOneWidget);
+    expect(tester.widget<FilledButton>(send).onPressed, isNull);
 
+    // A match to 1 leaves no 0 behind for a longer match.
+    await tester.ensureVisible(find.bySemanticsLabel('Match to 1'));
+    await tester.tap(find.bySemanticsLabel('Match to 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Match to 3'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(points(0)).selected, isFalse);
+
+    await tester.ensureVisible(points(2));
+    await tester.tap(points(2));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
     await tester.tap(send);
@@ -1450,6 +1468,9 @@ void main() {
     await tester.ensureVisible(find.text('I won'));
     await tester.tap(find.text('I won'));
     await tester.pumpAndSettle();
+    // No choice to make, so no points row.
+    expect(find.text('Bogdan\'s points'), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, '0'), findsNothing);
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
     expect(tester.widget<FilledButton>(send).onPressed, isNotNull);

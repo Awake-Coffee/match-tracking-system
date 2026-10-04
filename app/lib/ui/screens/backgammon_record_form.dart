@@ -42,10 +42,12 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
   /// A match to 1 can only end 1-0, so it needs no answer.
   int? get _loserPoints => _matchLength == 1 ? 0 : _loserScore;
 
+  /// A loser's score that would win the new length is cleared, not clamped,
+  /// so the form never sends a score the member did not pick.
   void _setLength(int length) => setState(() {
     _matchLength = length;
     final loser = _loserScore;
-    if (loser != null && loser >= length) _loserScore = length - 1;
+    if (loser != null && loser >= length) _loserScore = null;
   });
 
   @override
@@ -59,7 +61,8 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
     final scored = outcome != null && loserPoints != null;
     final myScore = scored ? (won ? _matchLength : loserPoints) : null;
     final opponentScore = scored ? (won ? loserPoints : _matchLength) : null;
-    final preview = opponent != null && scored
+    // The loser's points do not move ratings: the preview needs the result.
+    final preview = opponent != null && outcome != null
         ? BackgammonPreview(
             me: widget.me,
             opponent: opponent,
@@ -111,7 +114,8 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             selected: {?outcome},
             onSelectionChanged: (s) => setState(() => _outcome = s.firstOrNull),
           ),
-          if (outcome != null) ...[
+          // A match to 1 can only end 1-0: no points row to answer.
+          if (outcome != null && _matchLength > 1) ...[
             const SizedBox(height: 24),
             Text(
               won
@@ -142,8 +146,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
           RatingPreview(
             rated: _rated,
             emptyHint:
-                'Pick an opponent, the result and the loser\'s points to see '
-                'how ratings change.',
+                'Pick an opponent and a result to see how ratings change.',
             rows: preview == null
                 ? null
                 : [
