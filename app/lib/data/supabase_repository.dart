@@ -183,7 +183,7 @@ class SupabaseLadderRepository extends LadderRepository {
       });
 
   @override
-  Future<void> signUp({
+  Future<SignUpResult> signUp({
     required String email,
     required String password,
     required String displayName,
@@ -192,17 +192,26 @@ class SupabaseLadderRepository extends LadderRepository {
       email: email.trim(),
       password: password,
       data: {'display_name': displayName.trim()},
-      // Without it the confirmation link opens Supabase's Site URL, whatever
-      // host the member signed up on. Must be in the project's Redirect URLs.
-      emailRedirectTo: kIsWeb ? '${Uri.base.origin}/' : null,
+      emailRedirectTo: _confirmationRedirect,
     );
-    if (res.session == null) {
-      throw const LadderException(
-        'Check your inbox to confirm your email, then sign in.',
-      );
-    }
+    // No session means the project requires email confirmation first.
+    if (res.session == null) return SignUpResult.confirmationSent;
     await _loadMe();
+    return SignUpResult.signedIn;
   });
+
+  /// Without it the confirmation link opens Supabase's Site URL, whatever
+  /// host the member signed up on. Must be in the project's Redirect URLs.
+  String? get _confirmationRedirect => kIsWeb ? '${Uri.base.origin}/' : null;
+
+  @override
+  Future<void> resendSignUpConfirmation(String email) => _guard(
+    () => _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: _confirmationRedirect,
+    ),
+  );
 
   @override
   Future<void> signOut() => _guard(() async {

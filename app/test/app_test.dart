@@ -1,7 +1,9 @@
 import 'package:awake_ladder/app.dart';
+import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:awake_ladder/domain/swu.dart';
+import 'package:awake_ladder/design/design_scope.dart';
 import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
 import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
@@ -46,6 +48,109 @@ void main() {
 
     expect(find.text('The ladder'), findsOneWidget);
     expect(find.textContaining('You\'re '), findsOneWidget);
+  });
+
+  /// Opens the app signed out and submits the sign-up form for [email].
+  Future<void> signUpAs(
+    WidgetTester tester,
+    DemoLadderRepository repo,
+    String email,
+  ) async {
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New here? Create a profile'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Display name'),
+      'Cleo',
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), email);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Password'),
+      'longenough',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create profile'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a sign-up that needs confirming is a success, not an error', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..requireEmailConfirmation = true;
+    await signUpAs(tester, repo, 'cleo@example.com');
+
+    expect(repo.isSignedIn, isFalse);
+    expect(find.text('Check your inbox'), findsOneWidget);
+    expect(find.text('cleo@example.com'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create profile'), findsNothing);
+    final loss = tester.element(find.text('Check your inbox')).design.loss;
+    final colours = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.style?.color);
+    expect(colours, isNot(contains(loss)));
+  });
+
+  testWidgets('resending the confirmation acknowledges, then waits', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..requireEmailConfirmation = true;
+    await signUpAs(tester, repo, ' Cleo@Example.com ');
+
+    await tester.tap(find.widgetWithText(TextButton, 'Resend email'));
+    await tester.pump();
+    await tester.pump();
+    expect(repo.resentConfirmations, ['cleo@example.com']);
+    final sent = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Sent again'),
+    );
+    expect(sent.onPressed, isNull);
+
+    await tester.pump(const Duration(seconds: 31));
+    final again = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Resend email'),
+    );
+    expect(again.onPressed, isNotNull);
+  });
+
+  testWidgets('back to sign in keeps the email and lets them sign in', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..requireEmailConfirmation = true;
+    await signUpAs(tester, repo, 'cleo@example.com');
+
+    await tester.tap(find.text('Back to sign in'));
+    await tester.pumpAndSettle();
+    expect(find.text('Check your inbox'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(find.text('cleo@example.com'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Password'),
+      'longenough',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+    expect(find.text('The ladder'), findsOneWidget);
+  });
+
+  testWidgets('a failed sign-up stays an error in the loss colour', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await signUpAs(tester, repo, anaEmail);
+
+    expect(find.text('Check your inbox'), findsNothing);
+    final error = find.text(
+      'That email already has an account. Sign in instead.',
+    );
+    expect(error, findsOneWidget);
+    final loss = tester.element(error).design.loss;
+    expect(tester.widget<Text>(error).style?.color, loss);
   });
 
   testWidgets('a recorded game waits for the opponent to confirm', (

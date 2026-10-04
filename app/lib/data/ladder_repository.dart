@@ -13,6 +13,15 @@ class LadderException implements Exception {
   String toString() => message;
 }
 
+/// How a sign-up ended. Both are successes: the second just isn't signed in.
+enum SignUpResult {
+  /// The account exists and the member is signed in.
+  signedIn,
+
+  /// The account exists but the member must open the emailed link first.
+  confirmationSent,
+}
+
 /// Everything the UI needs from the backend.
 ///
 /// Notifies listeners when the signed-in member changes or when data that
@@ -35,11 +44,14 @@ abstract class LadderRepository extends ChangeNotifier {
 
   Future<void> signIn({required String email, required String password});
 
-  Future<void> signUp({
+  Future<SignUpResult> signUp({
     required String email,
     required String password,
     required String displayName,
   });
+
+  /// Sends the sign-up confirmation email to [email] again.
+  Future<void> resendSignUpConfirmation(String email);
 
   Future<void> signOut();
 

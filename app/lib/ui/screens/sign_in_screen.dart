@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
+import '../../design/design_spec.dart';
 import '../app_scope.dart';
 import '../widgets/surface.dart';
 
@@ -21,6 +24,10 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _busy = false;
   String? _error;
 
+  /// The address a confirmation email was sent to; set after a sign-up that
+  /// needs the emailed link, and replaces the form until the member goes back.
+  String? _confirming;
+
   @override
   void dispose() {
     _email.dispose();
@@ -38,11 +45,14 @@ class _SignInScreenState extends State<SignInScreen> {
     final repo = context.repo;
     try {
       if (_creating) {
-        await repo.signUp(
+        final result = await repo.signUp(
           email: _email.text,
           password: _password.text,
           displayName: _name.text,
         );
+        if (result == SignUpResult.confirmationSent && mounted) {
+          setState(() => _confirming = _email.text.trim());
+        }
       } else {
         await repo.signIn(email: _email.text, password: _password.text);
       }
@@ -61,10 +71,100 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  /// The intro, fields, error and buttons of the sign-in / sign-up form.
+  List<Widget> _formFields(DesignSpec d) => [
+    Text(
+      _creating
+          ? 'Make a profile. You\'ll start at 1000 in chess and Star Wars: Unlimited, 1500 in backgammon.'
+          : 'Sign in to log games and see where you stand.',
+      style: d.body(16, color: d.muted),
+    ),
+    const SizedBox(height: 28),
+    if (_creating) ...[
+      TextFormField(
+        controller: _name,
+        decoration: const InputDecoration(
+          labelText: 'Display name',
+          helperText: 'Shown on the ladder. You can change it later.',
+        ),
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.nickname],
+        validator: validateDisplayName,
+      ),
+      const SizedBox(height: 16),
+    ],
+    TextFormField(
+      controller: _email,
+      decoration: const InputDecoration(labelText: 'Email'),
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.email],
+      validator: (v) =>
+          (v == null || !v.contains('@')) ? 'Enter an email address' : null,
+    ),
+    const SizedBox(height: 16),
+    TextFormField(
+      controller: _password,
+      decoration: const InputDecoration(labelText: 'Password'),
+      obscureText: true,
+      autofillHints: [
+        _creating ? AutofillHints.newPassword : AutofillHints.password,
+      ],
+      onFieldSubmitted: (_) => _submit(),
+      validator: (v) {
+        if (v == null || v.isEmpty) {
+          return 'Enter your password';
+        }
+        if (_creating && v.length < 8) {
+          return 'Use at least 8 characters';
+        }
+        return null;
+      },
+    ),
+    if (_error != null) ...[
+      const SizedBox(height: 16),
+      Text(
+        _error!,
+        style: d.body(15, color: d.loss, weight: FontWeight.w600),
+      ),
+    ],
+    const SizedBox(height: 24),
+    FilledButton(
+      onPressed: _busy ? null : _submit,
+      child: _busy
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(_creating ? 'Create profile' : 'Sign in'),
+    ),
+    const SizedBox(height: 8),
+    TextButton(
+      onPressed: _busy
+          ? null
+          : () => setState(() {
+              _creating = !_creating;
+              _error = null;
+            }),
+      child: Text(
+        _creating ? 'I already have a profile' : 'New here? Create a profile',
+      ),
+    ),
+  ];
+
+  /// Leaves the confirmation panel for the sign-in form, email filled in.
+  void _backToSignIn() => setState(() {
+    _email.text = _confirming ?? _email.text;
+    _password.clear();
+    _confirming = null;
+    _creating = false;
+  });
+
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final note = context.repo.modeNote;
+    final confirming = _confirming;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -89,97 +189,13 @@ class _SignInScreenState extends State<SignInScreen> {
                       const SizedBox(height: 4),
                       Text('Chess, backgammon and SWU', style: d.display(46)),
                       const SizedBox(height: 12),
-                      Text(
-                        _creating
-                            ? 'Make a profile. You\'ll start at 1000 in chess and Star Wars: Unlimited, 1500 in backgammon.'
-                            : 'Sign in to log games and see where you stand.',
-                        style: d.body(16, color: d.muted),
-                      ),
-                      const SizedBox(height: 28),
-                      if (_creating) ...[
-                        TextFormField(
-                          controller: _name,
-                          decoration: const InputDecoration(
-                            labelText: 'Display name',
-                            helperText:
-                                'Shown on the ladder. You can change it later.',
-                          ),
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.nickname],
-                          validator: validateDisplayName,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      TextFormField(
-                        controller: _email,
-                        decoration: const InputDecoration(labelText: 'Email'),
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        validator: (v) => (v == null || !v.contains('@'))
-                            ? 'Enter an email address'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _password,
-                        decoration: const InputDecoration(
-                          labelText: 'Password',
-                        ),
-                        obscureText: true,
-                        autofillHints: [
-                          _creating
-                              ? AutofillHints.newPassword
-                              : AutofillHints.password,
-                        ],
-                        onFieldSubmitted: (_) => _submit(),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Enter your password';
-                          }
-                          if (_creating && v.length < 8) {
-                            return 'Use at least 8 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          _error!,
-                          style: d.body(
-                            15,
-                            color: d.loss,
-                            weight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        onPressed: _busy ? null : _submit,
-                        child: _busy
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(_creating ? 'Create profile' : 'Sign in'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                _creating = !_creating;
-                                _error = null;
-                              }),
-                        child: Text(
-                          _creating
-                              ? 'I already have a profile'
-                              : 'New here? Create a profile',
-                        ),
-                      ),
+                      if (confirming != null)
+                        _ConfirmationPanel(
+                          email: confirming,
+                          onBack: _backToSignIn,
+                        )
+                      else
+                        ..._formFields(d),
                       if (note != null) ...[
                         const SizedBox(height: 24),
                         SpecSurface(
@@ -195,6 +211,122 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Tells a new member to open the emailed link, and lets them ask for it
+/// again. A success, so it uses the surface and accent rather than the loss
+/// colour that real errors get.
+class _ConfirmationPanel extends StatefulWidget {
+  const _ConfirmationPanel({required this.email, required this.onBack});
+
+  final String email;
+  final VoidCallback onBack;
+
+  @override
+  State<_ConfirmationPanel> createState() => _ConfirmationPanelState();
+}
+
+class _ConfirmationPanelState extends State<_ConfirmationPanel> {
+  /// Keeps "Resend email" from being hammered; the email service rate-limits.
+  static const _cooldown = Duration(seconds: 30);
+
+  Timer? _timer;
+  bool _sending = false;
+  bool _sentAgain = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _resend() async {
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await context.repo.resendSignUpConfirmation(widget.email);
+      if (!mounted) return;
+      setState(() => _sentAgain = true);
+      _timer = Timer(_cooldown, () {
+        if (mounted) setState(() => _sentAgain = false);
+      });
+    } on LadderException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e, stack) {
+      debugPrint('Resending confirmation failed: $e\n$stack');
+      if (mounted) {
+        setState(() => _error = 'Couldn\'t send the email. Try again shortly.');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SpecSurface(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.mark_email_read_outlined, color: d.accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Check your inbox', style: d.display(24)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('We sent a confirmation link to', style: d.body(16)),
+              const SizedBox(height: 2),
+              Text(
+                widget.email,
+                style: d.body(16, color: d.accent, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Open it to activate your profile, then sign in. '
+                'It can take a minute, and may land in spam.',
+                style: d.body(15, color: d.muted),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: d.body(15, color: d.loss, weight: FontWeight.w600),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: widget.onBack,
+          child: const Text('Back to sign in'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _sending || _sentAgain ? null : _resend,
+          child: Text(
+            _sending
+                ? 'Sending…'
+                : _sentAgain
+                ? 'Sent again'
+                : 'Resend email',
+          ),
+        ),
+      ],
     );
   }
 }
