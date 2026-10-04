@@ -25,11 +25,28 @@ trap cleanup EXIT
 run_pg "initdb -D '$tmp/data' -A trust -U postgres >/dev/null"
 run_pg "pg_ctl -D '$tmp/data' -o '-p $port -k $tmp' -l '$tmp/log' -w start >/dev/null"
 
-psql_cmd=(psql -h "$tmp" -p "$port" -U postgres -d postgres -v ON_ERROR_STOP=1 -q -o /dev/null)
-"${psql_cmd[@]}" -f "$here/supabase_stub.sql"
+psql_in() { psql -h "$tmp" -p "$port" -U postgres -d "$1" -v ON_ERROR_STOP=1 -q -o /dev/null "${@:2}"; }
+
+psql_in postgres -f "$here/supabase_stub.sql"
 for f in "$root"/supabase/migrations/*.sql; do
-  "${psql_cmd[@]}" -f "$f"
+  psql_in postgres -f "$f"
 done
 for f in "$here"/*_test.sql; do
-  "${psql_cmd[@]}" -f "$f"
+  psql_in postgres -f "$f"
+done
+
+# Upgrade tests, each in a fresh database: upgrade/<migration>_seed.sql adds
+# rows in the schema just before <migration>, then the remaining migrations
+# run and upgrade/<migration>_test.sql checks how the rows carried over.
+for seed in "$here"/upgrade/*_seed.sql; do
+  [ -e "$seed" ] || continue
+  migration="$(basename "$seed" _seed.sql)"
+  db="upgrade_$migration"
+  psql_in postgres -c "create database \"$db\""
+  psql_in "$db" -f "$here/supabase_stub.sql"
+  for f in "$root"/supabase/migrations/*.sql; do
+    [ "$(basename "$f" .sql)" = "$migration" ] && psql_in "$db" -f "$seed"
+    psql_in "$db" -f "$f"
+  done
+  psql_in "$db" -f "$here/upgrade/${migration}_test.sql"
 done
