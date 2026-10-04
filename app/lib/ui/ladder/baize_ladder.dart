@@ -31,6 +31,11 @@ class BaizeLadder extends StatelessWidget {
             'The longer your point, the further ahead you are.',
             style: d.body(16, color: d.muted),
           ),
+          if (data.chase case final chase?) ...[
+            const SizedBox(height: 6),
+            // Gold on felt is AA only as large text: keep this style large.
+            Text(chase, style: d.display(26, color: d.accent)),
+          ],
           const SizedBox(height: 18),
           for (final (i, p) in players.indexed)
             LadderRowTap(

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
 import '../../domain/swu.dart';
 import '../game.dart';
+import '../ladder/ladder_view.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_tile.dart';
 import '../widgets/rating_chart.dart';
@@ -28,18 +30,22 @@ class ProfileScreen extends StatelessWidget {
     return LoadView<_GameRecord>(
       load: (repo) async {
         final player = await repo.player(playerId);
+        final chase = isMe ? await _chase(repo) : null;
         return switch (game) {
           Game.chess => _GameRecord.chess(
             player,
             await repo.matches(playerId: playerId, limit: 500),
+            chase,
           ),
           Game.backgammon => _GameRecord.backgammon(
             player,
             await repo.backgammonMatches(playerId: playerId, limit: 500),
+            chase,
           ),
           Game.swu => _GameRecord.swu(
             player,
             await repo.swuMatches(playerId: playerId, limit: 500),
+            chase,
           ),
         };
       },
@@ -47,6 +53,16 @@ class ProfileScreen extends StatelessWidget {
           _Profile(game: game, record: record, isMe: isMe),
     );
   }
+
+  /// How far the next rung up is for this member, from the same ladder the
+  /// ladder screen ranks by.
+  Future<String?> _chase(LadderRepository repo) async => LadderData(
+    game: game,
+    players: await game.ladderOf(repo),
+    meId: playerId,
+    onOpen: (_) {},
+    now: DateTime.now(),
+  ).chase;
 }
 
 /// A player's standing and results in one game, ready to show.
@@ -58,14 +74,16 @@ class _GameRecord {
     required this.history,
     required this.describePoint,
     required this.tiles,
+    this.chase,
   });
 
   /// [matches] newest first; only rated ones are on the rating line.
-  factory _GameRecord.chess(Player p, List<ChessMatch> matches) {
+  factory _GameRecord.chess(Player p, List<ChessMatch> matches, String? chase) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst);
     return _GameRecord(
       player: p,
+      chase: chase,
       rating: p.rating,
       stats: [
         ('Games', p.gamesPlayed),
@@ -93,7 +111,11 @@ class _GameRecord {
   }
 
   /// [matches] newest first; only rated ones are on the rating line.
-  factory _GameRecord.backgammon(Player p, List<BackgammonMatch> matches) {
+  factory _GameRecord.backgammon(
+    Player p,
+    List<BackgammonMatch> matches,
+    String? chase,
+  ) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(
       p.id,
@@ -103,6 +125,7 @@ class _GameRecord {
     final bg = p.backgammon;
     return _GameRecord(
       player: p,
+      chase: chase,
       rating: bg.rating,
       stats: [
         ('Matches', bg.matchesPlayed),
@@ -125,12 +148,13 @@ class _GameRecord {
   }
 
   /// [matches] newest first; only rated ones are on the rating line.
-  factory _GameRecord.swu(Player p, List<SwuMatch> matches) {
+  factory _GameRecord.swu(Player p, List<SwuMatch> matches, String? chase) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst, start: swuStartingRating);
     final swu = p.swu;
     return _GameRecord(
       player: p,
+      chase: chase,
       rating: swu.rating,
       stats: [
         ('Matches', swu.matchesPlayed),
@@ -169,6 +193,9 @@ class _GameRecord {
 
   /// The 20 most recent results, newest first.
   final List<Widget> tiles;
+
+  /// "10 to pass Irina", shown under the rating; null when nobody is above.
+  final String? chase;
 }
 
 class _Profile extends StatelessWidget {
@@ -234,6 +261,11 @@ class _Profile extends StatelessWidget {
                   style: d.body(14, color: d.muted, weight: FontWeight.w600),
                 ),
                 Text('${record.rating}', style: d.display(64, height: 1.05)),
+                if (record.chase case final chase?)
+                  Text(
+                    chase,
+                    style: d.body(15, color: d.accent, weight: FontWeight.w700),
+                  ),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 24,

@@ -40,6 +40,13 @@ class PawnsLadder extends StatelessWidget {
             data.summary ?? 'Every player at Awake starts at 1000.',
             style: d.body(16, color: d.muted),
           ),
+          if (data.chase case final chase?) ...[
+            const SizedBox(height: 6),
+            Text(
+              chase,
+              style: d.body(16, color: d.accent, weight: FontWeight.w700),
+            ),
+          ],
           const SizedBox(height: 24),
           // Nobody has played yet: an empty board would read as a broken top
           // eight, so go straight to the members waiting to play.

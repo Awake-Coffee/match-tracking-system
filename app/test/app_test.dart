@@ -6,7 +6,9 @@ import 'package:awake_ladder/domain/models.dart';
 import 'package:awake_ladder/domain/swu.dart';
 import 'package:awake_ladder/design/design_scope.dart';
 import 'package:awake_ladder/design/designs.dart';
+import 'package:awake_ladder/ui/game.dart';
 import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
+import 'package:awake_ladder/ui/ladder/ladder_view.dart';
 import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
 import 'package:awake_ladder/ui/widgets/match_request_list.dart';
@@ -1500,6 +1502,130 @@ void main() {
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
     await expectAllWaiting(RouteLadder);
+  });
+
+  group('chase line', () {
+    /// [meId]'s chase line on the [game] ladder, or null.
+    Future<String?> chaseOf(
+      DemoLadderRepository repo,
+      Game game,
+      String? meId,
+    ) async => LadderData(
+      game: game,
+      players: await game.ladderOf(repo),
+      meId: meId,
+      onOpen: (_) {},
+      now: DateTime(2026, 10, 5),
+    ).chase;
+
+    testWidgets('every ladder says how far the next rung up is', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdanWithSwu();
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      final bogdanId = repo.me!.id;
+      // Ana won each game, so Bogdan trails her by her whole lead, plus the
+      // one point a tie falls short.
+      final lead = {
+        for (final g in Game.values)
+          g: switch (await g.ladderOf(repo)) {
+            [final ana, final bogdan] =>
+              g.ratingOf(ana) - g.ratingOf(bogdan) + 1,
+            _ => fail('expected Ana and Bogdan on the ${g.label} ladder'),
+          },
+      };
+      // Pinned, so a slip in the +1 rule or the ordering fails every ladder.
+      expect(lead, {Game.chess: 41, Game.backgammon: 45, Game.swu: 41});
+      for (final g in Game.values) {
+        expect(await chaseOf(repo, g, bogdanId), '${lead[g]} to pass Ana');
+      }
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      Future<void> expectChase(Type ladder, Game game) async {
+        expect(
+          find.descendant(
+            of: find.byType(ladder),
+            matching: find.text('${lead[game]} to pass Ana'),
+          ),
+          findsOneWidget,
+        );
+      }
+
+      await expectChase(PawnsLadder, Game.chess);
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Backgammon'));
+      await tester.pumpAndSettle();
+      await expectChase(BaizeLadder, Game.backgammon);
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Star Wars: Unlimited'));
+      await tester.pumpAndSettle();
+      await expectChase(RouteLadder, Game.swu);
+    });
+
+    test('the leader, the unplayed and a signed-out viewer get none', () async {
+      final repo = await anaAndBogdanWithSwu();
+      final anaId = repo.me!.id;
+      await repo.signOut();
+      await repo.signUp(
+        email: 'cleo@example.com',
+        password: 'x',
+        displayName: 'Cleo',
+      );
+      final cleoId = repo.me!.id;
+      for (final g in Game.values) {
+        expect(await chaseOf(repo, g, anaId), isNull, reason: 'leader');
+        expect(await chaseOf(repo, g, cleoId), isNull, reason: 'unplayed');
+        expect(await chaseOf(repo, g, null), isNull, reason: 'signed out');
+      }
+    });
+
+    testWidgets('your own profile shows it under the rating, theirs does not', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdanWithSwu();
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      final bogdanId = repo.me!.id;
+      final anaId = (await repo.ladder())
+          .firstWhere((p) => p.id != bogdanId)
+          .id;
+      Future<void> open(String location) async {
+        // A fresh app, or the router would keep the page it is on.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          AwakeApp(repository: repo, initialLocation: location),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      for (final (prefix, game) in [
+        ('', Game.chess),
+        ('/backgammon', Game.backgammon),
+        ('/swu', Game.swu),
+      ]) {
+        final gap = await chaseOf(repo, game, bogdanId);
+        await open('$prefix/me');
+        expect(find.text(gap!), findsOneWidget);
+        expect(
+          tester.getTopLeft(find.text(gap)).dy,
+          greaterThan(
+            tester.getBottomLeft(find.text('${game.label} rating')).dy,
+          ),
+        );
+        // Ana's page is about her, not about Bogdan's chase.
+        await open('$prefix/players/$anaId');
+        expect(find.textContaining('to pass'), findsNothing);
+      }
+
+      // The leader has nobody to chase.
+      await repo.signIn(email: anaEmail, password: 'x');
+      await open('/swu/me');
+      expect(find.textContaining('to pass'), findsNothing);
+    });
   });
 
   testWidgets('a recorded backgammon match waits for the opponent', (

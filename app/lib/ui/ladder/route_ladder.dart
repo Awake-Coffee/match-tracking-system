@@ -43,21 +43,20 @@ class RouteLadder extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Expanded(child: Text('The route', style: d.display(34))),
-                  if (_chase() case final chase?)
-                    Text(chase, style: d.body(14, color: d.muted)),
-                ],
-              ),
+              Text('The route', style: d.display(34)),
               const SizedBox(height: 6),
               Text(
                 '${data.summary ?? 'Everyone starts at $start.'} '
                 'Gaps on the line are rating gaps.',
                 style: d.body(15, color: d.muted),
               ),
+              if (data.chase case final chase?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  chase,
+                  style: d.number(15, color: d.accent, weight: FontWeight.w700),
+                ),
+              ],
             ],
           ),
         ),
@@ -90,17 +89,6 @@ class RouteLadder extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  /// "10 to pass Irina" for a ranked member below first place.
-  String? _chase() {
-    final game = data.game;
-    final ranked = data.ranked;
-    final i = ranked.indexWhere((p) => p.id == data.meId);
-    if (i < 1) return null;
-    final above = ranked[i - 1];
-    final points = game.ratingOf(above) - game.ratingOf(ranked[i]) + 1;
-    return '$points to pass ${above.displayName}';
   }
 }
 

@@ -48,6 +48,13 @@ void main() {
   aa('Baize rank on oxblood chip', baize.ink, baizeOxbloodPoint);
   aa('Baize rank on ivory chip', baize.surface, baizeIvoryPoint);
   aa('Baize selected match length', baize.surface, baize.ink);
+  // Gold on felt clears AA only as large text, so the chase line stays large.
+  aa(
+    'Baize chase line on background (large text)',
+    baize.accent,
+    baize.background,
+    3,
+  );
 
   // Holotable's route dots and gap labels sit on both arenas.
   aa('Holotable gap label on space', holotable.accent, holotable.background);
