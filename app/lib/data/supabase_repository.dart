@@ -8,6 +8,7 @@ import '../domain/models.dart';
 import '../domain/swu.dart';
 import 'ladder_repository.dart';
 import 'live_updates.dart';
+import 'query_cache.dart';
 
 /// A table of one game's results: its name, the two player columns
 /// (`<side>_id`) and how to read a row.
@@ -80,6 +81,7 @@ class SupabaseLadderRepository extends LadderRepository {
       if (state.event == AuthChangeEvent.signedOut) {
         _me = null;
         _recovering = false;
+        _queries.clear();
         _live.stop();
         notifyListeners();
         // initialSession is left to restore(), so startup fetches the profile once.
@@ -129,6 +131,9 @@ class SupabaseLadderRepository extends LadderRepository {
   String? _authLinkError;
   int _revision = 0;
   Future<List<Player>>? _players;
+
+  /// Matches and request lists by table and parameters, kept like [_players].
+  final _queries = QueryCache();
   late final _live = LiveUpdates(onChanged: _dataChanged, subscribe: _listen);
 
   @override
@@ -167,8 +172,10 @@ class SupabaseLadderRepository extends LadderRepository {
         .eq('id', user.id)
         .maybeSingle();
     _me = row == null ? null : Player.fromRow(row);
-    // A new account isn't in the cached members yet.
+    // A new account isn't in the cached members yet, and requests are
+    // visible per member.
     _players = null;
+    _queries.clear();
     if (_me != null) _live.start();
     notifyListeners();
   }
@@ -192,6 +199,7 @@ class SupabaseLadderRepository extends LadderRepository {
   void _dataChanged() {
     _revision++;
     _players = null;
+    _queries.clear();
     notifyListeners();
   }
 
@@ -316,26 +324,31 @@ class SupabaseLadderRepository extends LadderRepository {
     await _client.auth.signOut();
     _me = null;
     _recovering = false;
+    _queries.clear();
     notifyListeners();
   });
 
   /// Newest first; only [playerId]'s when set. Pending requests are already
-  /// limited to the signed-in member by RLS.
+  /// limited to the signed-in member by RLS. Shared per parameters until data
+  /// changes, so switching tabs doesn't refetch.
   Future<List<T>> _results<T>(
     _ResultTable<T> table, {
     required String orderColumn,
     String? playerId,
     int? limit,
-  }) => _guard(() async {
-    var query = _client.from(table.name).select(_selectWithNames(table));
-    if (playerId != null) {
-      final (first, second) = table.sides;
-      query = query.or('${first}_id.eq.$playerId,${second}_id.eq.$playerId');
-    }
-    final ordered = query.order(orderColumn, ascending: false);
-    final rows = await (limit == null ? ordered : ordered.limit(limit));
-    return rows.map(table.fromRow).toList();
-  });
+  }) => _queries.of(
+    (table.name, playerId, limit),
+    () => _guard(() async {
+      var query = _client.from(table.name).select(_selectWithNames(table));
+      if (playerId != null) {
+        final (first, second) = table.sides;
+        query = query.or('${first}_id.eq.$playerId,${second}_id.eq.$playerId');
+      }
+      final ordered = query.order(orderColumn, ascending: false);
+      final rows = await (limit == null ? ordered : ordered.limit(limit));
+      return rows.map(table.fromRow).toList();
+    }),
+  );
 
   Future<T> _rowById<T>(_ResultTable<T> table, int id) async => table.fromRow(
     await _client

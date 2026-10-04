@@ -84,18 +84,53 @@ class _LoadViewState<T> extends State<LoadView<T>> {
           );
         }
         if (last == null) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(48),
-              child: CircularProgressIndicator(),
-            ),
-          );
+          return const LoadingSkeleton();
         }
         return RefreshIndicator(
           onRefresh: _reload,
           child: widget.builder(context, last.$1, _reload),
         );
       },
+    );
+  }
+}
+
+/// What a first load shows: a few rows of blocks in the design's surface
+/// colour and radius, so the page holds its shape instead of flashing a
+/// spinner. Still (no shimmer) and announced as loading to screen readers.
+class LoadingSkeleton extends StatelessWidget {
+  const LoadingSkeleton({super.key});
+
+  static const rows = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: 'Loading',
+      child: ExcludeSemantics(
+        child: ListView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            for (var i = 0; i < rows; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  key: const ValueKey('skeleton-row'),
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: d.surface,
+                    borderRadius: d.borderRadius,
+                    border: Border.all(color: d.line, width: d.lineWidth),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
