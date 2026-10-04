@@ -83,5 +83,66 @@ void main() {
       expect(find.byType(LoadingSkeleton), findsNothing);
       handle.dispose();
     });
+
+    testWidgets('a new reloadKey reloads this view, not the repository', (
+      tester,
+    ) async {
+      final repo = DemoLadderRepository();
+      final revision = repo.revision;
+      Widget keyed(String key) => MaterialApp(
+        home: DesignScope(
+          spec: baize,
+          child: AppScope(
+            repository: repo,
+            child: Scaffold(
+              body: LoadView<String>(
+                reloadKey: key,
+                load: (_) async => key,
+                builder: (_, data, _) => Text(data),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(keyed('a'));
+      await tester.pump();
+      expect(find.text('a'), findsOneWidget);
+
+      await tester.pumpWidget(keyed('b'));
+      await tester.pump();
+      expect(find.text('b'), findsOneWidget);
+      expect(repo.revision, revision);
+    });
+
+    testWidgets('a load overtaken by a newer one never lands', (tester) async {
+      final gates = {
+        'first': Completer<String>()..complete('first'),
+        'stale': Completer<String>(),
+        'newest': Completer<String>(),
+      };
+      Widget keyed(String key) => _host(
+        LoadView<String>(
+          reloadKey: key,
+          load: (_) => gates[key]!.future,
+          builder: (_, data, _) => Text(data),
+        ),
+      );
+      await tester.pumpWidget(keyed('first'));
+      await tester.pump();
+      await tester.pumpWidget(keyed('stale'));
+      await tester.pumpWidget(keyed('newest'));
+
+      // The newest load lands first, the overtaken one after it.
+      gates['newest']!.complete('newest');
+      await tester.pump();
+      gates['stale']!.complete('stale');
+      await tester.pump();
+      // Any later rebuild must still show the newest.
+      await tester.pumpWidget(keyed('newest'));
+      await tester.pump();
+
+      expect(find.text('newest'), findsOneWidget);
+      expect(find.text('stale'), findsNothing);
+    });
   });
 }

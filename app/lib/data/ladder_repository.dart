@@ -85,8 +85,14 @@ abstract class LadderRepository extends ChangeNotifier {
 
   Future<Player> player(String id);
 
-  /// Newest first. When [playerId] is set, only that member's games.
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50});
+  /// Newest first. When [playerId] is set, only that member's games. When
+  /// [before] is set, only games played before it: pass the `playedAt` of the
+  /// oldest game already loaded to fetch the next page.
+  Future<List<ChessMatch>> matches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  });
 
   /// Reports a game the signed-in member played. It is rated only once the
   /// opponent accepts it with [respondToMatchRequest], and never when
@@ -117,10 +123,12 @@ abstract class LadderRepository extends ChangeNotifier {
   /// Every member, best backgammon rating first.
   Future<List<Player>> backgammonLadder();
 
-  /// Newest first. When [playerId] is set, only that member's matches.
+  /// Newest first. When [playerId] is set, only that member's matches. When
+  /// [before] is set, only matches played before it, like [matches].
   Future<List<BackgammonMatch>> backgammonMatches({
     String? playerId,
     int limit = 50,
+    DateTime? before,
   });
 
   /// Reports a match the signed-in member played. It is rated only once the
@@ -152,8 +160,13 @@ abstract class LadderRepository extends ChangeNotifier {
   /// Every member, best Star Wars: Unlimited rating first.
   Future<List<Player>> swuLadder();
 
-  /// Newest first. When [playerId] is set, only that member's matches.
-  Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50});
+  /// Newest first. When [playerId] is set, only that member's matches. When
+  /// [before] is set, only matches played before it, like [matches].
+  Future<List<SwuMatch>> swuMatches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  });
 
   /// Reports a best of three the signed-in member played. It is rated only
   /// once the opponent accepts it with [respondToSwuMatchRequest], and never

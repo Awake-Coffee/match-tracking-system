@@ -326,17 +326,19 @@ class SupabaseLadderRepository extends LadderRepository {
     notifyListeners();
   });
 
-  /// Newest first; only [playerId]'s when set. Pending requests are already
-  /// limited to the signed-in member by RLS. Shared per parameters until data
-  /// changes, so switching tabs doesn't refetch.
+  /// Newest first; only [playerId]'s when set, and only those whose
+  /// [orderColumn] is before [before] when set (the next page). Pending
+  /// requests are already limited to the signed-in member by RLS. Shared per
+  /// parameters until data changes, so switching tabs doesn't refetch.
   Future<List<T>> _results<T>(
     _ResultTable<T> table, {
     required String orderColumn,
     String? playerId,
     int? limit,
+    DateTime? before,
   }) => _queries.of(
     // Games share a table, so the game is part of the key.
-    (table.name, table.matchType, playerId, limit),
+    (table.name, table.matchType, playerId, limit, before),
     () => _guard(() async {
       var query = _client
           .from(table.name)
@@ -347,7 +349,10 @@ class SupabaseLadderRepository extends LadderRepository {
           '${player1}_id.eq.$playerId,${player2}_id.eq.$playerId',
         );
       }
-      final ordered = query.order(orderColumn, ascending: false);
+      final older = before == null
+          ? query
+          : query.lt(orderColumn, before.toUtc().toIso8601String());
+      final ordered = older.order(orderColumn, ascending: false);
       final rows = await (limit == null ? ordered : ordered.limit(limit));
       return rows.map(table.fromRow).toList();
     }),
@@ -412,13 +417,17 @@ class SupabaseLadderRepository extends LadderRepository {
   Future<List<Player>> ladder() => _ladderBy(compareLadder);
 
   @override
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) =>
-      _results(
-        _chessMatches,
-        orderColumn: 'played_at',
-        playerId: playerId,
-        limit: limit,
-      );
+  Future<List<ChessMatch>> matches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  }) => _results(
+    _chessMatches,
+    orderColumn: 'played_at',
+    playerId: playerId,
+    limit: limit,
+    before: before,
+  );
 
   @override
   Future<MatchRequest> requestMatch({
@@ -457,11 +466,13 @@ class SupabaseLadderRepository extends LadderRepository {
   Future<List<BackgammonMatch>> backgammonMatches({
     String? playerId,
     int limit = 50,
+    DateTime? before,
   }) => _results(
     _backgammonMatches,
     orderColumn: 'played_at',
     playerId: playerId,
     limit: limit,
+    before: before,
   );
 
   @override
@@ -505,13 +516,17 @@ class SupabaseLadderRepository extends LadderRepository {
   Future<List<Player>> swuLadder() => _ladderBy(compareSwuLadder);
 
   @override
-  Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50}) =>
-      _results(
-        _swuMatches,
-        orderColumn: 'played_at',
-        playerId: playerId,
-        limit: limit,
-      );
+  Future<List<SwuMatch>> swuMatches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  }) => _results(
+    _swuMatches,
+    orderColumn: 'played_at',
+    playerId: playerId,
+    limit: limit,
+    before: before,
+  );
 
   @override
   Future<SwuMatchRequest> requestSwuMatch({

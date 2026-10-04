@@ -17,12 +17,23 @@ import '../app_scope.dart';
 /// A first load that takes longer than [skeletonDelay] shows a
 /// [LoadingSkeleton]; a quicker one (a warm cache on a tab switch) shows
 /// nothing until it lands, so it neither flashes nor announces "Loading".
+///
+/// A new [reloadKey] re-runs [load] for this view alone (a filter or page
+/// size changed), leaving the repository and the other screens' data alone.
 class LoadView<T> extends StatefulWidget {
-  const LoadView({super.key, required this.load, required this.builder});
+  const LoadView({
+    super.key,
+    required this.load,
+    required this.builder,
+    this.reloadKey,
+  });
 
   static const skeletonDelay = Duration(milliseconds: 150);
 
   final Future<T> Function(LadderRepository repo) load;
+
+  /// What [load] depends on besides the repository; compared with `==`.
+  final Object? reloadKey;
   final Widget Function(
     BuildContext context,
     T data,
@@ -52,10 +63,18 @@ class _LoadViewState<T> extends State<LoadView<T>> {
     if (_future == null || _revision != repo.revision) _load(repo);
   }
 
+  @override
+  void didUpdateWidget(LoadView<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reloadKey != oldWidget.reloadKey) _load(context.repo);
+  }
+
   void _load(LadderRepository repo) {
     _revision = repo.revision;
-    final future = _future = widget.load(repo).then((data) {
-      _last = (data,);
+    late final Future<T> future;
+    future = _future = widget.load(repo).then((data) {
+      // A load overtaken by a newer one must not land after it.
+      if (identical(future, _future)) _last = (data,);
       return data;
     });
     _slowTimer?.cancel();

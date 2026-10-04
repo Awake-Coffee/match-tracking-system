@@ -324,12 +324,16 @@ class DemoLadderRepository extends LadderRepository {
   }
 
   @override
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) async =>
-      _matches.reversed
-          .where((m) => playerId == null || m.involves(playerId))
-          .take(limit)
-          .map(_withCurrentNames)
-          .toList();
+  Future<List<ChessMatch>> matches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  }) async => _matches.reversed
+      .where((m) => playerId == null || m.involves(playerId))
+      .where((m) => before == null || m.playedAt.isBefore(before))
+      .take(limit)
+      .map(_withCurrentNames)
+      .toList();
 
   @override
   Future<MatchRequest> requestMatch({
@@ -511,8 +515,10 @@ class DemoLadderRepository extends LadderRepository {
   Future<List<BackgammonMatch>> backgammonMatches({
     String? playerId,
     int limit = 50,
+    DateTime? before,
   }) async => _backgammonMatches.reversed
       .where((m) => playerId == null || m.involves(playerId))
+      .where((m) => before == null || m.playedAt.isBefore(before))
       .take(limit)
       .map(_backgammonWithCurrentNames)
       .toList();
@@ -687,12 +693,16 @@ class DemoLadderRepository extends LadderRepository {
       _players.values.toList()..sort(compareSwuLadder);
 
   @override
-  Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50}) async =>
-      _swuMatches.reversed
-          .where((m) => playerId == null || m.involves(playerId))
-          .take(limit)
-          .map(_swuWithCurrentNames)
-          .toList();
+  Future<List<SwuMatch>> swuMatches({
+    String? playerId,
+    int limit = 50,
+    DateTime? before,
+  }) async => _swuMatches.reversed
+      .where((m) => playerId == null || m.involves(playerId))
+      .where((m) => before == null || m.playedAt.isBefore(before))
+      .take(limit)
+      .map(_swuWithCurrentNames)
+      .toList();
 
   @override
   Future<SwuMatchRequest> requestSwuMatch({
