@@ -185,7 +185,7 @@ class RatedSwitch extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Rated', style: d.body(15, weight: FontWeight.w700)),
+                Text('Rated', style: d.strong(15)),
                 Text(
                   rated
                       ? 'Counts toward everyone\'s rating.'

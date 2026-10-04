@@ -67,7 +67,7 @@ void main() {
     final history = _browserHistory(tester);
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Standard'));
+    await tester.tap(modeLine('Standard'));
     await tester.pumpAndSettle();
     expect(history.last, (uri: '/ladder/standard', replace: false));
 

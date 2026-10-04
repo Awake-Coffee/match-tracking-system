@@ -189,7 +189,7 @@ class _ModePicker extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Mode', style: d.body(15, weight: FontWeight.w700)),
+          Text('Mode', style: d.strong(15)),
           const SizedBox(height: 8),
           DropdownMenu<GameMode>(
             initialSelection: mode,

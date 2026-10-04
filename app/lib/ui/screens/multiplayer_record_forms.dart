@@ -125,7 +125,7 @@ class _BughouseRecordFormState extends State<BughouseRecordForm>
     final partnerId = _partnerId;
     final outcome = _outcome;
     final clock = _clock;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
     final teamsSet = partnerId != null && _opponentIds.length == 2;
     final seats = !teamsSet || outcome == null
         ? null
@@ -290,7 +290,7 @@ class _ChouetteRecordFormState extends State<ChouetteRecordForm>
     final inBox = _inBox;
     final outcome = _outcome;
     final loserPoints = _loserPoints;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
     // The team counts the member when they weren't the box.
     final teamSize = _teamIds.length + (inBox == false ? 1 : 0);
     final boxId = inBox == true ? meId : _boxId;
@@ -522,7 +522,7 @@ class _FreeForAllRecordFormState extends State<FreeForAllRecordForm>
     final d = context.design;
     final mode = widget.mode;
     final meId = widget.me.id;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
     final byId = {for (final p in widget.players) p.id: p};
     final ready = _order.length >= 2;
     final seats = _seats;

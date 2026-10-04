@@ -25,7 +25,8 @@ class CounterLadder extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(d.caps('The ladder'), style: d.display(44, height: 1)),
+          // The board is titled with its mode, like a menu's section.
+          Text(d.caps(data.mode.label), style: d.display(44, height: 1)),
           const SizedBox(height: 10),
           Text(
             data.summary ?? 'Every player at Awake starts at 1000.',

@@ -71,7 +71,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             (playerId: opponent.id, side: 2, score: won ? 0 : _matchLength),
           ])
         : null;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),

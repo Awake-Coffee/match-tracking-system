@@ -36,7 +36,7 @@ final _list = find
 
 /// Opens [mode]'s ladder from its game's ladders overview.
 Future<void> _openLadder(WidgetTester tester, String mode) async {
-  final card = find.text(mode);
+  final card = modeLine(mode);
   await tester.scrollUntilVisible(card, 200, scrollable: _list);
   await tester.tap(card);
   await tester.pumpAndSettle();
@@ -380,7 +380,7 @@ void main() {
 
     expect(repo.passwordRecoveryPending, isTrue);
     expect(find.text('Choose a new password'), findsOneWidget);
-    expect(find.text('THE LADDER'), findsNothing);
+    expect(find.text('LADDERS'), findsNothing);
 
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'short');
@@ -1547,7 +1547,7 @@ void main() {
 
     expect(find.text('LADDERS'), findsOneWidget);
     await _openLadder(tester, 'Standard');
-    expect(find.text('THE LADDER'), findsOneWidget);
+    expect(find.text('STANDARD'), findsOneWidget);
     // Pending chess game on the Ladder tab, pending match on the picker.
     expect(_awaitingBadge('1'), findsNWidgets(2));
 
