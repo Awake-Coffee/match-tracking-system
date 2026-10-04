@@ -31,9 +31,11 @@ flutter --version
 
 supabase_url=${SUPABASE_URL:-}
 supabase_key=${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}
-if [ -z "$supabase_url" ] || [ -z "$supabase_key" ]; then
+# A URL without a scheme (e.g. a redacted placeholder) builds fine but sends
+# every auth call to the app's own host.
+if [[ $supabase_url != https://* ]] || [ -z "$supabase_key" ]; then
   if [ "${VERCEL_ENV:-}" = production ]; then
-    echo "SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be set for production builds." >&2
+    echo "SUPABASE_URL (https://...) and SUPABASE_PUBLISHABLE_KEY must be set for production builds." >&2
     exit 1
   fi
   echo "Supabase settings missing; building in demo mode."

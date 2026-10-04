@@ -82,15 +82,12 @@ jobs:
       # The app and the database ship in this order so the live app never runs
       # against a schema it doesn't know: build and upload the new app without
       # serving it, migrate, then switch traffic to it in one alias swap.
-      - name: Build app
-        run: |
-          npx --yes vercel@62.2.0 pull --yes --environment=production --token "$VERCEL_TOKEN"
-          npx --yes vercel@62.2.0 build --prod --token "$VERCEL_TOKEN"
-
-      - name: Upload app without serving it
+      # Built on Vercel, not here: SUPABASE_* are Sensitive env vars, which
+      # `vercel pull` can't read, so a local build bakes in placeholders.
+      - name: Build and upload app without serving it
         id: app
         run: |
-          url=$(npx --yes vercel@62.2.0 deploy --prebuilt --prod --skip-domain --token "$VERCEL_TOKEN")
+          url=$(npx --yes vercel@62.2.0 deploy --prod --skip-domain --token "$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Apply migrations
