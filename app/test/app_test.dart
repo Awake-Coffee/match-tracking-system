@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
@@ -509,6 +511,7 @@ void main() {
     await tester.tap(fischer);
     await tester.pumpAndSettle();
     final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    expect(find.text('Pick the custom time'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, 'Minutes each'), '7');
     await tester.pump();
     expect(tester.widget<FilledButton>(send).onPressed, isNull);
@@ -666,6 +669,76 @@ void main() {
       expect(
         tester.widget<ChoiceChip>(chip('Sudden death 5 min')).selected,
         isFalse,
+      );
+    });
+
+    testWidgets('a short history is padded with the defaults', (tester) async {
+      // Ana has played one clock; three defaults fill the row to four.
+      await open(tester, await anaAndBogdan());
+      final labels = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((c) => (c.label as Text).data)
+          .toList();
+      expect(labels, [
+        'Sudden death 5 min',
+        'Fischer 5 min + 3 s',
+        'Fischer 10 min + 10 s',
+        'Fischer 15 min + 10 s',
+        'More…',
+      ]);
+    });
+
+    testWidgets('a clock without a chip keeps the full list open', (
+      tester,
+    ) async {
+      await open(tester, await anaAndBogdan());
+      await tapVisible(tester, chip('More…'));
+      await tester.tap(find.byType(DropdownMenu<TimeControl>));
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Fischer 25 min + 10 s').last);
+      await tapVisible(tester, chip('More…'));
+
+      expect(tester.widget<ChoiceChip>(chip('More…')).selected, isFalse);
+      expect(
+        tester
+            .widget<DropdownMenu<TimeControl>>(
+              find.byType(DropdownMenu<TimeControl>),
+            )
+            .initialSelection,
+        TimeControl.fischer25plus10,
+      );
+
+      // A chip's clock needs no list.
+      await tapVisible(tester, chip('Sudden death 5 min'));
+      expect(find.byType(DropdownMenu<TimeControl>), findsNothing);
+    });
+
+    testWidgets('the stored clock is chosen before the games load', (
+      tester,
+    ) async {
+      final repo = _SlowGames();
+      await anaAndBogdan(into: repo);
+      SharedPreferences.setMockInitialValues({
+        'last_clock.${repo.me!.id}': '21,7,4',
+      });
+      final games = repo.hold = Completer();
+      await open(tester, repo);
+
+      expect(
+        tester.widget<ChoiceChip>(chip('Fischer 7 min + 4 s')).selected,
+        isTrue,
+      );
+      expect(chip('Sudden death 5 min'), findsNothing);
+
+      // A default chip tapped while the games load keeps its place.
+      await tapVisible(tester, chip('Fischer 15 min + 10 s'));
+      games.complete();
+      await tester.pumpAndSettle();
+
+      expect(chip('Sudden death 5 min'), findsOneWidget);
+      expect(
+        tester.widget<ChoiceChip>(chip('Fischer 15 min + 10 s')).selected,
+        isTrue,
       );
     });
   });
@@ -1336,4 +1409,15 @@ void main() {
       scrollable: _list,
     );
   });
+}
+
+/// A demo ladder whose game history waits on [hold], like a slow connection.
+class _SlowGames extends DemoLadderRepository {
+  Completer<void>? hold;
+
+  @override
+  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) async {
+    await hold?.future;
+    return super.matches(playerId: playerId, limit: limit);
+  }
 }

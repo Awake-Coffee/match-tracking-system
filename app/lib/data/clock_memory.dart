@@ -55,12 +55,14 @@ abstract final class ClockMemory {
 
 /// The member's most recent distinct clocks, newest first: [last] (which may
 /// not have been confirmed yet), then those of their own [matches] (newest
-/// first). Falls back to [defaultClocks] with no history at all.
+/// first). Padded with [defaultClocks] so a short history still offers [max]
+/// one-tap choices.
 List<ClockSetting> recentClocks({
   ClockSetting? last,
   required Iterable<ChessMatch> matches,
   int max = 4,
-}) {
-  final recent = <ClockSetting>{?last, for (final m in matches) ?m.clock};
-  return recent.isEmpty ? defaultClocks : recent.take(max).toList();
-}
+}) => <ClockSetting>{
+  ?last,
+  for (final m in matches) ?m.clock,
+  ...defaultClocks,
+}.take(max).toList();

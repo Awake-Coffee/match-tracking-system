@@ -114,10 +114,18 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
     _loadClocks(context.repo);
   }
 
-  /// Preselects the member's last clock and builds their recent chips from
-  /// the last used one and their own games. Without either, the defaults stay.
+  /// Preselects the member's last clock as soon as local storage has it, then
+  /// builds their recent chips from it and their own games once those load.
   Future<void> _loadClocks(LadderRepository repo) async {
     final last = await ClockMemory.last(widget.me.id);
+    if (!mounted) return;
+    if (last != null) {
+      setState(() {
+        _recent = recentClocks(last: last, matches: const []);
+        // A choice made while this loaded wins.
+        if (_timeControl == null) _choose(last);
+      });
+    }
     var mine = const <ChessMatch>[];
     try {
       mine = await repo.matches(playerId: widget.me.id);
@@ -125,11 +133,9 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
       // The chips are a shortcut; the full list still works.
     }
     if (!mounted) return;
-    setState(() {
-      _recent = recentClocks(last: last, matches: mine);
-      // A choice made while this loaded wins.
-      if (last != null && _timeControl == null) _choose(last);
-    });
+    // The current choice leads, so a chip tapped while the games loaded keeps
+    // its place instead of vanishing.
+    setState(() => _recent = recentClocks(last: _clock ?? last, matches: mine));
   }
 
   void _choose(ClockSetting clock) {
@@ -226,7 +232,11 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
               ),
             ],
           ),
-          if (_showAllClocks) ...[
+          // The full list also stays open while the choice has no chip, so
+          // the clock that will be sent (or the preset its custom time belongs
+          // to) is always on screen.
+          if (_showAllClocks ||
+              (_timeControl != null && !_recent.contains(clock))) ...[
             const SizedBox(height: 12),
             DropdownMenu<TimeControl>(
               key: ValueKey(_clockEpoch),
@@ -304,7 +314,10 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             missing: [
               if (opponent == null) 'an opponent',
               if (outcome == null) 'a result',
-              if (clock == null) 'a time control',
+              if (_timeControl == null)
+                'a time control'
+              else if (clock == null)
+                'the custom time',
             ],
             onPressed: opponent == null || outcome == null || clock == null
                 ? null
