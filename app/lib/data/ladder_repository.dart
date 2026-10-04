@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/backgammon.dart';
 import '../domain/models.dart';
+import '../domain/swu.dart';
 
 /// Thrown with a message that can be shown to the member as-is.
 class LadderException implements Exception {
@@ -27,6 +28,10 @@ abstract class LadderRepository extends ChangeNotifier {
 
   /// Short description shown on the sign-in screen, or null for production.
   String? get modeNote => null;
+
+  /// Drops cached data so the next load hits the backend (pull-to-refresh,
+  /// retry).
+  void refresh() {}
 
   Future<void> signIn({required String email, required String password});
 
@@ -95,31 +100,58 @@ abstract class LadderRepository extends ChangeNotifier {
     required bool accept,
   });
 
+  /// Every member, best Star Wars: Unlimited rating first.
+  Future<List<Player>> swuLadder();
+
+  /// Newest first. When [playerId] is set, only that member's matches.
+  Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50});
+
+  /// Reports a best of three the signed-in member played. It is rated only
+  /// once the opponent accepts it with [respondToSwuMatchRequest].
+  Future<SwuMatchRequest> requestSwuMatch({
+    required String opponentId,
+    required int myGames,
+    required int opponentGames,
+  });
+
+  /// Matches involving the signed-in member that wait for confirmation,
+  /// newest first.
+  Future<List<SwuMatchRequest>> swuMatchRequests();
+
+  /// The opponent accepts ([accept]) and gets the rated match back, or either
+  /// player drops the request and gets null.
+  Future<SwuMatch?> respondToSwuMatchRequest(
+    int requestId, {
+    required bool accept,
+  });
+
   Future<void> updateDisplayName(String displayName);
 }
 
-/// Ladder order: rating, then more games played, then name.
-int compareLadder(Player a, Player b) {
-  final byRating = b.rating.compareTo(a.rating);
+/// Ladder order in one game: rating, then more results played, then name.
+Comparator<Player> _ladderOrder(
+  ({int rating, int played}) Function(Player) standingIn,
+) => (a, b) {
+  final (rating: ratingA, played: playedA) = standingIn(a);
+  final (rating: ratingB, played: playedB) = standingIn(b);
+  final byRating = ratingB.compareTo(ratingA);
   if (byRating != 0) return byRating;
-  final byGames = b.gamesPlayed.compareTo(a.gamesPlayed);
-  if (byGames != 0) return byGames;
-  return _compareNames(a, b);
-}
+  final byPlayed = playedB.compareTo(playedA);
+  if (byPlayed != 0) return byPlayed;
+  return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+};
 
-/// Backgammon ladder order: rating, then more matches played, then name.
-int compareBackgammonLadder(Player a, Player b) {
-  final byRating = b.backgammon.rating.compareTo(a.backgammon.rating);
-  if (byRating != 0) return byRating;
-  final byMatches = b.backgammon.matchesPlayed.compareTo(
-    a.backgammon.matchesPlayed,
-  );
-  if (byMatches != 0) return byMatches;
-  return _compareNames(a, b);
-}
+final compareLadder = _ladderOrder(
+  (p) => (rating: p.rating, played: p.gamesPlayed),
+);
 
-int _compareNames(Player a, Player b) =>
-    a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+final compareBackgammonLadder = _ladderOrder(
+  (p) => (rating: p.backgammon.rating, played: p.backgammon.matchesPlayed),
+);
+
+final compareSwuLadder = _ladderOrder(
+  (p) => (rating: p.swu.rating, played: p.swu.matchesPlayed),
+);
 
 String? validateDisplayName(String? value) {
   final name = value?.trim() ?? '';

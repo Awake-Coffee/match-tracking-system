@@ -312,10 +312,7 @@ class _GameTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: d.accent, width: d.lineWidth),
       ),
-      child: Text(
-        game.glyph,
-        style: TextStyle(color: d.accent, fontSize: 18, height: 1),
-      ),
+      child: Icon(game.mark, color: d.accent, size: 18),
     );
   }
 }
@@ -404,10 +401,7 @@ class _GameCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(child: Text(game.label, style: d.display(20))),
-                    Text(
-                      game.glyph,
-                      style: TextStyle(color: d.accent, fontSize: 20),
-                    ),
+                    Icon(game.mark, color: d.accent, size: 20),
                   ],
                 ),
                 if (standing != null)

@@ -58,3 +58,23 @@ Future<DemoLadderRepository> anaAndBogdanWithBackgammon() async {
   await repo.signIn(email: anaEmail, password: 'x');
   return repo;
 }
+
+/// [anaAndBogdanWithBackgammon] plus Star Wars: Unlimited: one rated match
+/// (Ana won 2-1) and one Bogdan reported winning 2-0 that waits for Ana.
+/// Signed in as Ana.
+Future<DemoLadderRepository> anaAndBogdanWithSwu() async {
+  final repo = await anaAndBogdanWithBackgammon();
+  final anaId = repo.me!.id;
+  final bogdanId = (await repo.ladder()).firstWhere((p) => p.id != anaId).id;
+
+  final rated = await repo.requestSwuMatch(
+    opponentId: bogdanId,
+    myGames: 2,
+    opponentGames: 1,
+  );
+  await repo.signIn(email: bogdanEmail, password: 'x');
+  await repo.respondToSwuMatchRequest(rated.id, accept: true);
+  await repo.requestSwuMatch(opponentId: anaId, myGames: 2, opponentGames: 0);
+  await repo.signIn(email: anaEmail, password: 'x');
+  return repo;
+}

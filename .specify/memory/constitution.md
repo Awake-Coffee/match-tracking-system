@@ -30,13 +30,14 @@ depends on them.
 Screens read colors, type, shape and leaderboard layout from a
 `DesignSpec`. No screen hardcodes a color or font. Adding a design must
 not require touching screen logic. Each game has its own design (chess:
-Roast pawns, backgammon: Baize).
+Roast pawns, backgammon: Baize, Star Wars: Unlimited: Holotable).
 
 ### VI. Start narrow
-Chess and backgammon are supported. Each game has its own ratings,
-results tables and RPCs; shared UI is extracted only where both games
-already need it. No speculative multi-game abstractions are built for
-games that aren't played yet.
+Chess, backgammon and Star Wars: Unlimited are supported. Each game has
+its own ratings, results tables and RPCs; rating math and UI are shared
+only where games already need the same thing (SWU reuses the FIDE math).
+No speculative multi-game abstractions are built for games that aren't
+played yet.
 
 ## Technology Constraints
 
@@ -63,4 +64,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-04
+**Version**: 1.3.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-04

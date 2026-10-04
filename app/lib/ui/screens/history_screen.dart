@@ -23,6 +23,10 @@ class HistoryScreen extends StatelessWidget {
           for (final m in await repo.backgammonMatches(limit: 100))
             BackgammonMatchTile(match: m),
         ],
+        Game.swu => [
+          for (final m in await repo.swuMatches(limit: 100))
+            SwuMatchTile(match: m),
+        ],
       },
       builder: (context, tiles, _) => ListView(
         children: [
@@ -32,6 +36,8 @@ class HistoryScreen extends StatelessWidget {
               Game.chess => 'Every game played at Awake, newest first.',
               Game.backgammon =>
                 'Every backgammon match at Awake, newest first.',
+              Game.swu =>
+                'Every Star Wars: Unlimited match at Awake, newest first.',
             },
           ),
           if (tiles.isEmpty)

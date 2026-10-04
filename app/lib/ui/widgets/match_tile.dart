@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../design/design_scope.dart';
 import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
+import '../../domain/swu.dart';
 import '../game.dart';
 import 'surface.dart';
 
@@ -133,7 +134,50 @@ class BackgammonMatchTile extends StatelessWidget {
   }
 }
 
-/// The row both tiles share: "Won against **Bo**" with your change and new
+/// One Star Wars: Unlimited match in a list, from the club's or a player's
+/// view like [MatchTile].
+class SwuMatchTile extends StatelessWidget {
+  const SwuMatchTile({super.key, required this.match, this.perspectiveId});
+
+  final SwuMatch match;
+  final String? perspectiveId;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = match;
+    final me = perspectiveId != null && m.involves(perspectiveId!)
+        ? perspectiveId
+        : null;
+    final detail = '${m.scoreFor(me)} in games, ${relativeDate(m.playedAt)}';
+    if (me != null) {
+      return _ResultRow.forPlayer(
+        verb: switch (m.outcomeFor(me)) {
+          Outcome.win => 'Won against',
+          Outcome.loss => 'Lost to',
+          Outcome.draw => 'Drew with',
+        },
+        opponentName: m.opponentName(me),
+        opponentPath: Game.swu.path('players/${m.opponentId(me)}'),
+        detail: detail,
+        delta: m.deltaFor(me),
+        ratingAfter: m.ratingAfterFor(me),
+      );
+    }
+    // Winner first; for a draw, whoever recorded it.
+    final firstId = m.winnerId ?? m.reporterId;
+    final secondId = m.opponentId(firstId);
+    return _ResultRow.forClub(
+      firstName: m.nameOf(firstId),
+      verb: m.winnerId == null ? 'drew with' : 'beat',
+      secondName: m.nameOf(secondId),
+      detail: detail,
+      firstDelta: m.deltaFor(firstId),
+      secondDelta: m.deltaFor(secondId),
+    );
+  }
+}
+
+/// The row all tiles share: "Won against **Bo**" with your change and new
 /// rating, or "**Ana** beat **Bo**" with both changes.
 class _ResultRow extends StatelessWidget {
   const _ResultRow.forPlayer({

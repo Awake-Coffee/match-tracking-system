@@ -1,5 +1,3 @@
-import 'models.dart';
-
 /// Rating every member starts with.
 const startingRating = 1000;
 
@@ -11,8 +9,18 @@ const _fideBandUpperBounds = [
   256, 267, 278, 290, 302, 315, 328, 344, 357, 374, 391,
 ];
 
+/// What the FIDE rules need of a player: a chess member, or a member's
+/// standing in another game rated the same way.
+abstract interface class FideRated {
+  int get rating;
+  int get peakRating;
+
+  /// Results rated so far; FIDE moves newcomers faster.
+  int get gamesPlayed;
+}
+
 /// FIDE 8.3.3. Skipped: K = 40 for juniors (no birth dates here).
-int fideKFactor(Player player) => player.gamesPlayed < 30
+int fideKFactor(FideRated player) => player.gamesPlayed < 30
     ? 40
     : player.peakRating < 2400
     ? 20
@@ -22,7 +30,7 @@ int fideKFactor(Player player) => player.gamesPlayed < 30
 ///
 /// Mirrors `public.fide_rating_change` in the Supabase migration; the server
 /// is the source of truth and this is only used to preview a result.
-int fideRatingChange(Player player, Player opponent, double score) {
+int fideRatingChange(FideRated player, FideRated opponent, double score) {
   final diff = player.rating - opponent.rating;
   final cappedDiff = diff.abs().clamp(0, 400);
   final bandsPassed = _fideBandUpperBounds

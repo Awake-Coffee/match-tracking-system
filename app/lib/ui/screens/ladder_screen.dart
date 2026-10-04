@@ -8,6 +8,7 @@ import '../game.dart';
 import '../ladder/baize_ladder.dart';
 import '../ladder/ladder_view.dart';
 import '../ladder/pawns_ladder.dart';
+import '../ladder/route_ladder.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_request_list.dart';
 
@@ -33,6 +34,13 @@ class LadderScreen extends StatelessWidget {
         [
           for (final r in await repo.backgammonMatchRequests())
             PendingResult.backgammon(repo, meId, r),
+        ],
+      ),
+      Game.swu => (
+        await repo.swuLadder(),
+        [
+          for (final r in await repo.swuMatchRequests())
+            PendingResult.swu(repo, meId, r),
         ],
       ),
     };
@@ -67,6 +75,7 @@ class LadderScreen extends StatelessWidget {
             switch (game) {
               Game.chess => PawnsLadder(data: ladder),
               Game.backgammon => BaizeLadder(data: ladder),
+              Game.swu => RouteLadder(data: ladder),
             },
           ],
         );

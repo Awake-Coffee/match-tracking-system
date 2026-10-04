@@ -9,6 +9,7 @@ import '../widgets/load_view.dart';
 import '../widgets/record_form.dart';
 import '../widgets/surface.dart';
 import 'backgammon_record_form.dart';
+import 'swu_record_form.dart';
 
 class RecordScreen extends StatelessWidget {
   const RecordScreen({super.key, required this.game, this.initialOpponentId});
@@ -50,6 +51,11 @@ class RecordScreen extends StatelessWidget {
                   initialOpponentId: initialOpponentId,
                 ),
                 Game.backgammon => BackgammonRecordForm(
+                  me: me,
+                  players: players,
+                  initialOpponentId: initialOpponentId,
+                ),
+                Game.swu => SwuRecordForm(
                   me: me,
                   players: players,
                   initialOpponentId: initialOpponentId,

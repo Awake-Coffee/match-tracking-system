@@ -1,5 +1,5 @@
 name: awake_ladder
-description: "Awake Coffee chess and backgammon ladders for the cafe's regulars."
+description: "Awake Coffee chess, backgammon and Star Wars: Unlimited ladders for the cafe's regulars."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -50,4 +50,16 @@ flutter:
         - asset: assets/fonts/WorkSans-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/WorkSans-Bold.ttf
+          weight: 700
+    - family: GameMarks
+      fonts:
+        - asset: assets/fonts/GameMarks.ttf
+    - family: Chakra Petch
+      fonts:
+        - asset: assets/fonts/ChakraPetch-Regular.ttf
+        - asset: assets/fonts/ChakraPetch-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/ChakraPetch-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/ChakraPetch-Bold.ttf
           weight: 700

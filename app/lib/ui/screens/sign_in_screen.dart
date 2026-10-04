@@ -48,7 +48,9 @@ class _SignInScreenState extends State<SignInScreen> {
       }
     } on LadderException catch (e) {
       if (mounted) setState(() => _error = e.message);
-    } catch (_) {
+    } catch (e, stack) {
+      // Shows in the console: non-network failures (e.g. a profile row that doesn't parse) land here too.
+      debugPrint('Sign-in failed: $e\n$stack');
       if (mounted) {
         setState(
           () => _error = 'Couldn\'t reach the server. Check your connection and try again.',
@@ -85,11 +87,11 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('Chess and backgammon', style: d.display(46)),
+                      Text('Chess, backgammon and SWU', style: d.display(46)),
                       const SizedBox(height: 12),
                       Text(
                         _creating
-                            ? 'Make a profile. You\'ll start at 1000 in chess and 1500 in backgammon.'
+                            ? 'Make a profile. You\'ll start at 1000 in chess and Star Wars: Unlimited, 1500 in backgammon.'
                             : 'Sign in to log games and see where you stand.',
                         style: d.body(16, color: d.muted),
                       ),
