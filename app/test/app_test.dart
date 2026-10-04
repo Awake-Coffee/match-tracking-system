@@ -48,7 +48,7 @@ void main() {
       find.text('Chess, backgammon and Star Wars: Unlimited'),
       findsOneWidget,
     );
-    expect(find.textContaining('ladders.'), findsOneWidget);
+    expect(find.textContaining('see where you stand'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Email'),
       anaEmail,
@@ -64,7 +64,8 @@ void main() {
     expect(find.textContaining('You\'re '), findsOneWidget);
   });
 
-  testWidgets('the sign-in copy explains the ladders in plain words at 360px', (
+  // Whether the longer headline fits a phone is in sign_in_layout_test.dart.
+  testWidgets('the sign-in copy explains the ladders in plain words', (
     tester,
   ) async {
     _phone(tester);
@@ -74,7 +75,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('SWU'), findsNothing);
-    expect(tester.takeException(), isNull);
+    expect(
+      find.text(
+        'Sign in to log your games and see where you stand on the '
+        'café\'s ladders.',
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('New here? Create a profile'));
     await tester.pumpAndSettle();
@@ -89,7 +96,6 @@ void main() {
     // The ladder summary tells new members their starting rating.
     expect(find.textContaining('1000'), findsNothing);
     expect(find.textContaining('1500'), findsNothing);
-    expect(tester.takeException(), isNull);
   });
 
   /// Opens the app signed out and submits the sign-up form for [email].

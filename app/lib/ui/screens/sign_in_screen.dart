@@ -96,8 +96,8 @@ class _SignInScreenState extends State<SignInScreen> {
       _creating
           ? 'Report the games you play at the café. Your opponent confirms '
                 'the result, and then both ratings move.'
-          : 'Sign in to the café\'s chess, backgammon and Star Wars: '
-                'Unlimited ladders.',
+          : 'Sign in to log your games and see where you stand on the '
+                'café\'s ladders.',
       style: d.body(16, color: d.muted),
     ),
     const SizedBox(height: 28),
@@ -269,8 +269,9 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // Spelled out for newcomers; 34 keeps the longer name to
-                      // about three lines in the 320px a phone leaves.
+                      // Spelled out for newcomers; 34 rather than 46 so the
+                      // longer name wraps to about the old headline's height
+                      // on a phone.
                       Text(
                         'Chess, backgammon and Star Wars: Unlimited',
                         style: d.display(34),
