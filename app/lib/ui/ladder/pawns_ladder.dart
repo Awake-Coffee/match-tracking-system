@@ -53,8 +53,11 @@ class PawnsLadder extends StatelessWidget {
           if (players.isEmpty)
             Text('No games yet.', style: d.body(13, color: d.muted))
           else ...[
-            // Pawns are a tap shortcut; the list below carries the same players
-            // for screen readers.
+            // Pawns are a shortcut for tap and keyboard users (each one is a
+            // focusable button, Enter or Space opens the profile). They stay
+            // out of the semantics tree on purpose: the list below carries the
+            // same players with rank and record, and announcing both would
+            // read every player twice.
             ExcludeSemantics(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(6, 14, 6, 10),
@@ -68,8 +71,9 @@ class PawnsLadder extends StatelessWidget {
                   children: [
                     for (final p in players.take(_pawnsInARank))
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () => data.onOpen(p),
+                        child: _PawnButton(
+                          label: '${p.displayName}, rating ${p.rating}',
+                          onOpen: () => data.onOpen(p),
                           child: _Pawn(
                             player: p,
                             fill:
@@ -102,6 +106,100 @@ class PawnsLadder extends StatelessWidget {
             ),
           UnplayedGroup(data: data),
         ],
+      ),
+    );
+  }
+}
+
+/// Makes a pawn a keyboard-reachable button: it takes Tab focus, Enter or
+/// Space opens the profile, and a ring in the design's accent shows where
+/// focus is. The tooltip names the player and rating on hover, long-press and
+/// keyboard focus.
+class _PawnButton extends StatefulWidget {
+  const _PawnButton({
+    required this.label,
+    required this.onOpen,
+    required this.child,
+  });
+
+  final String label;
+  final VoidCallback onOpen;
+  final Widget child;
+
+  @override
+  State<_PawnButton> createState() => _PawnButtonState();
+}
+
+class _PawnButtonState extends State<_PawnButton> {
+  /// The pawn whose tooltip keyboard focus opened. Focus moving between pawns
+  /// notifies both in no fixed order, so only this one may close it.
+  static _PawnButtonState? _tooltipOwner;
+
+  final _tooltip = GlobalKey<TooltipState>();
+
+  /// True only for keyboard focus, so a mouse click leaves no ring behind.
+  bool _ring = false;
+
+  /// Material tooltips open on hover and long-press only, so a keyboard user
+  /// would see the ring but never the rating without this.
+  void _onHighlight(bool shown) {
+    setState(() => _ring = shown);
+    if (shown) {
+      Tooltip.dismissAllToolTips();
+      _tooltip.currentState?.ensureTooltipVisible();
+      _tooltipOwner = this;
+    } else if (_tooltipOwner == this) {
+      Tooltip.dismissAllToolTips();
+      _tooltipOwner = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_tooltipOwner == this) _tooltipOwner = null;
+    super.dispose();
+  }
+
+  void _open() => widget.onOpen();
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Tooltip(
+      key: _tooltip,
+      message: widget.label,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: _onHighlight,
+        // The web build maps Enter to ButtonActivateIntent and Space to
+        // ActivateIntent; other platforms map both to ActivateIntent.
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => _open(),
+          ),
+          ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+            onInvoke: (_) => _open(),
+          ),
+        },
+        child: GestureDetector(
+          onTap: _open,
+          // Foreground and padded, so the name label (accent on your own
+          // pawn) neither paints over the ring nor blends into it.
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _ring ? d.accent : Colors.transparent,
+                width: 2.5,
+              ),
+              borderRadius: d.borderRadius,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: widget.child,
+            ),
+          ),
+        ),
       ),
     );
   }

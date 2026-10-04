@@ -13,9 +13,11 @@ import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
 import 'package:awake_ladder/ui/ladder/ladder_view.dart';
 import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
+import 'package:awake_ladder/ui/widgets/rating_chart.dart';
 import 'package:awake_ladder/ui/widgets/match_request_list.dart';
 import 'package:awake_ladder/ui/widgets/match_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -2484,6 +2486,193 @@ void main() {
     expect(age(const Duration(days: 3)), '3 days ago');
     expect(age(const Duration(days: 10)), '24 Sep');
     expect(age(const Duration(minutes: -3)), 'just now');
+  });
+
+  group('keyboard access', () {
+    Widget inDesign(Widget child) => MaterialApp(
+      home: DesignScope(
+        spec: roastPawns,
+        child: Scaffold(body: SingleChildScrollView(child: child)),
+      ),
+    );
+
+    testWidgets('Tab reaches a pawn and Enter or Space opens its profile', (
+      tester,
+    ) async {
+      _phone(tester, width: 400);
+      final repo = await anaAndBogdan();
+      final opened = <String>[];
+      final data = LadderData(
+        game: Game.chess,
+        players: await Game.chess.ladderOf(repo),
+        meId: repo.me!.id,
+        onOpen: (p) => opened.add(p.displayName),
+        now: DateTime(2026, 10, 5),
+      );
+      await tester.pumpWidget(inDesign(PawnsLadder(data: data)));
+      final ana = 'Ana, rating ${data.ranked[0].rating}';
+      final bogdan = 'Bogdan, rating ${data.ranked[1].rating}';
+
+      // Pawns come before the list in tab order, so the first Tab lands on
+      // the top-ranked pawn (Ana, who won) and the second on Bogdan's.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      // Keyboard focus opens the tooltip, so the rating is on screen.
+      expect(find.text(ana), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(opened, ['Ana']);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(find.text(ana), findsNothing);
+      expect(find.text(bogdan), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(opened, ['Ana', 'Bogdan']);
+    });
+
+    testWidgets('Enter opens a pawn with the web shortcut map', (tester) async {
+      _phone(tester, width: 400);
+      final repo = await anaAndBogdan();
+      final opened = <String>[];
+      final data = LadderData(
+        game: Game.chess,
+        players: await Game.chess.ladderOf(repo),
+        meId: repo.me!.id,
+        onOpen: (p) => opened.add(p.displayName),
+        now: DateTime(2026, 10, 5),
+      );
+      // Flutter web maps Enter to ButtonActivateIntent, not ActivateIntent;
+      // tests otherwise run with the non-web map, so swap it in app-wide (a
+      // nested Shortcuts would fall back to the app's Enter mapping).
+      await tester.pumpWidget(
+        MaterialApp(
+          shortcuts: {
+            ...WidgetsApp.defaultShortcuts,
+            const SingleActivator(LogicalKeyboardKey.enter):
+                const ButtonActivateIntent(),
+          },
+          home: DesignScope(
+            spec: roastPawns,
+            child: Scaffold(
+              body: SingleChildScrollView(child: PawnsLadder(data: data)),
+            ),
+          ),
+        ),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(opened, ['Ana']);
+    });
+
+    testWidgets('a profile opens from a pawn via the keyboard in the app', (
+      tester,
+    ) async {
+      _phone(tester, width: 400);
+      final repo = await anaAndBogdan();
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      final pawns = find.descendant(
+        of: find.byType(PawnsLadder),
+        matching: find.byType(FocusableActionDetector),
+      );
+      expect(pawns, findsNWidgets(2));
+      bool onFirstPawn() {
+        final focus = FocusManager.instance.primaryFocus?.context;
+        return focus != null &&
+            find
+                .descendant(
+                  of: pawns.first,
+                  matching: find.byElementPredicate((e) => e == focus),
+                )
+                .evaluate()
+                .isNotEmpty;
+      }
+
+      // Tab until focus is inside a pawn, however many header controls
+      // precede it.
+      for (var i = 0; i < 20 && !onFirstPawn(); i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(onFirstPawn(), isTrue, reason: 'Tab never reached a pawn');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      // The first pawn is Ana, who is signed in: her own profile opened.
+      expect(find.text('Rating over time'), findsOneWidget);
+      expect(find.text('Your profile'), findsOneWidget);
+    });
+
+    testWidgets('arrow keys, Home and End move the chart\'s active point', (
+      tester,
+    ) async {
+      _phone(tester, width: 400);
+      final semantics = tester.ensureSemantics();
+      const points = [1000, 1016, 1005, 1030];
+      await tester.pumpWidget(
+        inDesign(
+          Column(
+            children: [
+              RatingChart(
+                points: points,
+                describe: (i) =>
+                    i == 0 ? 'Start: 1000' : 'Game $i: ${points[i]}',
+              ),
+              TextButton(onPressed: () {}, child: const Text('Next control')),
+            ],
+          ),
+        ),
+      );
+
+      String? active() => tester
+          .getSemantics(find.bySemanticsLabel(RegExp('^Rating over 3 games')))
+          .value;
+      Future<void> press(LogicalKeyboardKey key) async {
+        await tester.sendKeyEvent(key);
+        await tester.pump();
+      }
+
+      // Each step is announced outright: web live regions only speak when
+      // the label changes, and the chart's label stays the same.
+      Future<void> announces(LogicalKeyboardKey key, String spoken) async {
+        await press(key);
+        expect(tester.takeAnnouncements().map((a) => a.message), [spoken]);
+      }
+
+      // Nothing is active until the chart has focus.
+      expect(active(), isEmpty);
+
+      await press(LogicalKeyboardKey.tab);
+      expect(active(), 'Game 3: 1030', reason: 'focus starts on the latest');
+      await press(LogicalKeyboardKey.arrowLeft);
+      expect(active(), 'Game 2: 1005');
+      await press(LogicalKeyboardKey.arrowLeft);
+      await press(LogicalKeyboardKey.arrowLeft);
+      expect(active(), 'Start: 1000');
+      await press(LogicalKeyboardKey.arrowLeft);
+      expect(active(), 'Start: 1000', reason: 'stops at the first point');
+      await press(LogicalKeyboardKey.arrowRight);
+      expect(active(), 'Game 1: 1016');
+      await press(LogicalKeyboardKey.end);
+      expect(active(), 'Game 3: 1030');
+      await press(LogicalKeyboardKey.arrowRight);
+      expect(active(), 'Game 3: 1030', reason: 'stops at the last point');
+      await press(LogicalKeyboardKey.home);
+      expect(active(), 'Start: 1000');
+      tester.takeAnnouncements();
+      await announces(LogicalKeyboardKey.arrowRight, 'Game 1: 1016');
+      await announces(LogicalKeyboardKey.end, 'Game 3: 1030');
+
+      // Tabbing on to the next control clears the tooltip again.
+      await press(LogicalKeyboardKey.tab);
+      expect(active(), isEmpty);
+      semantics.dispose();
+    });
   });
 }
 
