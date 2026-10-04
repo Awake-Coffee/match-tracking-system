@@ -56,16 +56,13 @@ String _selectWithNames<T>(_ResultTable<T> table) =>
 /// A profile with its rating in every game.
 const _profileWithRatings = '*, ratings(*)';
 
-/// Tables whose changes tell a member something is waiting for them: every
-/// request change (new, answered, withdrawn) and every confirmed result.
-/// Kept in step with the publication in the realtime migration.
+/// Tables whose changes tell a member something is waiting for them, in
+/// every game: every request change (new, answered, withdrawn) and every
+/// confirmed result. Kept in step with the publication in the realtime
+/// migration.
 const _watched = [
   (table: 'match_requests', event: PostgresChangeEvent.all),
-  (table: 'backgammon_match_requests', event: PostgresChangeEvent.all),
-  (table: 'swu_match_requests', event: PostgresChangeEvent.all),
   (table: 'matches', event: PostgresChangeEvent.insert),
-  (table: 'backgammon_matches', event: PostgresChangeEvent.insert),
-  (table: 'swu_matches', event: PostgresChangeEvent.insert),
 ];
 
 class SupabaseLadderRepository extends LadderRepository {
