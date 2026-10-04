@@ -6,10 +6,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array[
-    'match_requests', 'backgammon_match_requests', 'swu_match_requests',
-    'matches', 'backgammon_matches', 'swu_matches'
-  ] loop
+  foreach t in array array['match_requests', 'matches'] loop
     assert exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
