@@ -25,3 +25,7 @@ as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 grant execute on function auth.uid() to anon, authenticated;
+
+-- Supabase ships this (empty) publication; Realtime streams the tables added
+-- to it.
+create publication supabase_realtime;

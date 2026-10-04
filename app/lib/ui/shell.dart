@@ -81,10 +81,15 @@ class _AppShellState extends State<AppShell> {
   /// The member's standing per game. Results waiting for their confirmation
   /// are badged on that game's Ladder tab, where they're confirmed, and on
   /// the game picker while another game is open.
-  // ponytail: refreshes only when this client changes data; push updates if
-  // members miss requests from others.
+  // Reloads whenever the repository's revision moves: this client changed
+  // data, or the repository heard of someone else's change (Realtime,
+  // returning to the app, the fallback poll).
   Future<Map<Game, _Standing>>? _standings;
   int? _revision;
+
+  /// The last standings that loaded: a failed background reload keeps the
+  /// badges rather than dropping them until the next success.
+  Map<Game, _Standing> _lastStandings = const {};
 
   @override
   void didChangeDependencies() {
@@ -93,10 +98,11 @@ class _AppShellState extends State<AppShell> {
     if (_revision == repo.revision) return;
     _revision = repo.revision;
     final me = repo.me;
-    _standings = me == null
-        ? Future.value(const {})
+    final standings = me == null
+        ? Future.value(const <Game, _Standing>{})
         : [for (final game in Game.values) _standingIn(game, repo, me)].wait
               .then((s) => Map.fromIterables(Game.values, s));
+    _standings = standings.then((s) => _lastStandings = s);
   }
 
   @override
@@ -114,7 +120,7 @@ class _AppShellState extends State<AppShell> {
     return FutureBuilder<Map<Game, _Standing>>(
       future: _standings,
       builder: (context, snap) {
-        final standings = snap.data ?? const {};
+        final standings = snap.data ?? _lastStandings;
         final awaitingMe = standings[game]?.awaitingMe ?? 0;
         final picker = _GamePicker(
           current: game,
@@ -446,14 +452,34 @@ class _PhoneHeader extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     height: 60,
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      // Shrinks rather than overflows on narrow phones or large text.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: picker,
+      padding: const EdgeInsets.only(left: 16, right: 4),
+      child: Row(
+        children: [
+          Expanded(
+            // Shrinks rather than overflows on narrow phones or large text.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: picker,
+            ),
+          ),
+          const _RefreshButton(),
+        ],
       ),
     ),
+  );
+}
+
+/// Reloads everything on screen. Pull-to-refresh doesn't respond to a
+/// mouse, so wide screens and narrow desktop windows need this.
+class _RefreshButton extends StatelessWidget {
+  const _RefreshButton();
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: 'Refresh',
+    onPressed: context.repo.reload,
+    icon: Icon(Icons.refresh, color: context.design.muted),
   );
 }
 
@@ -602,6 +628,8 @@ class _WideHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 28),
                 ],
+                const _RefreshButton(),
+                const SizedBox(width: 12),
                 FilledButton(
                   onPressed: () => context.go(game.path(_Tab.record.page)),
                   style: FilledButton.styleFrom(

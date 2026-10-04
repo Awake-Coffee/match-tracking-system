@@ -152,6 +152,156 @@ void main() {
     expect(find.text('Backgammon rating'), findsOneWidget);
   });
 
+  /// Bogdan reports a draw against Ana from his own device; this client
+  /// isn't told.
+  Future<void> bogdanReportsADraw(SharedLadder repo) =>
+      repo.elsewhere(() async {
+        final anaId = repo.me!.id;
+        await repo.signIn(email: bogdanEmail, password: 'x');
+        await repo.requestMatch(
+          opponentId: anaId,
+          myColor: PieceColor.black,
+          myOutcome: Outcome.draw,
+          clock: const ClockSetting(TimeControl.sudden5),
+        );
+        await repo.signIn(email: anaEmail, password: 'x');
+      });
+
+  testWidgets('a result reported elsewhere appears when the repository hears '
+      'of it', (tester) async {
+    _phone(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    await bogdanReportsADraw(repo);
+    await tester.pumpAndSettle();
+    expect(find.text('Bogdan says it was a draw'), findsNothing);
+    expect(_awaitingBadge('1'), findsOneWidget);
+
+    // What a Realtime event, the poll or returning to the app does.
+    repo.reload();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+    expect(find.text('Bogdan says it was a draw'), findsOneWidget);
+    expect(_awaitingBadge('2'), findsOneWidget);
+  });
+
+  testWidgets('wide screens refresh from the header', (tester) async {
+    _phone(tester, width: 1024);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    await bogdanReportsADraw(repo);
+    await tester.pumpAndSettle();
+    expect(find.text('Bogdan says it was a draw'), findsNothing);
+
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bogdan says it was a draw'), findsOneWidget);
+    expect(_awaitingBadge('2'), findsOneWidget);
+  });
+
+  testWidgets('pulling to refresh updates the list and the tab badge', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    await bogdanReportsADraw(repo);
+
+    await tester.fling(_list, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bogdan says it was a draw'), findsOneWidget);
+    expect(_awaitingBadge('2'), findsOneWidget);
+  });
+
+  testWidgets('a failed background reload keeps the form and badges', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/record?opponent=demo-2'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Black'));
+    final won = find.text('I won');
+    await tester.ensureVisible(won);
+    await tester.pumpAndSettle();
+    await tester.tap(won);
+    await tester.pumpAndSettle();
+
+    repo.offline = true;
+    repo.reload();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Couldn\'t load this'), findsNothing);
+    expect(
+      tester
+          .widget<SegmentedButton<PieceColor>>(
+            find.byType(SegmentedButton<PieceColor>),
+          )
+          .selected,
+      {PieceColor.black},
+    );
+    expect(
+      tester
+          .widget<SegmentedButton<Outcome>>(
+            find.byType(SegmentedButton<Outcome>),
+          )
+          .selected,
+      {Outcome.win},
+    );
+    expect(_awaitingBadge('1'), findsOneWidget);
+  });
+
+  testWidgets('a failed pull to refresh keeps the list and says so', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    repo.offline = true;
+    await tester.fling(_list, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+    expect(
+      find.text('Couldn\'t refresh. Check your connection.'),
+      findsOneWidget,
+    );
+    expect(_awaitingBadge('1'), findsOneWidget);
+  });
+
+  testWidgets('a first load that fails offers to try again', (tester) async {
+    _phone(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    repo.offline = true;
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Couldn\'t load this'), findsOneWidget);
+
+    repo.offline = false;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Try again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+    expect(_awaitingBadge('1'), findsOneWidget);
+  });
+
   testWidgets('every screen renders at 360px', (tester) async {
     _phone(tester);
     final repo = await anaAndBogdan();

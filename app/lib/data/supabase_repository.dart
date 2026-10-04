@@ -7,6 +7,7 @@ import '../domain/backgammon.dart';
 import '../domain/models.dart';
 import '../domain/swu.dart';
 import 'ladder_repository.dart';
+import 'live_updates.dart';
 
 /// One game's rows in the shared `matches` or `match_requests` table: the
 /// table, the game's `match_type` and how to read a row.
@@ -55,11 +56,21 @@ String _selectWithNames<T>(_ResultTable<T> table) =>
 /// A profile with its rating in every game.
 const _profileWithRatings = '*, ratings(*)';
 
+/// Tables whose changes tell a member something is waiting for them, in
+/// every game: every request change (new, answered, withdrawn) and every
+/// confirmed result. Kept in step with the publication in the realtime
+/// migration.
+const _watched = [
+  (table: 'match_requests', event: PostgresChangeEvent.all),
+  (table: 'matches', event: PostgresChangeEvent.insert),
+];
+
 class SupabaseLadderRepository extends LadderRepository {
   SupabaseLadderRepository(this._client) {
     _authSub = _client.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.signedOut) {
         _me = null;
+        _live.stop();
         notifyListeners();
         // initialSession is left to restore(), so startup fetches the profile once.
       } else if (state.event != AuthChangeEvent.initialSession &&
@@ -75,6 +86,7 @@ class SupabaseLadderRepository extends LadderRepository {
   Player? _me;
   int _revision = 0;
   Future<List<Player>>? _players;
+  late final _live = LiveUpdates(onChanged: _dataChanged, subscribe: _listen);
 
   @override
   Player? get me => _me;
@@ -98,7 +110,23 @@ class SupabaseLadderRepository extends LadderRepository {
     _me = row == null ? null : Player.fromRow(row);
     // A new account isn't in the cached members yet.
     _players = null;
+    if (_me != null) _live.start();
     notifyListeners();
+  }
+
+  /// Hears of other members' results and requests the moment they happen.
+  VoidCallback _listen(VoidCallback onEvent) {
+    final channel = _client.channel('ladder-changes');
+    for (final (:table, :event) in _watched) {
+      channel.onPostgresChanges(
+        event: event,
+        schema: 'public',
+        table: table,
+        callback: (_) => onEvent(),
+      );
+    }
+    channel.subscribe();
+    return () => unawaited(_client.removeChannel(channel));
   }
 
   /// Ratings, matches or pending games changed: screens reload, members refetch.
@@ -109,7 +137,7 @@ class SupabaseLadderRepository extends LadderRepository {
   }
 
   @override
-  void refresh() => _players = null;
+  void reload() => _dataChanged();
 
   /// Every member, fetched once and shared by all ladders and profiles until
   /// data changes.
@@ -391,6 +419,7 @@ class SupabaseLadderRepository extends LadderRepository {
 
   @override
   void dispose() {
+    _live.stop();
     _authSub.cancel();
     super.dispose();
   }

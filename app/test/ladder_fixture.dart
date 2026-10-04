@@ -4,10 +4,50 @@ import 'package:awake_ladder/domain/models.dart';
 const anaEmail = 'ana@example.com';
 const bogdanEmail = 'bogdan@example.com';
 
+/// A demo ladder that behaves like a backend shared with other devices:
+/// changes can land there without this client hearing of them, and the
+/// connection can drop.
+class SharedLadder extends DemoLadderRepository {
+  bool _away = false;
+  int _heard = 0;
+
+  /// While true, loading the ladder fails as on a dropped request.
+  bool offline = false;
+
+  /// What this client has heard of: the revision moves only when it is told.
+  @override
+  int get revision => _heard;
+
+  @override
+  void notifyListeners() {
+    if (_away) return;
+    _heard = super.revision;
+    super.notifyListeners();
+  }
+
+  /// Runs [change] as if on another member's device: the data changes but
+  /// this client isn't told until something reloads it.
+  Future<void> elsewhere(Future<void> Function() change) async {
+    _away = true;
+    try {
+      await change();
+    } finally {
+      _away = false;
+    }
+  }
+
+  @override
+  Future<List<Player>> ladder() async {
+    if (offline) throw Exception('connection dropped');
+    return super.ladder();
+  }
+}
+
 /// Ana and Bogdan with one rated game (Ana won) and one Bogdan reported
-/// against Ana that waits for her to confirm. Signed in as Ana.
-Future<DemoLadderRepository> anaAndBogdan() async {
-  final repo = DemoLadderRepository();
+/// against Ana that waits for her to confirm. Signed in as Ana. Fills [into]
+/// when given.
+Future<DemoLadderRepository> anaAndBogdan({DemoLadderRepository? into}) async {
+  final repo = into ?? DemoLadderRepository();
   await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
   final anaId = repo.me!.id;
   await repo.signOut();

@@ -6,6 +6,11 @@ import '../app_scope.dart';
 
 /// Runs [load] and shows its result, re-running whenever ratings or matches
 /// change (the repository's revision moves).
+///
+/// Reloads also happen in the background (other members' changes, the app
+/// returning to the foreground, a poll), so a failed reload keeps what is on
+/// screen, including any half-filled form, rather than replacing it with an
+/// error. The error view is only for a first load that fails.
 class LoadView<T> extends StatefulWidget {
   const LoadView({super.key, required this.load, required this.builder});
 
@@ -25,24 +30,41 @@ class _LoadViewState<T> extends State<LoadView<T>> {
   Future<T>? _future;
   int? _revision;
 
+  /// The last data that loaded; a record so a null [T] still counts.
+  (T,)? _last;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final repo = context.repo;
-    if (_future == null || _revision != repo.revision) {
-      _revision = repo.revision;
-      _future = widget.load(repo);
-    }
+    if (_future == null || _revision != repo.revision) _load(repo);
   }
 
+  void _load(LadderRepository repo) {
+    _revision = repo.revision;
+    _future = widget.load(repo).then((data) {
+      _last = (data,);
+      return data;
+    });
+  }
+
+  /// Pull-to-refresh and retry. Goes through the repository so the shell's
+  /// badges refetch too, and loads this view right away so the spinner
+  /// waits for it.
   Future<void> _reload() async {
-    final repo = context.repo..refresh();
-    final future = widget.load(repo);
-    setState(() => _future = future);
+    final repo = context.repo..reload();
+    setState(() => _load(repo));
     try {
-      await future;
+      await _future;
     } catch (_) {
-      // The FutureBuilder shows the error.
+      // With nothing on screen the error view says so; otherwise a quiet note.
+      if (_last != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Couldn\'t refresh. Check your connection.'),
+          ),
+        );
+      }
     }
   }
 
@@ -51,7 +73,8 @@ class _LoadViewState<T> extends State<LoadView<T>> {
     return FutureBuilder<T>(
       future: _future,
       builder: (context, snap) {
-        if (snap.hasError) {
+        final last = _last;
+        if (last == null && snap.hasError) {
           return MessageView(
             message: snap.error is LadderException
                 ? snap.error.toString()
@@ -60,7 +83,7 @@ class _LoadViewState<T> extends State<LoadView<T>> {
             onAction: _reload,
           );
         }
-        if (!snap.hasData) {
+        if (last == null) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(48),
@@ -70,7 +93,7 @@ class _LoadViewState<T> extends State<LoadView<T>> {
         }
         return RefreshIndicator(
           onRefresh: _reload,
-          child: widget.builder(context, snap.data as T, _reload),
+          child: widget.builder(context, last.$1, _reload),
         );
       },
     );

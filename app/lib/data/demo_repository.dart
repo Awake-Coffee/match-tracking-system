@@ -30,6 +30,12 @@ class DemoLadderRepository extends LadderRepository {
   int get revision => _revision;
 
   @override
+  void reload() {
+    _revision++;
+    notifyListeners();
+  }
+
+  @override
   String? get modeNote =>
       'Demo mode: no Supabase project is connected. Any email and password '
       'works, and games are kept only in this browser tab.';
