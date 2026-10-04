@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "git": { "deploymentEnabled": { "main": false } },
   "installCommand": "true",
   "buildCommand": "bash scripts/vercel-build.sh",
   "outputDirectory": "app/build/web",
