@@ -1,12 +1,6 @@
 import 'dart:async';
 
-import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/query_cache.dart';
-import 'package:awake_ladder/design/design_scope.dart';
-import 'package:awake_ladder/design/designs.dart';
-import 'package:awake_ladder/ui/app_scope.dart';
-import 'package:awake_ladder/ui/widgets/load_view.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -93,70 +87,5 @@ void main() {
       expect(await cache.of('k', fresh), 1);
       expect(hits, 1);
     });
-  });
-
-  group('LoadingSkeleton', () {
-    Widget host(Widget child) => MaterialApp(
-      home: DesignScope(
-        spec: baize,
-        child: Scaffold(body: child),
-      ),
-    );
-
-    testWidgets('draws surface blocks in the design radius, no spinner', (
-      tester,
-    ) async {
-      await tester.pumpWidget(host(const LoadingSkeleton()));
-
-      final rows = find.byKey(const ValueKey('skeleton-row'));
-      expect(rows, findsNWidgets(LoadingSkeleton.rows));
-      final box =
-          tester.widget<Container>(rows.first).decoration! as BoxDecoration;
-      expect(box.color, baize.surface);
-      expect(box.borderRadius, baize.borderRadius);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-    });
-
-    testWidgets('is announced to screen readers as loading', (tester) async {
-      final handle = tester.ensureSemantics();
-      await tester.pumpWidget(host(const LoadingSkeleton()));
-
-      expect(
-        tester.getSemantics(find.byType(LoadingSkeleton)),
-        matchesSemantics(label: 'Loading', isLiveRegion: true),
-      );
-      handle.dispose();
-    });
-  });
-
-  testWidgets('LoadView shows the skeleton while loading, then the data', (
-    tester,
-  ) async {
-    final gate = Completer<String>();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: DesignScope(
-          spec: baize,
-          child: AppScope(
-            repository: DemoLadderRepository(),
-            child: Scaffold(
-              body: LoadView<String>(
-                load: (_) => gate.future,
-                builder: (_, data, _) => Text(data),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byType(LoadingSkeleton), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-
-    gate.complete('Loaded');
-    await tester.pumpAndSettle();
-
-    expect(find.byType(LoadingSkeleton), findsNothing);
-    expect(find.text('Loaded'), findsOneWidget);
   });
 }

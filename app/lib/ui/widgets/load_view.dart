@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/ladder_repository.dart';
@@ -11,8 +13,14 @@ import '../app_scope.dart';
 /// returning to the foreground, a poll), so a failed reload keeps what is on
 /// screen, including any half-filled form, rather than replacing it with an
 /// error. The error view is only for a first load that fails.
+///
+/// A first load that takes longer than [skeletonDelay] shows a
+/// [LoadingSkeleton]; a quicker one (a warm cache on a tab switch) shows
+/// nothing until it lands, so it neither flashes nor announces "Loading".
 class LoadView<T> extends StatefulWidget {
   const LoadView({super.key, required this.load, required this.builder});
+
+  static const skeletonDelay = Duration(milliseconds: 150);
 
   final Future<T> Function(LadderRepository repo) load;
   final Widget Function(
@@ -33,6 +41,10 @@ class _LoadViewState<T> extends State<LoadView<T>> {
   /// The last data that loaded; a record so a null [T] still counts.
   (T,)? _last;
 
+  /// Set once the pending load has outlasted [LoadView.skeletonDelay].
+  bool _slow = false;
+  Timer? _slowTimer;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,10 +54,25 @@ class _LoadViewState<T> extends State<LoadView<T>> {
 
   void _load(LadderRepository repo) {
     _revision = repo.revision;
-    _future = widget.load(repo).then((data) {
+    final future = _future = widget.load(repo).then((data) {
       _last = (data,);
       return data;
     });
+    _slowTimer?.cancel();
+    _slow = false;
+    // Only a first load can show the skeleton; reloads keep the old data.
+    if (_last != null) return;
+    final timer = _slowTimer = Timer(LoadView.skeletonDelay, () {
+      if (mounted) setState(() => _slow = true);
+    });
+    // Errors are shown by the FutureBuilder; this branch only stops the timer.
+    future.then<void>((_) {}, onError: (_) {}).whenComplete(timer.cancel);
+  }
+
+  @override
+  void dispose() {
+    _slowTimer?.cancel();
+    super.dispose();
   }
 
   /// Pull-to-refresh and retry. Goes through the repository so the shell's
@@ -84,7 +111,7 @@ class _LoadViewState<T> extends State<LoadView<T>> {
           );
         }
         if (last == null) {
-          return const LoadingSkeleton();
+          return _slow ? const LoadingSkeleton() : const SizedBox.expand();
         }
         return RefreshIndicator(
           onRefresh: _reload,
