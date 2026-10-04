@@ -48,6 +48,8 @@ Map<String, dynamic> _request(num player1Score, num player2Score) => {
   'custom_extra_seconds': 4,
   'requested_by': _bo,
   'created_at': '2026-10-05T10:00:00+00:00',
+  'status': 'pending',
+  'responded_at': null,
 };
 
 Map<String, dynamic> _rating(String matchType, int rating, {int exp = 0}) => {
