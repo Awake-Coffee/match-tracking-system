@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../design/design_scope.dart';
 import '../app_scope.dart';
 import '../widgets/password_field.dart';
+import 'sign_in_screen.dart';
 
 /// Where the emailed reset link lands. The link has signed the member in; the
 /// router keeps them here until they save a new password, which ends the
@@ -31,7 +32,10 @@ class ResetPasswordScreen extends StatelessWidget {
                     style: d.body(16, color: d.muted, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
-                  Text('Choose a new password', style: d.display(46)),
+                  Text(
+                    'Choose a new password',
+                    style: d.display(authHeadlineSize),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Pick something you haven\'t used before. '
