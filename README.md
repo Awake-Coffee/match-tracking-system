@@ -56,3 +56,8 @@ cd app && flutter build web --release --dart-define-from-file=../.env
 ```
 
 The static site lands in `app/build/web/`.
+
+Vercel builds every push with `scripts/vercel-build.sh` (see `vercel.json`),
+which installs Flutter and passes the project's `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` environment variables to `flutter build`.
+Production builds fail if either is missing.
