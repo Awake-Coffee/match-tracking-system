@@ -19,13 +19,14 @@ class BackgammonStats {
     this.experience = 0,
   });
 
+  /// A member's backgammon row in `ratings`.
   factory BackgammonStats.fromRow(Map<String, dynamic> row) => BackgammonStats(
-    rating: row['bg_rating'] as int,
-    peakRating: row['bg_peak_rating'] as int,
-    matchesPlayed: row['bg_matches_played'] as int,
-    wins: row['bg_wins'] as int,
-    losses: row['bg_losses'] as int,
-    experience: row['bg_experience'] as int,
+    rating: row['rating'] as int,
+    peakRating: row['peak_rating'] as int,
+    matchesPlayed: row['played'] as int,
+    wins: row['wins'] as int,
+    losses: row['losses'] as int,
+    experience: row['experience'] as int,
   );
 
   final int rating;
@@ -75,6 +76,12 @@ bool isFinalScore(int matchLength, int scoreA, int scoreB) =>
     math.max(scoreA, scoreB) == matchLength &&
     math.min(scoreA, scoreB) >= 0 &&
     math.min(scoreA, scoreB) < matchLength;
+
+/// The winning and losing sides of a backgammon result row.
+({String winner, String loser}) _sides(Map<String, dynamic> row) =>
+    sideScore(row, player1) > sideScore(row, player2)
+    ? (winner: player1, loser: player2)
+    : (winner: player2, loser: player1);
 
 /// Who won a match and by how much: shared by rated matches and matches
 /// still waiting for the opponent to confirm.
@@ -133,21 +140,24 @@ class BackgammonMatch extends BackgammonResult implements RatedGame {
     required this.playedAt,
   });
 
-  factory BackgammonMatch.fromRow(Map<String, dynamic> row) => BackgammonMatch(
-    id: row['id'] as int,
-    winnerId: row['winner_id'] as String,
-    loserId: row['loser_id'] as String,
-    winnerName: joinedName(row, 'winner'),
-    loserName: joinedName(row, 'loser'),
-    matchLength: row['match_length'] as int,
-    loserScore: row['loser_score'] as int,
-    rated: row['rated'] as bool,
-    winnerRatingBefore: row['winner_rating_before'] as int,
-    loserRatingBefore: row['loser_rating_before'] as int,
-    winnerRatingDelta: row['winner_rating_delta'] as int,
-    loserRatingDelta: row['loser_rating_delta'] as int,
-    playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
-  );
+  factory BackgammonMatch.fromRow(Map<String, dynamic> row) {
+    final (:winner, :loser) = _sides(row);
+    return BackgammonMatch(
+      id: row['id'] as int,
+      winnerId: row['${winner}_id'] as String,
+      loserId: row['${loser}_id'] as String,
+      winnerName: joinedName(row, winner),
+      loserName: joinedName(row, loser),
+      matchLength: sideScore(row, winner).toInt(),
+      loserScore: sideScore(row, loser).toInt(),
+      rated: row['rated'] as bool,
+      winnerRatingBefore: row['${winner}_rating_before'] as int,
+      loserRatingBefore: row['${loser}_rating_before'] as int,
+      winnerRatingDelta: row['${winner}_rating_delta'] as int,
+      loserRatingDelta: row['${loser}_rating_delta'] as int,
+      playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
+    );
+  }
 
   final int id;
   final int winnerRatingBefore;
@@ -183,19 +193,21 @@ class BackgammonMatchRequest extends BackgammonResult {
     required this.createdAt,
   });
 
-  factory BackgammonMatchRequest.fromRow(Map<String, dynamic> row) =>
-      BackgammonMatchRequest(
-        id: row['id'] as int,
-        winnerId: row['winner_id'] as String,
-        loserId: row['loser_id'] as String,
-        winnerName: joinedName(row, 'winner'),
-        loserName: joinedName(row, 'loser'),
-        matchLength: row['match_length'] as int,
-        loserScore: row['loser_score'] as int,
-        rated: row['rated'] as bool,
-        requestedBy: row['requested_by'] as String,
-        createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
-      );
+  factory BackgammonMatchRequest.fromRow(Map<String, dynamic> row) {
+    final (:winner, :loser) = _sides(row);
+    return BackgammonMatchRequest(
+      id: row['id'] as int,
+      winnerId: row['${winner}_id'] as String,
+      loserId: row['${loser}_id'] as String,
+      winnerName: joinedName(row, winner),
+      loserName: joinedName(row, loser),
+      matchLength: sideScore(row, winner).toInt(),
+      loserScore: sideScore(row, loser).toInt(),
+      rated: row['rated'] as bool,
+      requestedBy: row['requested_by'] as String,
+      createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    );
+  }
 
   final int id;
   final String requestedBy;
