@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../design/design_scope.dart';
@@ -33,29 +31,39 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
     with SendsForConfirmation {
   late String? _opponentId = widget.initialOpponentId;
   int _matchLength = 5;
-  int _myScore = 0;
-  int _opponentScore = 0;
+  Outcome? _outcome;
+  int? _loserScore;
   bool _rated = true;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
 
+  /// The loser's points, which the match length caps at one short of a win.
+  /// A match to 1 can only end 1-0, so it needs no answer.
+  int? get _loserPoints => _matchLength == 1 ? 0 : _loserScore;
+
   void _setLength(int length) => setState(() {
     _matchLength = length;
-    _myScore = math.min(_myScore, length);
-    _opponentScore = math.min(_opponentScore, length);
+    final loser = _loserScore;
+    if (loser != null && loser >= length) _loserScore = length - 1;
   });
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final opponent = _opponent;
-    final scored = isFinalScore(_matchLength, _myScore, _opponentScore);
+    final outcome = _outcome;
+    final loserPoints = _loserPoints;
+    final won = outcome == Outcome.win;
+    // The winner always scores the match length; only the loser's points vary.
+    final scored = outcome != null && loserPoints != null;
+    final myScore = scored ? (won ? _matchLength : loserPoints) : null;
+    final opponentScore = scored ? (won ? loserPoints : _matchLength) : null;
     final preview = opponent != null && scored
         ? BackgammonPreview(
             me: widget.me,
             opponent: opponent,
-            won: _myScore == _matchLength,
+            won: won,
             matchLength: _matchLength,
           )
         : null;
@@ -91,31 +99,40 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             ],
           ),
           const SizedBox(height: 24),
-          Text('Final score', style: label),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _ScoreStepper(
-                  name: 'You',
-                  owner: 'your',
-                  score: _myScore,
-                  max: _matchLength,
-                  onChanged: (v) => setState(() => _myScore = v),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ScoreStepper(
-                  name: opponent?.displayName ?? 'Opponent',
-                  owner: '${opponent?.displayName ?? 'your opponent'}\'s',
-                  score: _opponentScore,
-                  max: _matchLength,
-                  onChanged: (v) => setState(() => _opponentScore = v),
-                ),
-              ),
+          Text('Result', style: label),
+          const SizedBox(height: 8),
+          SegmentedButton<Outcome>(
+            showSelectedIcon: false,
+            emptySelectionAllowed: true,
+            segments: const [
+              ButtonSegment(value: Outcome.win, label: Text('I won')),
+              ButtonSegment(value: Outcome.loss, label: Text('I lost')),
             ],
+            selected: {?outcome},
+            onSelectionChanged: (s) => setState(() => _outcome = s.firstOrNull),
           ),
+          if (outcome != null) ...[
+            const SizedBox(height: 24),
+            Text(
+              won
+                  ? '${opponent?.displayName ?? 'Your opponent'}\'s points'
+                  : 'Your points',
+              style: label,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var points = 0; points < _matchLength; points++)
+                  ChoiceChip(
+                    label: Text('$points'),
+                    selected: points == loserPoints,
+                    onSelected: (_) => setState(() => _loserScore = points),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 24),
           RatedSwitch(
             rated: _rated,
@@ -125,8 +142,8 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
           RatingPreview(
             rated: _rated,
             emptyHint:
-                'Pick an opponent and the final score to see how ratings '
-                'change. The winner\'s score is the match length.',
+                'Pick an opponent, the result and the loser\'s points to see '
+                'how ratings change.',
             rows: preview == null
                 ? null
                 : [
@@ -147,9 +164,11 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             saving: saving,
             missing: [
               if (opponent == null) 'an opponent',
-              if (!scored) 'a final score',
+              if (outcome == null) 'a result',
+              if (loserPoints == null) 'the loser\'s points',
             ],
-            onPressed: opponent == null || !scored
+            onPressed:
+                opponent == null || myScore == null || opponentScore == null
                 ? null
                 : () => sendForConfirmation(
                     game: Game.backgammon,
@@ -158,8 +177,8 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
                     request: (repo) => repo.requestBackgammonMatch(
                       opponentId: opponent.id,
                       matchLength: _matchLength,
-                      myScore: _myScore,
-                      opponentScore: _opponentScore,
+                      myScore: myScore,
+                      opponentScore: opponentScore,
                       rated: _rated,
                     ),
                   ),
@@ -211,64 +230,6 @@ class _LengthChoice extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ScoreStepper extends StatelessWidget {
-  const _ScoreStepper({
-    required this.name,
-    required this.owner,
-    required this.score,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final String name;
-
-  /// Possessive used in the button labels, e.g. "your" or "Bogdan's".
-  final String owner;
-  final int score;
-  final int max;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.design;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: d.surface, borderRadius: d.borderRadius),
-      child: Column(
-        children: [
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: d.body(14, color: d.muted),
-          ),
-          Text(
-            '$score',
-            semanticsLabel: '$name: $score',
-            style: d.number(72, displayFace: true).copyWith(height: 1),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton.outlined(
-                tooltip: 'Lower $owner score',
-                onPressed: score > 0 ? () => onChanged(score - 1) : null,
-                icon: const Icon(Icons.remove),
-              ),
-              const SizedBox(width: 8),
-              IconButton.outlined(
-                tooltip: 'Raise $owner score',
-                onPressed: score < max ? () => onChanged(score + 1) : null,
-                icon: const Icon(Icons.add),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

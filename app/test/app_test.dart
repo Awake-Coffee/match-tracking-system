@@ -748,7 +748,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
-    expect(find.text('Pick an opponent and a final score'), findsOneWidget);
+    expect(
+      find.text('Pick an opponent, a result and the loser\'s points'),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(
@@ -1353,14 +1356,16 @@ void main() {
 
     expect(find.text('Record a match'), findsOneWidget);
     final send = find.widgetWithText(FilledButton, 'Send for confirmation');
-    final raiseMine = find.byTooltip('Raise your score');
-    final raiseTheirs = find.byTooltip('Raise Bogdan\'s score');
-    await tester.ensureVisible(raiseTheirs);
-    for (var i = 0; i < 5; i++) {
-      await tester.tap(raiseMine);
-      await tester.pump();
-    }
-    await tester.tap(raiseTheirs);
+    Finder points(int n) => find.widgetWithText(ChoiceChip, '$n');
+    await tester.ensureVisible(find.text('I won'));
+    // No result picked yet: no points to ask for.
+    expect(find.text('Bogdan\'s points'), findsNothing);
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    // The winner scores the match length, so only the loser's points are asked.
+    expect(find.text('Bogdan\'s points'), findsOneWidget);
+    expect(points(5), findsNothing);
+    await tester.tap(points(1));
     await tester.pumpAndSettle();
     expect(find.text('1500 to '), findsNWidgets(2));
     expect(find.text('+22'), findsOneWidget);
@@ -1380,6 +1385,77 @@ void main() {
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     expect(find.text('Match to 3, you won 3-1'), findsOneWidget);
     expect(repo.me!.backgammon.rating, backgammonStartingRating);
+  });
+
+  testWidgets('a lost backgammon match asks for your own points', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(
+      AwakeApp(
+        repository: repo,
+        initialLocation: '/backgammon/record?opponent=demo-2',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    Finder points(int n) => find.widgetWithText(ChoiceChip, '$n');
+    await tester.ensureVisible(find.text('I lost'));
+    await tester.tap(find.text('I lost'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your points'), findsOneWidget);
+    expect(find.text('Bogdan\'s points'), findsNothing);
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick the loser\'s points'), findsOneWidget);
+    expect(tester.widget<FilledButton>(send).onPressed, isNull);
+
+    await tester.ensureVisible(points(4));
+    await tester.tap(points(4));
+    await tester.pumpAndSettle();
+    // A shorter match cannot keep a loser's score that would have won it.
+    await tester.tap(find.bySemanticsLabel('Match to 3'));
+    await tester.pumpAndSettle();
+    expect(points(4), findsNothing);
+    expect(tester.widget<ChoiceChip>(points(2)).selected, isTrue);
+
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Match to 3, you lost 2-3'), findsOneWidget);
+  });
+
+  testWidgets('a match to 1 needs no loser score', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(
+      AwakeApp(
+        repository: repo,
+        initialLocation: '/backgammon/record?opponent=demo-2',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    await tester.ensureVisible(find.bySemanticsLabel('Match to 1'));
+    await tester.tap(find.bySemanticsLabel('Match to 1'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(send).onPressed, isNull);
+
+    await tester.ensureVisible(find.text('I won'));
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Match to 1, you won 1-0'), findsOneWidget);
   });
 
   testWidgets('confirming a backgammon match rates it', (tester) async {
