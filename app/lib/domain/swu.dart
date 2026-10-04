@@ -79,6 +79,7 @@ abstract class SwuResult {
     required this.respondentName,
     required this.reporterGames,
     required this.respondentGames,
+    this.rated = true,
   });
 
   /// Who recorded the match.
@@ -90,6 +91,9 @@ abstract class SwuResult {
   final String respondentName;
   final int reporterGames;
   final int respondentGames;
+
+  /// False for a match that's kept in history but moves no rating.
+  final bool rated;
 
   bool involves(String playerId) =>
       playerId == reporterId || playerId == respondentId;
@@ -122,7 +126,7 @@ abstract class SwuResult {
   }
 }
 
-/// A rated Star Wars: Unlimited match.
+/// A confirmed Star Wars: Unlimited match, rated unless [rated] is false.
 class SwuMatch extends SwuResult implements RatedGame {
   const SwuMatch({
     required this.id,
@@ -132,6 +136,7 @@ class SwuMatch extends SwuResult implements RatedGame {
     required super.respondentName,
     required super.reporterGames,
     required super.respondentGames,
+    super.rated,
     required this.reporterRatingBefore,
     required this.respondentRatingBefore,
     required this.reporterRatingDelta,
@@ -147,6 +152,7 @@ class SwuMatch extends SwuResult implements RatedGame {
     respondentName: joinedName(row, 'respondent'),
     reporterGames: row['reporter_games'] as int,
     respondentGames: row['respondent_games'] as int,
+    rated: row['rated'] as bool,
     reporterRatingBefore: row['reporter_rating_before'] as int,
     respondentRatingBefore: row['respondent_rating_before'] as int,
     reporterRatingDelta: row['reporter_rating_delta'] as int,
@@ -183,6 +189,7 @@ class SwuMatchRequest extends SwuResult {
     required super.respondentName,
     required super.reporterGames,
     required super.respondentGames,
+    super.rated,
     required this.createdAt,
   });
 
@@ -194,6 +201,7 @@ class SwuMatchRequest extends SwuResult {
     respondentName: joinedName(row, 'respondent'),
     reporterGames: row['reporter_games'] as int,
     respondentGames: row['respondent_games'] as int,
+    rated: row['rated'] as bool,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
   );
 

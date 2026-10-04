@@ -60,9 +60,9 @@ class _GameRecord {
     required this.tiles,
   });
 
-  /// [matches] newest first.
+  /// [matches] newest first; only rated ones are on the rating line.
   factory _GameRecord.chess(Player p, List<ChessMatch> matches) {
-    final oldestFirst = matches.reversed.toList();
+    final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst);
     return _GameRecord(
       player: p,
@@ -92,9 +92,9 @@ class _GameRecord {
     );
   }
 
-  /// [matches] newest first.
+  /// [matches] newest first; only rated ones are on the rating line.
   factory _GameRecord.backgammon(Player p, List<BackgammonMatch> matches) {
-    final oldestFirst = matches.reversed.toList();
+    final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(
       p.id,
       oldestFirst,
@@ -124,9 +124,9 @@ class _GameRecord {
     );
   }
 
-  /// [matches] newest first.
+  /// [matches] newest first; only rated ones are on the rating line.
   factory _GameRecord.swu(Player p, List<SwuMatch> matches) {
-    final oldestFirst = matches.reversed.toList();
+    final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst, start: swuStartingRating);
     final swu = p.swu;
     return _GameRecord(

@@ -86,6 +86,7 @@ abstract class BackgammonResult {
     required this.loserName,
     required this.matchLength,
     required this.loserScore,
+    this.rated = true,
   });
 
   final String winnerId;
@@ -94,6 +95,9 @@ abstract class BackgammonResult {
   final String loserName;
   final int matchLength;
   final int loserScore;
+
+  /// False for a match that's kept in history but moves no rating.
+  final bool rated;
 
   bool involves(String playerId) => playerId == winnerId || playerId == loserId;
 
@@ -111,7 +115,7 @@ abstract class BackgammonResult {
       : '$matchLength-$loserScore';
 }
 
-/// A rated backgammon match.
+/// A confirmed backgammon match, rated unless [rated] is false.
 class BackgammonMatch extends BackgammonResult implements RatedGame {
   const BackgammonMatch({
     required this.id,
@@ -121,6 +125,7 @@ class BackgammonMatch extends BackgammonResult implements RatedGame {
     required super.loserName,
     required super.matchLength,
     required super.loserScore,
+    super.rated,
     required this.winnerRatingBefore,
     required this.loserRatingBefore,
     required this.winnerRatingDelta,
@@ -136,6 +141,7 @@ class BackgammonMatch extends BackgammonResult implements RatedGame {
     loserName: joinedName(row, 'loser'),
     matchLength: row['match_length'] as int,
     loserScore: row['loser_score'] as int,
+    rated: row['rated'] as bool,
     winnerRatingBefore: row['winner_rating_before'] as int,
     loserRatingBefore: row['loser_rating_before'] as int,
     winnerRatingDelta: row['winner_rating_delta'] as int,
@@ -172,6 +178,7 @@ class BackgammonMatchRequest extends BackgammonResult {
     required super.loserName,
     required super.matchLength,
     required super.loserScore,
+    super.rated,
     required this.requestedBy,
     required this.createdAt,
   });
@@ -185,6 +192,7 @@ class BackgammonMatchRequest extends BackgammonResult {
         loserName: joinedName(row, 'loser'),
         matchLength: row['match_length'] as int,
         loserScore: row['loser_score'] as int,
+        rated: row['rated'] as bool,
         requestedBy: row['requested_by'] as String,
         createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
       );
