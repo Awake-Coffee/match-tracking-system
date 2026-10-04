@@ -67,12 +67,14 @@ Future<_Standing> _standingIn(
     game.ladderOf(repo),
     game.awaitingCountOf(repo, me.id),
   ).wait;
-  final i = ladder.indexWhere((p) => p.id == me.id);
-  final fresh = i < 0 ? me : ladder[i];
+  final fresh = ladder.where((p) => p.id == me.id).firstOrNull ?? me;
+  // Only members who have played are ranked, so "of N" counts them alone.
+  final ranked = game.rankedIn(ladder);
+  final i = ranked.indexWhere((p) => p.id == me.id);
   return (
     rating: game.ratingOf(fresh),
-    rank: i < 0 || game.playedOf(fresh) == 0 ? null : i + 1,
-    ladderSize: ladder.length,
+    rank: i < 0 ? null : i + 1,
+    ladderSize: ranked.length,
     awaitingMe: awaitingMe,
   );
 }

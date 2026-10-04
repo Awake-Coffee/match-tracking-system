@@ -94,6 +94,13 @@ enum Game {
     swu => p.swu.matchesPlayed,
   };
 
+  /// The members of [ladder] who have played this game, in ladder order. Only
+  /// they hold a rank: an unplayed member merely sits at the starting rating.
+  List<Player> rankedIn(List<Player> ladder) => [
+    for (final p in ladder)
+      if (playedOf(p) > 0) p,
+  ];
+
   /// Every member, best first.
   Future<List<Player>> ladderOf(LadderRepository repo) => switch (this) {
     chess => repo.ladder(),

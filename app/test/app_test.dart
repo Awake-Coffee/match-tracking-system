@@ -1387,6 +1387,121 @@ void main() {
     );
   });
 
+  testWidgets('a member who has not played sits below every ladder unranked', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdanWithSwu();
+    await repo.signOut();
+    await repo.signUp(
+      email: 'cleo@example.com',
+      password: 'x',
+      displayName: 'Cleo',
+    );
+    await repo.signOut();
+    await repo.signIn(email: anaEmail, password: 'x');
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    Future<void> expectUnranked(Type ladder) async {
+      final cleo = find.descendant(
+        of: find.byType(ladder),
+        matching: find.text('Cleo'),
+      );
+      await tester.scrollUntilVisible(cleo, 200, scrollable: _list);
+      // Listed once, in the muted group, not among the pawns: her row carries
+      // no rank number, and the two ranked members are 1st and 2nd.
+      expect(cleo, findsOneWidget);
+      expect(find.text('Not yet played'), findsOneWidget);
+      expect(find.text('3'), findsNothing);
+      // The route draws no rank numbers at all, so check what screen readers
+      // hear, which every ladder labels the same way.
+      expect(find.bySemanticsLabel(RegExp(r'^Cleo, rating')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^\d+(st|nd|rd|th), Cleo')),
+        findsNothing,
+      );
+      expect(find.textContaining('of 2 with'), findsOneWidget);
+      await tester.ensureVisible(cleo);
+      await tester.pumpAndSettle();
+      await tester.tap(cleo);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('with Cleo'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+
+    await expectUnranked(PawnsLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    // Each card counts the two ranked members, not Cleo.
+    expect(find.textContaining('1st of 2', findRichText: true), findsWidgets);
+    expect(find.textContaining('of 3', findRichText: true), findsNothing);
+    await tester.tap(find.text('Backgammon'));
+    await tester.pumpAndSettle();
+    await expectUnranked(BaizeLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Star Wars: Unlimited'));
+    await tester.pumpAndSettle();
+    await expectUnranked(RouteLadder);
+  });
+
+  testWidgets('every ladder renders when nobody has played yet', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
+    await repo.signUp(
+      email: 'cleo@example.com',
+      password: 'x',
+      displayName: 'Cleo',
+    );
+    await repo.signOut();
+    await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    Future<void> expectAllWaiting(Type ladder) async {
+      expect(find.byType(ladder), findsOneWidget);
+      expect(find.textContaining('You start at'), findsOneWidget);
+      final cleo = find.descendant(
+        of: find.byType(ladder),
+        matching: find.text('Cleo'),
+      );
+      await tester.scrollUntilVisible(cleo, 200, scrollable: _list);
+      expect(find.text('Not yet played'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Cleo, rating')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Ana \(you\), rating')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp(r'^\d+(st|nd|rd|th), ')),
+        findsNothing,
+      );
+    }
+
+    // No empty top-eight board: the summary leads straight to the group.
+    expect(find.text('No games yet.'), findsOneWidget);
+    expect(find.textContaining('top eight'), findsNothing);
+    await expectAllWaiting(PawnsLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Backgammon'));
+    await tester.pumpAndSettle();
+    await expectAllWaiting(BaizeLadder);
+
+    await tester.tap(find.byTooltip('Switch game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Star Wars: Unlimited'));
+    await tester.pumpAndSettle();
+    await expectAllWaiting(RouteLadder);
+  });
+
   testWidgets('a recorded backgammon match waits for the opponent', (
     tester,
   ) async {
