@@ -342,8 +342,9 @@ class SupabaseLadderRepository extends LadderRepository {
   @override
   Future<void> deleteAccount() => _guard(() async {
     await _client.rpc<void>('delete_my_account');
-    // The session's user is gone, so only forget it here: telling the server
-    // to revoke it would be refused.
+    // The user no longer exists, so the logout call is answered 403/404;
+    // gotrue ignores that for the local scope, which only clears this
+    // device's session.
     await _client.auth.signOut(scope: SignOutScope.local);
     _me = null;
     _recovering = false;
