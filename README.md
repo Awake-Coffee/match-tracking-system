@@ -10,7 +10,11 @@ screen moves between them.
 - **App**: Flutter web (`app/`). Chess uses the "Roast pawns" design,
   backgammon "Baize", Star Wars: Unlimited "Holotable".
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
-  computed in database functions, so clients can't tamper with them.
+  computed in database functions, so clients can't tamper with them. All
+  games share one schema keyed by a `match_type` enum: `ratings` (one row
+  per member per game), `match_requests`, `matches`, and the
+  `request_match` / `respond_to_match` RPCs.
+  Full spec: [`specs/005-match-types/spec.md`](specs/005-match-types/spec.md).
 - **Chess rating**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
   first 30 games, then 20, 10 for good once 2400 is reached). Everyone
   starts at 1000.
@@ -50,6 +54,7 @@ as long as Supabase allows it: the Site URL and Redirect URLs live in
 ## Database changes
 
 Add a new file in `supabase/migrations/`, cover it in a
+
 `supabase/tests/*_test.sql` file and run `make test`. Merging to `main`
 applies it to production.
 
