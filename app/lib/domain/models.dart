@@ -1,3 +1,4 @@
+import 'backgammon.dart';
 import 'elo.dart';
 
 enum PieceColor { white, black }
@@ -25,6 +26,7 @@ class Player {
     required this.wins,
     required this.losses,
     required this.draws,
+    this.backgammon = const BackgammonStats(),
   });
 
   factory Player.fromRow(Map<String, dynamic> row) => Player(
@@ -36,6 +38,7 @@ class Player {
     wins: row['wins'] as int,
     losses: row['losses'] as int,
     draws: row['draws'] as int,
+    backgammon: BackgammonStats.fromRow(row),
   );
 
   final String id;
@@ -47,6 +50,9 @@ class Player {
   final int losses;
   final int draws;
 
+  /// The member's separate backgammon rating and record.
+  final BackgammonStats backgammon;
+
   Player copyWith({
     String? displayName,
     int? rating,
@@ -55,6 +61,7 @@ class Player {
     int? wins,
     int? losses,
     int? draws,
+    BackgammonStats? backgammon,
   }) => Player(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -64,6 +71,7 @@ class Player {
     wins: wins ?? this.wins,
     losses: losses ?? this.losses,
     draws: draws ?? this.draws,
+    backgammon: backgammon ?? this.backgammon,
   );
 }
 
@@ -225,11 +233,18 @@ abstract class GameReport {
   };
 }
 
-String _nameOf(Map<String, dynamic> row, String side) =>
+/// A player's display name embedded by a `side:profiles!...` select.
+String joinedName(Map<String, dynamic> row, String side) =>
     (row[side] as Map?)?['display_name'] as String? ?? '';
 
+/// A rated chess game or backgammon match, as a player's rating line sees it.
+abstract interface class RatedGame {
+  int ratingBeforeFor(String playerId);
+  int ratingAfterFor(String playerId);
+}
+
 /// A rated game.
-class ChessMatch extends GameReport {
+class ChessMatch extends GameReport implements RatedGame {
   const ChessMatch({
     required this.id,
     required super.whiteId,
@@ -249,8 +264,8 @@ class ChessMatch extends GameReport {
     id: row['id'] as int,
     whiteId: row['white_id'] as String,
     blackId: row['black_id'] as String,
-    whiteName: _nameOf(row, 'white'),
-    blackName: _nameOf(row, 'black'),
+    whiteName: joinedName(row, 'white'),
+    blackName: joinedName(row, 'black'),
     result: MatchResult.values.byName(row['result'] as String),
     clock: ClockSetting.fromRow(row),
     whiteRatingBefore: row['white_rating_before'] as int,
@@ -270,9 +285,11 @@ class ChessMatch extends GameReport {
   int deltaFor(String playerId) =>
       playerId == whiteId ? whiteRatingDelta : blackRatingDelta;
 
+  @override
   int ratingBeforeFor(String playerId) =>
       playerId == whiteId ? whiteRatingBefore : blackRatingBefore;
 
+  @override
   int ratingAfterFor(String playerId) =>
       ratingBeforeFor(playerId) + deltaFor(playerId);
 }
@@ -295,8 +312,8 @@ class MatchRequest extends GameReport {
     id: row['id'] as int,
     whiteId: row['white_id'] as String,
     blackId: row['black_id'] as String,
-    whiteName: _nameOf(row, 'white'),
-    blackName: _nameOf(row, 'black'),
+    whiteName: joinedName(row, 'white'),
+    blackName: joinedName(row, 'black'),
     result: MatchResult.values.byName(row['result'] as String),
     clock: ClockSetting.fromRow(row)!,
     requestedBy: row['requested_by'] as String,
@@ -343,11 +360,16 @@ class MatchPreview {
   int get opponentRatingAfter => opponent.rating + opponentDelta;
 }
 
-/// A player's rating after each game, oldest first, starting at 1000.
-List<int> ratingHistory(String playerId, List<ChessMatch> matchesOldestFirst) {
+/// A player's rating after each game, oldest first, from [start] when they
+/// haven't played.
+List<int> ratingHistory(
+  String playerId,
+  List<RatedGame> matchesOldestFirst, {
+  int start = startingRating,
+}) {
   final points = <int>[
     matchesOldestFirst.isEmpty
-        ? startingRating
+        ? start
         : matchesOldestFirst.first.ratingBeforeFor(playerId),
   ];
   for (final m in matchesOldestFirst) {

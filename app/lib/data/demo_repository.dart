@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../domain/backgammon.dart';
 import '../domain/elo.dart';
 import '../domain/models.dart';
 import 'ladder_repository.dart';
@@ -13,6 +14,8 @@ class DemoLadderRepository extends LadderRepository {
   final Map<String, String> _emails = {};
   final List<ChessMatch> _matches = [];
   final List<MatchRequest> _requests = [];
+  final List<BackgammonMatch> _backgammonMatches = [];
+  final List<BackgammonMatchRequest> _backgammonRequests = [];
   int _nextRequestId = 1;
   String? _meId;
   int _revision = 0;
@@ -279,6 +282,155 @@ class DemoLadderRepository extends LadderRepository {
             clock: request.clock,
           )
         : null;
+    _revision++;
+    notifyListeners();
+    return match;
+  }
+
+  BackgammonMatch _backgammonWithCurrentNames(BackgammonMatch m) =>
+      BackgammonMatch(
+        id: m.id,
+        winnerId: m.winnerId,
+        loserId: m.loserId,
+        winnerName: _players[m.winnerId]!.displayName,
+        loserName: _players[m.loserId]!.displayName,
+        matchLength: m.matchLength,
+        loserScore: m.loserScore,
+        winnerRatingBefore: m.winnerRatingBefore,
+        loserRatingBefore: m.loserRatingBefore,
+        winnerRatingDelta: m.winnerRatingDelta,
+        loserRatingDelta: m.loserRatingDelta,
+        playedAt: m.playedAt,
+      );
+
+  BackgammonMatch _applyBackgammon(BackgammonMatchRequest request) {
+    final winner = _players[request.winnerId]!;
+    final loser = _players[request.loserId]!;
+    final length = request.matchLength;
+    final winnerDelta = fibsRatingChange(
+      winner.backgammon,
+      loser.backgammon,
+      won: true,
+      matchLength: length,
+    );
+    final loserDelta = fibsRatingChange(
+      loser.backgammon,
+      winner.backgammon,
+      won: false,
+      matchLength: length,
+    );
+    _players[winner.id] = winner.copyWith(
+      backgammon: winner.backgammon.afterMatch(
+        delta: winnerDelta,
+        won: true,
+        matchLength: length,
+      ),
+    );
+    _players[loser.id] = loser.copyWith(
+      backgammon: loser.backgammon.afterMatch(
+        delta: loserDelta,
+        won: false,
+        matchLength: length,
+      ),
+    );
+    final match = BackgammonMatch(
+      id: _backgammonMatches.length + 1,
+      winnerId: winner.id,
+      loserId: loser.id,
+      winnerName: winner.displayName,
+      loserName: loser.displayName,
+      matchLength: length,
+      loserScore: request.loserScore,
+      winnerRatingBefore: winner.backgammon.rating,
+      loserRatingBefore: loser.backgammon.rating,
+      winnerRatingDelta: winnerDelta,
+      loserRatingDelta: loserDelta,
+      playedAt: DateTime.now(),
+    );
+    _backgammonMatches.add(match);
+    return match;
+  }
+
+  @override
+  Future<List<Player>> backgammonLadder() async =>
+      _players.values.toList()..sort(compareBackgammonLadder);
+
+  @override
+  Future<List<BackgammonMatch>> backgammonMatches({
+    String? playerId,
+    int limit = 50,
+  }) async => _backgammonMatches.reversed
+      .where((m) => playerId == null || m.involves(playerId))
+      .take(limit)
+      .map(_backgammonWithCurrentNames)
+      .toList();
+
+  @override
+  Future<BackgammonMatchRequest> requestBackgammonMatch({
+    required String opponentId,
+    required int matchLength,
+    required int myScore,
+    required int opponentScore,
+  }) async {
+    final me = _requireMe();
+    if (opponentId == me.id) {
+      throw const LadderException('Choose an opponent other than yourself.');
+    }
+    final opponent = _players[opponentId];
+    if (opponent == null) throw const LadderException('Opponent not found.');
+    if (matchLength < 1 ||
+        matchLength > 25 ||
+        !isFinalScore(matchLength, myScore, opponentScore)) {
+      throw const LadderException(
+        'The winner\'s score must equal the match length.',
+      );
+    }
+    final iWon = myScore == matchLength;
+    final (winner, loser) = iWon ? (me, opponent) : (opponent, me);
+    final request = BackgammonMatchRequest(
+      id: _nextRequestId++,
+      winnerId: winner.id,
+      loserId: loser.id,
+      winnerName: winner.displayName,
+      loserName: loser.displayName,
+      matchLength: matchLength,
+      loserScore: math.min(myScore, opponentScore),
+      requestedBy: me.id,
+      createdAt: DateTime.now(),
+    );
+    _backgammonRequests.add(request);
+    _revision++;
+    notifyListeners();
+    return request;
+  }
+
+  @override
+  Future<List<BackgammonMatchRequest>> backgammonMatchRequests() async {
+    final me = _requireMe();
+    return _backgammonRequests.reversed
+        .where((r) => r.involves(me.id))
+        .toList();
+  }
+
+  @override
+  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
+    int requestId, {
+    required bool accept,
+  }) async {
+    final me = _requireMe();
+    final request = _backgammonRequests
+        .where((r) => r.id == requestId && r.involves(me.id))
+        .firstOrNull;
+    if (request == null) {
+      throw const LadderException(
+        'That match is no longer waiting for confirmation.',
+      );
+    }
+    if (accept && !request.awaits(me.id)) {
+      throw const LadderException('Your opponent has to confirm this match.');
+    }
+    _backgammonRequests.remove(request);
+    final match = accept ? _applyBackgammon(request) : null;
     _revision++;
     notifyListeners();
     return match;

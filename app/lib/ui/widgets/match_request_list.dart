@@ -2,28 +2,102 @@ import 'package:flutter/material.dart';
 
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
+import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
-import '../app_scope.dart';
 import 'surface.dart';
 
-/// Games the signed-in member is part of that still wait for the opponent:
-/// confirm or decline the ones reported against you, withdraw your own.
-class MatchRequestList extends StatelessWidget {
-  const MatchRequestList({super.key, required this.requests});
+/// A reported result involving the signed-in member that still waits for
+/// the opponent, in either game.
+class PendingResult {
+  const PendingResult({
+    required this.headline,
+    required this.detail,
+    required this.incoming,
+    required this.respond,
+  });
 
-  final List<MatchRequest> requests;
+  factory PendingResult.chess(
+    LadderRepository repo,
+    String meId,
+    MatchRequest r,
+  ) {
+    final incoming = r.awaits(meId);
+    final myResult = switch (r.outcomeFor(meId)) {
+      Outcome.win => 'you won',
+      Outcome.loss => 'you lost',
+      Outcome.draw => 'it was a draw',
+    };
+    return PendingResult(
+      headline: incoming
+          ? '${r.opponentName(meId)} says $myResult'
+          : 'Waiting for ${r.opponentName(meId)} to confirm',
+      detail:
+          'You had ${r.colorOf(meId).name}${incoming ? '' : ', $myResult'} · ${r.clock.label}',
+      incoming: incoming,
+      respond: ({required accept}) async {
+        final match = await repo.respondToMatchRequest(r.id, accept: accept);
+        return match == null
+            ? null
+            : 'Game confirmed. You\'re now ${match.ratingAfterFor(meId)} '
+                  '(${formatDelta(match.deltaFor(meId))}).';
+      },
+    );
+  }
+
+  factory PendingResult.backgammon(
+    LadderRepository repo,
+    String meId,
+    BackgammonMatchRequest r,
+  ) {
+    final incoming = r.awaits(meId);
+    final myResult =
+        '${r.wonBy(meId) ? 'you won' : 'you lost'} ${r.scoreFor(meId)}';
+    return PendingResult(
+      headline: incoming
+          ? '${r.opponentName(meId)} says $myResult'
+          : 'Waiting for ${r.opponentName(meId)} to confirm',
+      detail: 'Match to ${r.matchLength}${incoming ? '' : ', $myResult'}',
+      incoming: incoming,
+      respond: ({required accept}) async {
+        final match = await repo.respondToBackgammonMatchRequest(
+          r.id,
+          accept: accept,
+        );
+        return match == null
+            ? null
+            : 'Match confirmed. You\'re now ${match.ratingAfterFor(meId)} '
+                  '(${formatDelta(match.deltaFor(meId))}).';
+      },
+    );
+  }
+
+  final String headline;
+  final String detail;
+
+  /// Reported against the member, who confirms or declines it; otherwise the
+  /// member reported it and can only withdraw it.
+  final bool incoming;
+
+  /// Accepts or drops the result; returns the message to show, if any.
+  final Future<String?> Function({required bool accept}) respond;
+}
+
+/// Confirm or decline results reported against you, withdraw your own.
+class PendingResultList extends StatelessWidget {
+  const PendingResultList({super.key, required this.results});
+
+  final List<PendingResult> results;
 
   @override
   Widget build(BuildContext context) {
-    final meId = context.repo.me?.id;
-    if (meId == null || requests.isEmpty) return const SizedBox.shrink();
+    if (results.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final r in requests) ...[
-            _MatchRequestCard(request: r, meId: meId),
+          for (final r in results) ...[
+            _PendingResultCard(result: r),
             const SizedBox(height: 12),
           ],
         ],
@@ -32,37 +106,25 @@ class MatchRequestList extends StatelessWidget {
   }
 }
 
-class _MatchRequestCard extends StatefulWidget {
-  const _MatchRequestCard({required this.request, required this.meId});
+class _PendingResultCard extends StatefulWidget {
+  const _PendingResultCard({required this.result});
 
-  final MatchRequest request;
-  final String meId;
+  final PendingResult result;
 
   @override
-  State<_MatchRequestCard> createState() => _MatchRequestCardState();
+  State<_PendingResultCard> createState() => _PendingResultCardState();
 }
 
-class _MatchRequestCardState extends State<_MatchRequestCard> {
+class _PendingResultCardState extends State<_PendingResultCard> {
   bool _busy = false;
 
   Future<void> _respond({required bool accept}) async {
-    final repo = context.repo;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      final match = await repo.respondToMatchRequest(
-        widget.request.id,
-        accept: accept,
-      );
-      if (match != null) {
-        final delta = match.deltaFor(widget.meId);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Game confirmed. You\'re now ${match.ratingAfterFor(widget.meId)} (${formatDelta(delta)}).',
-            ),
-          ),
-        );
+      final message = await widget.result.respond(accept: accept);
+      if (message != null) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
       }
     } on LadderException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -80,34 +142,20 @@ class _MatchRequestCardState extends State<_MatchRequestCard> {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final r = widget.request;
-    final me = widget.meId;
-    final opponent = r.opponentName(me);
-    final incoming = r.awaits(me);
-    final myResult = switch (r.outcomeFor(me)) {
-      Outcome.win => 'you won',
-      Outcome.loss => 'you lost',
-      Outcome.draw => 'it was a draw',
-    };
-    final headline = incoming
-        ? '$opponent says $myResult'
-        : 'Waiting for $opponent to confirm';
-    final detail =
-        'You had ${r.colorOf(me).name}${incoming ? '' : ', $myResult'} · ${r.clock.label}';
-
+    final r = widget.result;
     return SpecSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(headline, style: d.body(16, weight: FontWeight.w700)),
+          Text(r.headline, style: d.body(16, weight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(detail, style: d.body(13, color: d.muted)),
+          Text(r.detail, style: d.body(13, color: d.muted)),
           const SizedBox(height: 12),
           Wrap(
             alignment: WrapAlignment.end,
             spacing: 8,
             runSpacing: 8,
-            children: incoming
+            children: r.incoming
                 ? [
                     OutlinedButton(
                       onPressed: _busy ? null : () => _respond(accept: false),

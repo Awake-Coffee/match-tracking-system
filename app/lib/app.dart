@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import 'data/ladder_repository.dart';
 import 'design/design_scope.dart';
-import 'design/designs.dart';
 import 'ui/app_scope.dart';
+import 'ui/game.dart';
 import 'ui/screens/history_screen.dart';
 import 'ui/screens/ladder_screen.dart';
 import 'ui/screens/profile_screen.dart';
@@ -29,7 +29,7 @@ class AwakeApp extends StatefulWidget {
 
 class _AwakeAppState extends State<AwakeApp> {
   late final GoRouter _router = _buildRouter();
-  final _theme = roastPawns.toTheme();
+  final _themes = {for (final g in Game.values) g: g.design.toTheme()};
 
   LadderRepository get _repo => widget.repository;
 
@@ -46,55 +46,78 @@ class _AwakeAppState extends State<AwakeApp> {
       GoRoute(
         path: '/sign-in',
         pageBuilder: (context, state) =>
-            const NoTransitionPage(child: SignInScreen()),
+            NoTransitionPage(key: state.pageKey, child: const SignInScreen()),
       ),
       ShellRoute(
-        builder: (context, state, child) =>
-            AppShell(location: state.matchedLocation, child: child),
-        routes: [
-          GoRoute(
-            path: '/',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: LadderScreen()),
-          ),
-          GoRoute(
-            path: '/record',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: RecordScreen(
-                initialOpponentId: state.uri.queryParameters['opponent'],
+        builder: (context, state, child) {
+          final game = Game.at(state.uri.path);
+          return DesignScope(
+            spec: game.design,
+            child: Theme(
+              data: _themes[game]!,
+              child: AppShell(
+                game: game,
+                location: state.uri.path,
+                child: child,
               ),
             ),
-          ),
-          GoRoute(
-            path: '/history',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: HistoryScreen()),
-          ),
-          GoRoute(
-            path: '/me',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: ProfileScreen(playerId: _repo.me!.id, isMe: true),
-            ),
-          ),
-          GoRoute(
-            path: '/settings',
-            builder: (context, state) => const SettingsScreen(),
-          ),
-          GoRoute(
-            path: '/players/:id',
-            builder: (context, state) {
-              final id = state.pathParameters['id']!;
-              return ProfileScreen(
-                key: ValueKey(id),
-                playerId: id,
-                isMe: id == _repo.me?.id,
-              );
-            },
-          ),
-        ],
+          );
+        },
+        routes: [for (final game in Game.values) ..._gameRoutes(game)],
       ),
     ],
   );
+
+  /// The same pages for each game, under its own prefix.
+  List<RouteBase> _gameRoutes(Game game) => [
+    GoRoute(
+      path: game.path(),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: state.pageKey,
+        child: LadderScreen(game: game),
+      ),
+    ),
+    GoRoute(
+      path: game.path('record'),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: state.pageKey,
+        child: RecordScreen(
+          game: game,
+          initialOpponentId: state.uri.queryParameters['opponent'],
+        ),
+      ),
+    ),
+    GoRoute(
+      path: game.path('history'),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: state.pageKey,
+        child: HistoryScreen(game: game),
+      ),
+    ),
+    GoRoute(
+      path: game.path('me'),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: state.pageKey,
+        child: ProfileScreen(game: game, playerId: _repo.me!.id, isMe: true),
+      ),
+    ),
+    GoRoute(
+      path: game.path('settings'),
+      builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: game.path('players/:id'),
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return ProfileScreen(
+          key: ValueKey((game, id)),
+          game: game,
+          playerId: id,
+          isMe: id == _repo.me?.id,
+        );
+      },
+    ),
+  ];
 
   @override
   void dispose() {
@@ -107,11 +130,11 @@ class _AwakeAppState extends State<AwakeApp> {
     return AppScope(
       repository: _repo,
       child: DesignScope(
-        spec: roastPawns,
+        spec: Game.chess.design,
         child: MaterialApp.router(
-          title: 'Awake Chess Ladder',
+          title: 'Awake Ladder',
           debugShowCheckedModeBanner: false,
-          theme: _theme,
+          theme: _themes[Game.chess],
           routerConfig: _router,
         ),
       ),

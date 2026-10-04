@@ -1,4 +1,5 @@
 import 'package:awake_ladder/data/demo_repository.dart';
+import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
 import 'package:awake_ladder/domain/elo.dart';
 import 'package:awake_ladder/domain/models.dart';
@@ -166,5 +167,85 @@ void main() {
       repo.updateDisplayName('ANA'),
       throwsA(isA<LadderException>()),
     );
+  });
+
+  test(
+    'a backgammon match is rated once confirmed, apart from chess',
+    () async {
+      final repo = await anaAndBogdan();
+      final ana = repo.me!;
+      final bogdan = (await repo.ladder()).firstWhere((p) => p.id != ana.id);
+      expect(ana.backgammon.rating, backgammonStartingRating);
+
+      final request = await repo.requestBackgammonMatch(
+        opponentId: bogdan.id,
+        matchLength: 5,
+        myScore: 3,
+        opponentScore: 5,
+      );
+      expect(request.winnerId, bogdan.id);
+      expect(request.loserScore, 3);
+      expect(await repo.backgammonMatches(), isEmpty);
+      await expectLater(
+        repo.respondToBackgammonMatchRequest(request.id, accept: true),
+        throwsA(isA<LadderException>()),
+      );
+
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      final match = await repo.respondToBackgammonMatchRequest(
+        request.id,
+        accept: true,
+      );
+      expect(match!.deltaFor(bogdan.id), 22);
+      expect(match.deltaFor(ana.id), -22);
+
+      final players = {for (final p in await repo.backgammonLadder()) p.id: p};
+      expect(players[bogdan.id]!.backgammon.rating, 1522);
+      expect(players[bogdan.id]!.backgammon.experience, 5);
+      expect(players[ana.id]!.backgammon.rating, 1478);
+      expect(players[ana.id]!.backgammon.losses, 1);
+      expect(players[ana.id]!.rating, ana.rating, reason: 'chess untouched');
+      expect((await repo.backgammonLadder()).first.id, bogdan.id);
+      expect(await repo.backgammonMatchRequests(), isEmpty);
+    },
+  );
+
+  test('backgammon ladder replays from history', () async {
+    final repo = await anaAndBogdanWithBackgammon();
+    for (final p in await repo.backgammonLadder()) {
+      final matches = await repo.backgammonMatches(playerId: p.id);
+      expect(matches.length, p.backgammon.matchesPlayed);
+      expect(
+        ratingHistory(
+          p.id,
+          matches.reversed.toList(),
+          start: backgammonStartingRating,
+        ).last,
+        p.backgammon.rating,
+      );
+    }
+  });
+
+  test('backgammon rejects impossible scores and playing yourself', () async {
+    final repo = await anaAndBogdan();
+    final me = repo.me!;
+    final bogdanId = (await repo.ladder()).firstWhere((p) => p.id != me.id).id;
+    for (final (opponent, length, mine, theirs) in [
+      (me.id, 5, 5, 3),
+      (bogdanId, 5, 5, 5),
+      (bogdanId, 5, 4, 3),
+      (bogdanId, 0, 0, 0),
+    ]) {
+      await expectLater(
+        repo.requestBackgammonMatch(
+          opponentId: opponent,
+          matchLength: length,
+          myScore: mine,
+          opponentScore: theirs,
+        ),
+        throwsA(isA<LadderException>()),
+      );
+    }
+    expect(await repo.backgammonMatchRequests(), isEmpty);
   });
 }

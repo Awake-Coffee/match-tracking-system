@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
+import '../game.dart';
 
 /// Data every ladder style receives.
 class LadderData {
   const LadderData({
+    required this.game,
     required this.players,
     required this.meId,
     required this.onOpen,
     required this.now,
   });
 
-  /// Sorted, highest rating first.
+  final Game game;
+
+  /// Sorted, highest rating in [game] first.
   final List<Player> players;
   final String? meId;
   final void Function(Player) onOpen;
@@ -24,11 +28,11 @@ class LadderData {
   String? get summary {
     final i = players.indexWhere((p) => p.id == meId);
     if (i < 0) return null;
-    final me = players[i];
-    if (me.gamesPlayed == 0) {
-      return 'You start at ${me.rating}. Record a game to climb.';
+    final rating = game.ratingOf(players[i]);
+    if (game.playedOf(players[i]) == 0) {
+      return 'You start at $rating. Record a ${game.resultNoun} to climb.';
     }
-    return 'You\'re ${ordinal(i + 1)} of ${players.length} with ${me.rating}.';
+    return 'You\'re ${ordinal(i + 1)} of ${players.length} with $rating.';
   }
 }
 
@@ -69,7 +73,7 @@ class LadderRowTap extends StatelessWidget {
       button: true,
       label:
           '${rank != null ? '${ordinal(rank!)}, ' : ''}${player.displayName}'
-          '${isMe ? ' (you)' : ''}, rating ${player.rating}',
+          '${isMe ? ' (you)' : ''}, rating ${data.game.ratingOf(player)}',
       excludeSemantics: true,
       child: InkWell(
         onTap: () => data.onOpen(player),

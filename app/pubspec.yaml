@@ -1,5 +1,5 @@
 name: awake_ladder
-description: "Awake Coffee chess ladder: internal Elo for the cafe's regulars."
+description: "Awake Coffee chess and backgammon ladders for the cafe's regulars."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -35,4 +35,19 @@ flutter:
         - asset: assets/fonts/Karla-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/Karla-Bold.ttf
+          weight: 700
+    - family: Big Shoulders Display
+      fonts:
+        - asset: assets/fonts/BigShouldersDisplay-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BigShouldersDisplay-ExtraBold.ttf
+          weight: 800
+    - family: Work Sans
+      fonts:
+        - asset: assets/fonts/WorkSans-Regular.ttf
+        - asset: assets/fonts/WorkSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/WorkSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/WorkSans-Bold.ttf
           weight: 700

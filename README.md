@@ -1,16 +1,22 @@
-# Awake Chess Ladder
+# Awake Ladder
 
-Internal chess Elo ladder for Awake Coffee. Members sign in, report games
-they played on the café's DGT 2500 clocks, and ratings move once the
-opponent confirms the result.
+Internal chess and backgammon ladders for Awake Coffee. Members sign in,
+report games they played (chess on the café's DGT 2500 clocks, backgammon
+as matches to N points), and ratings move once the opponent confirms the
+result. Each game has its own rating, ladder and look; a switch at the top
+of every screen moves between them.
 
-- **App**: Flutter web (`app/`), single "Roast pawns" design.
+- **App**: Flutter web (`app/`). Chess uses the "Roast pawns" design,
+  backgammon the "Baize" design.
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
   computed in database functions, so clients can't tamper with them.
-- **Elo**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
+- **Chess rating**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
   first 30 games, then 20, 10 for good once 2400 is reached). Everyone
   starts at 1000.
   Full spec: [`specs/001-chess-elo-tracking/spec.md`](specs/001-chess-elo-tracking/spec.md).
+- **Backgammon rating**: FIBS formula, which weighs match length and moves
+  newcomers faster. Everyone starts at 1500.
+  Full spec: [`specs/002-backgammon-ladder/spec.md`](specs/002-backgammon-ladder/spec.md).
 
 ## Run locally
 
@@ -31,8 +37,8 @@ make test   # Flutter tests + SQL tests (needs Postgres binaries on PATH)
 
 ## Database changes
 
-Add a new file in `supabase/migrations/`, cover it in
-`supabase/tests/chess_elo_test.sql`, run `make test`, then apply it with:
+Add a new file in `supabase/migrations/`, cover it in a
+`supabase/tests/*_test.sql` file, run `make test`, then apply it with:
 
 ```
 npx supabase db push

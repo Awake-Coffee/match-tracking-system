@@ -1,46 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../app_scope.dart';
+import '../game.dart';
 import '../widgets/load_view.dart';
+import '../widgets/record_form.dart';
 import '../widgets/surface.dart';
+import 'backgammon_record_form.dart';
 
 class RecordScreen extends StatelessWidget {
-  const RecordScreen({super.key, this.initialOpponentId});
+  const RecordScreen({super.key, required this.game, this.initialOpponentId});
 
+  final Game game;
   final String? initialOpponentId;
 
   @override
   Widget build(BuildContext context) {
+    final noun = game.resultNoun;
     return LoadView(
-      load: (repo) => repo.ladder(),
+      load: game.ladderOf,
       builder: (context, players, _) {
         final meId = context.repo.me?.id;
         final me = players.where((p) => p.id == meId).firstOrNull;
+        final initialOpponentId =
+            players.any((p) => p.id == this.initialOpponentId && p.id != meId)
+            ? this.initialOpponentId
+            : null;
         return ListView(
           children: [
-            const ScreenTitle(
-              'Record a game',
+            ScreenTitle(
+              'Record a $noun',
               subtitle:
-                  'Log a game you just played. Ratings update once your '
+                  'Log a $noun you just played. Ratings update once your '
                   'opponent confirms it.',
             ),
             if (me == null)
-              const MessageView(message: 'Sign in to record a game.')
+              MessageView(message: 'Sign in to record a $noun.')
             else if (players.length < 2)
               const MessageView(
                 message: 'You need an opponent. Ask someone to make a profile first.',
               )
             else
-              _RecordForm(
-                me: me,
-                players: players,
-                initialOpponentId: initialOpponentId,
-              ),
+              switch (game) {
+                Game.chess => _ChessRecordForm(
+                  me: me,
+                  players: players,
+                  initialOpponentId: initialOpponentId,
+                ),
+                Game.backgammon => BackgammonRecordForm(
+                  me: me,
+                  players: players,
+                  initialOpponentId: initialOpponentId,
+                ),
+              },
           ],
         );
       },
@@ -48,8 +62,8 @@ class RecordScreen extends StatelessWidget {
   }
 }
 
-class _RecordForm extends StatefulWidget {
-  const _RecordForm({
+class _ChessRecordForm extends StatefulWidget {
+  const _ChessRecordForm({
     required this.me,
     required this.players,
     this.initialOpponentId,
@@ -60,21 +74,17 @@ class _RecordForm extends StatefulWidget {
   final String? initialOpponentId;
 
   @override
-  State<_RecordForm> createState() => _RecordFormState();
+  State<_ChessRecordForm> createState() => _ChessRecordFormState();
 }
 
-class _RecordFormState extends State<_RecordForm> {
-  late String? _opponentId = widget.players
-      .where((p) => p.id == widget.initialOpponentId && p.id != widget.me.id)
-      .firstOrNull
-      ?.id;
+class _ChessRecordFormState extends State<_ChessRecordForm>
+    with SendsForConfirmation {
+  late String? _opponentId = widget.initialOpponentId;
   PieceColor _color = PieceColor.white;
   Outcome? _outcome;
   TimeControl? _timeControl;
   int? _customBaseMinutes;
   int? _customExtraSeconds;
-  bool _saving = false;
-  String? _error;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
@@ -95,57 +105,12 @@ class _RecordFormState extends State<_RecordForm> {
     return clock.isComplete ? clock : null;
   }
 
-  Future<void> _save() async {
-    final opponent = _opponent;
-    final outcome = _outcome;
-    final clock = _clock;
-    if (opponent == null || outcome == null || clock == null) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final repo = context.repo;
-    final messenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.of(context);
-    try {
-      await repo.requestMatch(
-        opponentId: opponent.id,
-        myColor: _color,
-        myOutcome: outcome,
-        clock: clock,
-      );
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sent to ${opponent.displayName}. Ratings update once they confirm.',
-          ),
-        ),
-      );
-      router.go('/');
-    } on LadderException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error =
-              'The game wasn\'t saved. Check your connection and try again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final opponents = widget.players.where((p) => p.id != widget.me.id).toList()
-      ..sort(
-        (a, b) =>
-            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
-      );
     final opponent = _opponent;
     final outcome = _outcome;
+    final clock = _clock;
     final preview = opponent != null && outcome != null
         ? MatchPreview(me: widget.me, opponent: opponent, outcome: outcome)
         : null;
@@ -158,21 +123,12 @@ class _RecordFormState extends State<_RecordForm> {
         children: [
           Text('Opponent', style: label),
           const SizedBox(height: 8),
-          DropdownMenu<String>(
-            initialSelection: _opponentId,
-            expandedInsets: EdgeInsets.zero,
-            enableFilter: true,
-            requestFocusOnTap: true,
-            hintText: 'Search players',
+          OpponentPicker(
+            game: Game.chess,
+            players: widget.players,
+            meId: widget.me.id,
+            selectedId: _opponentId,
             onSelected: (id) => setState(() => _opponentId = id),
-            dropdownMenuEntries: [
-              for (final p in opponents)
-                DropdownMenuEntry(
-                  value: p.id,
-                  label: p.displayName,
-                  trailingIcon: Text('${p.rating}'),
-                ),
-            ],
           ),
           const SizedBox(height: 24),
           Text('You played', style: label),
@@ -241,91 +197,42 @@ class _RecordFormState extends State<_RecordForm> {
             onSelectionChanged: (s) => setState(() => _outcome = s.firstOrNull),
           ),
           const SizedBox(height: 28),
-          SpecSurface(
-            child: preview == null
-                ? Text(
-                    'Pick an opponent and a result to see how ratings change.',
-                    style: d.body(15, color: d.muted),
-                  )
-                : Column(
-                    children: [
-                      _PreviewRow(
-                        name: 'You',
-                        before: preview.me.rating,
-                        after: preview.myRatingAfter,
-                        delta: preview.myDelta,
-                      ),
-                      const SizedBox(height: 10),
-                      _PreviewRow(
-                        name: preview.opponent.displayName,
-                        before: preview.opponent.rating,
-                        after: preview.opponentRatingAfter,
-                        delta: preview.opponentDelta,
-                      ),
-                    ],
-                  ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: d.body(15, color: d.loss, weight: FontWeight.w600),
-            ),
-          ],
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: preview == null || _clock == null || _saving
+          RatingPreview(
+            emptyHint:
+                'Pick an opponent and a result to see how ratings change.',
+            rows: preview == null
                 ? null
-                : _save,
-            child: _saving
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Send for confirmation'),
+                : [
+                    (
+                      name: 'You',
+                      before: preview.me.rating,
+                      delta: preview.myDelta,
+                    ),
+                    (
+                      name: preview.opponent.displayName,
+                      before: preview.opponent.rating,
+                      delta: preview.opponentDelta,
+                    ),
+                  ],
+          ),
+          SendForConfirmationButton(
+            error: error,
+            saving: saving,
+            onPressed: opponent == null || outcome == null || clock == null
+                ? null
+                : () => sendForConfirmation(
+                    game: Game.chess,
+                    opponentName: opponent.displayName,
+                    request: (repo) => repo.requestMatch(
+                      opponentId: opponent.id,
+                      myColor: _color,
+                      myOutcome: outcome,
+                      clock: clock,
+                    ),
+                  ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PreviewRow extends StatelessWidget {
-  const _PreviewRow({
-    required this.name,
-    required this.before,
-    required this.after,
-    required this.delta,
-  });
-
-  final String name;
-  final int before;
-  final int after;
-  final int delta;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = context.design;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            name,
-            overflow: TextOverflow.ellipsis,
-            style: d.body(17, weight: FontWeight.w600),
-          ),
-        ),
-        Text('$before to ', style: d.number(16, color: d.muted)),
-        Text('$after', style: d.number(18, weight: FontWeight.w700)),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 44,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: DeltaText(delta, size: 16),
-          ),
-        ),
-      ],
     );
   }
 }
