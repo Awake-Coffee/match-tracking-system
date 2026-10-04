@@ -1529,7 +1529,7 @@ void main() {
       );
       expect((await repo.matchRequests()).single.awaits(repo.me!.id), isTrue);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Keep it'));
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
       expect(find.text('Bogdan says you lost'), findsOneWidget);
@@ -1567,6 +1567,9 @@ void main() {
 
       expect(find.text('Ana declined your game'), findsOneWidget);
       expect(find.textContaining('You had white, you won'), findsOneWidget);
+      expect(find.text('Declined just now'), findsOneWidget);
+      expect(find.textContaining('Reported'), findsNothing);
+      expect(find.textContaining('you go to'), findsNothing);
       expect(find.text('Waiting for Ana to confirm'), findsNothing);
       expect(find.widgetWithText(TextButton, 'Withdraw'), findsNothing);
       expect(
@@ -1653,6 +1656,42 @@ void main() {
         findsNWidgets(2),
       );
       expect(find.text('−16'), findsNWidgets(2));
+    });
+
+    testWidgets('a declined card says when, and nothing about ratings', (
+      tester,
+    ) async {
+      _phone(tester);
+      final now = DateTime.now();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DesignScope(
+            spec: roastPawns,
+            child: Scaffold(
+              body: PendingResultList(
+                results: [
+                  PendingResult(
+                    headline: 'Ana declined your game',
+                    detail: 'You had white, you won',
+                    opponentName: 'Ana',
+                    rated: false,
+                    incoming: false,
+                    declined: true,
+                    reportedAt: now.subtract(const Duration(hours: 5)),
+                    respondedAt: now.subtract(const Duration(hours: 3)),
+                    respond: ({required accept}) async => null,
+                    dismiss: () async {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Declined 3 h ago'), findsOneWidget);
+      expect(find.textContaining('Reported'), findsNothing);
+      expect(find.text('Ratings stay put'), findsNothing);
     });
   });
 

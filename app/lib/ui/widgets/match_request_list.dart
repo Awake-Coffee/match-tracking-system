@@ -39,6 +39,7 @@ class PendingResult {
     required this.incoming,
     this.declined = false,
     required this.reportedAt,
+    this.respondedAt,
     this.impact,
     required this.respond,
     required this.dismiss,
@@ -75,6 +76,7 @@ class PendingResult {
       incoming: incoming,
       declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (after: preview.myRatingAfter, delta: preview.myDelta),
@@ -118,6 +120,7 @@ class PendingResult {
       incoming: incoming,
       declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (
@@ -167,6 +170,7 @@ class PendingResult {
       incoming: incoming,
       declined: declined,
       reportedAt: r.createdAt,
+      respondedAt: r.respondedAt,
       impact: preview == null
           ? null
           : (
@@ -201,6 +205,9 @@ class PendingResult {
   /// When the result was reported.
   final DateTime reportedAt;
 
+  /// When the opponent declined it; null while it's still pending.
+  final DateTime? respondedAt;
+
   /// The member's rating after this result and the change, from the ladder
   /// as loaded; null when unrated or the players aren't on the ladder.
   final RatingImpact? impact;
@@ -223,7 +230,7 @@ Future<bool> confirmDecline(BuildContext context, String name) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Keep it'),
+          child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
@@ -303,8 +310,10 @@ class _PendingResultCardState extends State<_PendingResultCard> {
   }
 
   /// What confirming does to the member's rating, before they decide. Said
-  /// in the future tense for a result still waiting on the opponent.
+  /// in the future tense for a result still waiting on the opponent. A
+  /// declined result will never count, so it says nothing.
   Widget? _impactLine(BuildContext context, PendingResult r) {
+    if (r.declined) return null;
     final style = context.design.body(14, weight: FontWeight.w600);
     if (!r.rated) return Text('Ratings stay put', style: style);
     final impact = r.impact;
@@ -344,10 +353,11 @@ class _PendingResultCardState extends State<_PendingResultCard> {
             style: d.body(13, color: d.muted),
           ),
           const SizedBox(height: 2),
-          Text(
-            'Reported ${relativeAge(r.reportedAt)}',
-            style: d.body(13, color: d.muted),
-          ),
+          // A decline can surface hours later, so say when it happened.
+          Text(switch (r.respondedAt) {
+            final at? when r.declined => 'Declined ${relativeAge(at)}',
+            _ => 'Reported ${relativeAge(r.reportedAt)}',
+          }, style: d.body(13, color: d.muted)),
           if (_impactLine(context, r) case final line?) ...[
             const SizedBox(height: 8),
             line,

@@ -103,6 +103,12 @@ exception when sqlstate 'P0002' then null;
 end $$;
 do $$
 begin
+  perform public.dismiss_declined_backgammon_match(current_setting('test.bg_id')::bigint);
+  assert false, 'the respondent should not dismiss a backgammon request';
+exception when sqlstate 'P0002' then null;
+end $$;
+do $$
+begin
   perform public.dismiss_declined_swu_match(current_setting('test.swu_id')::bigint);
   assert false, 'the respondent should not dismiss an SWU request';
 exception when sqlstate 'P0002' then null;
