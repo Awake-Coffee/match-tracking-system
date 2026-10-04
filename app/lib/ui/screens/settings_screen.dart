@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../app_scope.dart';
+import '../install/install_banner.dart';
+import '../install/installer.dart';
 import '../widgets/password_field.dart';
 import '../widgets/surface.dart';
 
@@ -156,6 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+        const _InstallSection(),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
           child: OutlinedButton(
@@ -262,6 +265,39 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
           child: const Text('Delete account'),
         ),
       ],
+    );
+  }
+}
+
+/// Puts the app on the home screen from settings, for a member who said not
+/// now to the banner. Nothing where the browser can't install or already has.
+class _InstallSection extends StatelessWidget {
+  const _InstallSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final installer = InstallScope.of(context);
+    final route = installer.route;
+    final hint = installHint(route);
+    if (hint == null) return const SizedBox.shrink();
+    final d = context.design;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('On your phone', style: d.display(22)),
+          const SizedBox(height: 8),
+          Text('Add Awake Ladder to your home screen. $hint'),
+          if (route == InstallRoute.prompt) ...[
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: installer.install,
+              child: const Text('Install the app'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

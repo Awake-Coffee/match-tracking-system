@@ -1,11 +1,18 @@
 {
+    "id": "/",
     "name": "Awake Ladder",
     "short_name": "Awake Ladder",
-    "start_url": ".",
+    "description": "Awake Coffee's chess, backgammon and Star Wars: Unlimited ladders.",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#161514",
     "theme_color": "#161514",
-    "description": "Awake Coffee's chess, backgammon and Star Wars: Unlimited ladders.",
+    "categories": [
+        "games",
+        "sports",
+        "lifestyle"
+    ],
     "prefer_related_applications": false,
     "icons": [
         {

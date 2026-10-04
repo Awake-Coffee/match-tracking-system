@@ -11,6 +11,10 @@ Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
 - **App**: Flutter web (`app/`). Chess uses the "Counter" design (the café's
   letterboard, light or dark with the system setting), backgammon "Baize",
   Star Wars: Unlimited "Holotable".
+- **Installable**: the app is a PWA (`app/web/manifest.json`, `app/web/sw.js`).
+  On phones a banner offers to add it to the home screen: the browser's own
+  install dialog on Android, the Share-sheet steps on iPhone. Settings offers
+  it again after "Not now".
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
   computed in database functions, so clients can't tamper with them. All
   games share one schema keyed by a `match_type` enum and a `mode`:
