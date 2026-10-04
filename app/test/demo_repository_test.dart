@@ -57,6 +57,30 @@ void main() {
     expect(games.single.opponentName(repo.me!.id), 'Ana Maria');
   });
 
+  test('a sign-up after a deletion leaves the other members alone', () async {
+    final repo = await anaAndBogdan();
+    await repo.signIn(email: bogdanEmail, password: 'x');
+    final bogdan = repo.me!;
+    await repo.signIn(email: anaEmail, password: 'x');
+    await repo.deleteAccount();
+
+    await repo.signUp(
+      email: 'cleo@example.com',
+      password: 'x',
+      displayName: 'Cleo',
+    );
+    expect(repo.me!.id, isNot(bogdan.id));
+    final ladder = await repo.ladder();
+    expect(
+      ladder.map((p) => p.displayName),
+      unorderedEquals(['Bogdan', 'Cleo']),
+    );
+    final kept = ladder.firstWhere((p) => p.id == bogdan.id);
+    expect(kept.displayName, 'Bogdan');
+    expect(kept.rating, bogdan.rating);
+    expect(kept.gamesPlayed, bogdan.gamesPlayed);
+  });
+
   test('deleting an account needs a signed-in member', () async {
     await expectLater(
       DemoLadderRepository().deleteAccount(),
