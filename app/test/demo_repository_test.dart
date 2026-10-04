@@ -33,6 +33,33 @@ void main() {
     }
   });
 
+  test('sign-up reports whether the member is signed in', () async {
+    final repo = DemoLadderRepository();
+    expect(
+      await repo.signUp(
+        email: 'a@example.com',
+        password: 'x',
+        displayName: 'A',
+      ),
+      SignUpResult.signedIn,
+    );
+    expect(repo.isSignedIn, isTrue);
+    await repo.signOut();
+
+    repo.requireEmailConfirmation = true;
+    expect(
+      await repo.signUp(
+        email: 'b@example.com',
+        password: 'x',
+        displayName: 'B',
+      ),
+      SignUpResult.confirmationSent,
+    );
+    expect(repo.isSignedIn, isFalse);
+    await repo.signIn(email: 'b@example.com', password: 'x');
+    expect(repo.me!.displayName, 'B');
+  });
+
   test('a reported game is rated only once the opponent confirms', () async {
     final repo = DemoLadderRepository();
     await repo.signUp(

@@ -35,6 +35,16 @@ class DemoLadderRepository extends LadderRepository {
     notifyListeners();
   }
 
+  /// When true, [signUp] creates the account but leaves the member signed
+  /// out, as a project that requires email confirmation does.
+  bool requireEmailConfirmation = false;
+
+  /// Addresses [resendSignUpConfirmation] was asked to email, oldest first.
+  final List<String> resentConfirmations = [];
+
+  /// When set, [resendSignUpConfirmation] throws it, as a refused send would.
+  LadderException? resendError;
+
   @override
   String? get modeNote =>
       'Demo mode: no Supabase project is connected. Any email and password '
@@ -197,7 +207,7 @@ class DemoLadderRepository extends LadderRepository {
   }
 
   @override
-  Future<void> signUp({
+  Future<SignUpResult> signUp({
     required String email,
     required String password,
     required String displayName,
@@ -208,8 +218,20 @@ class DemoLadderRepository extends LadderRepository {
         'That email already has an account. Sign in instead.',
       );
     }
-    _meId = _addPlayer(displayName.trim(), key).id;
+    final player = _addPlayer(displayName.trim(), key);
+    // Like a project that needs the emailed link: the account exists but the
+    // member stays signed out.
+    if (requireEmailConfirmation) return SignUpResult.confirmationSent;
+    _meId = player.id;
     notifyListeners();
+    return SignUpResult.signedIn;
+  }
+
+  @override
+  Future<void> resendSignUpConfirmation(String email) async {
+    final error = resendError;
+    if (error != null) throw error;
+    resentConfirmations.add(email.trim().toLowerCase());
   }
 
   @override
