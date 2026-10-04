@@ -496,6 +496,7 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('I won'));
+    await tester.tap(find.text('White'));
     final more = find.widgetWithText(ChoiceChip, 'More…');
     await tester.ensureVisible(more);
     await tester.pumpAndSettle();
@@ -565,12 +566,44 @@ void main() {
 
       expect(tester.widget<FilledButton>(send).onPressed, isNull);
       expect(
-        find.text('Pick an opponent, a result and a time control'),
+        find.text(
+          'Pick an opponent, a result, the colour you played '
+          'and a time control',
+        ),
         findsOneWidget,
       );
 
       await tapVisible(tester, find.text('I won'));
-      expect(find.text('Pick an opponent and a time control'), findsOneWidget);
+      expect(
+        find.text('Pick an opponent, the colour you played and a time control'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the colour starts unchosen and gates the button', (
+      tester,
+    ) async {
+      final repo = SharedLadder();
+      await anaAndBogdan(into: repo);
+      await open(tester, repo, location: '/record?opponent=demo-2');
+      await tapVisible(tester, find.text('I won'));
+      await tapVisible(tester, chip('Sudden death 5 min'));
+
+      expect(
+        tester
+            .widget<SegmentedButton<PieceColor>>(
+              find.byType(SegmentedButton<PieceColor>),
+            )
+            .selected,
+        isEmpty,
+      );
+      expect(find.text('Pick the colour you played'), findsOneWidget);
+      expect(tester.widget<FilledButton>(send).onPressed, isNull);
+
+      await tapVisible(tester, find.text('Black'));
+
+      expect(find.textContaining('Pick'), findsNothing);
+      expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
     });
 
     testWidgets('choosing a chip enables the button and clears the hint', (
@@ -580,6 +613,7 @@ void main() {
       await anaAndBogdan(into: repo);
       await open(tester, repo, location: '/record?opponent=demo-2');
       await tapVisible(tester, find.text('I won'));
+      await tapVisible(tester, find.text('White'));
 
       expect(find.text('Pick a time control'), findsOneWidget);
       expect(tester.widget<FilledButton>(send).onPressed, isNull);
@@ -622,6 +656,7 @@ void main() {
       await anaAndBogdan(into: repo);
       await open(tester, repo, location: '/record?opponent=demo-2');
       await tapVisible(tester, find.text('I won'));
+      await tapVisible(tester, find.text('White'));
       await tapVisible(tester, chip('More…'));
       await tester.tap(find.byType(DropdownMenu<TimeControl>));
       await tester.pumpAndSettle();
@@ -658,6 +693,7 @@ void main() {
         '7',
       );
       await tapVisible(tester, find.text('I won'));
+      await tapVisible(tester, find.text('White'));
       expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
     });
 

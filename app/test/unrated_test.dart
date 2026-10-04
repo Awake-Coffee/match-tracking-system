@@ -124,6 +124,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('I won'));
+    await tester.tap(find.text('White'));
     final clock = find.widgetWithText(ChoiceChip, 'Sudden death 5 min');
     await tester.ensureVisible(clock);
     await tester.pumpAndSettle();

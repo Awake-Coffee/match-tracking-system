@@ -129,7 +129,10 @@ class _ChessRecordForm extends StatefulWidget {
 class _ChessRecordFormState extends State<_ChessRecordForm>
     with SendsForConfirmation {
   late String? _opponentId = widget.initialOpponentId;
-  PieceColor _color = PieceColor.white;
+
+  /// Unset until chosen: games can't be edited, so a silent default would
+  /// make a wrong colour permanent.
+  PieceColor? _color;
   Outcome? _outcome;
   TimeControl? _timeControl;
   int? _customBaseMinutes;
@@ -192,6 +195,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
     final d = context.design;
     final opponent = _opponent;
     final outcome = _outcome;
+    final color = _color;
     final clock = _clock;
     final preview = opponent != null && outcome != null
         ? MatchPreview(me: widget.me, opponent: opponent, outcome: outcome)
@@ -232,12 +236,13 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
           const SizedBox(height: 8),
           SegmentedButton<PieceColor>(
             showSelectedIcon: false,
+            emptySelectionAllowed: true,
             segments: const [
               ButtonSegment(value: PieceColor.white, label: Text('White')),
               ButtonSegment(value: PieceColor.black, label: Text('Black')),
             ],
-            selected: {_color},
-            onSelectionChanged: (s) => setState(() => _color = s.first),
+            selected: {?color},
+            onSelectionChanged: (s) => setState(() => _color = s.firstOrNull),
           ),
           const SizedBox(height: 24),
           Text('Time control', style: label),
@@ -341,12 +346,17 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             missing: [
               if (opponent == null) 'an opponent',
               if (outcome == null) 'a result',
+              if (color == null) 'the colour you played',
               if (_timeControl == null)
                 'a time control'
               else if (clock == null)
                 'the custom time',
             ],
-            onPressed: opponent == null || outcome == null || clock == null
+            onPressed:
+                opponent == null ||
+                    outcome == null ||
+                    color == null ||
+                    clock == null
                 ? null
                 : () => sendForConfirmation(
                     game: Game.chess,
@@ -355,7 +365,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
                     request: (repo) async {
                       await repo.requestMatch(
                         opponentId: opponent.id,
-                        myColor: _color,
+                        myColor: color,
                         myOutcome: outcome,
                         clock: clock,
                         rated: _rated,
