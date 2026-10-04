@@ -1,7 +1,13 @@
 -- Minimal stand-in for the pieces of Supabase the migration relies on, so the
 -- migration can be tested against a plain Postgres. Not used in production.
-create role anon nologin;
-create role authenticated nologin;
+-- Roles are cluster-wide, so a second test database finds them already there.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+    create role authenticated nologin;
+  end if;
+end $$;
 
 create schema auth;
 grant usage on schema auth to anon, authenticated;
