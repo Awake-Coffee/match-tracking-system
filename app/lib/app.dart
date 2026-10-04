@@ -9,6 +9,7 @@ import 'ui/screens/history_screen.dart';
 import 'ui/screens/ladder_screen.dart';
 import 'ui/screens/profile_screen.dart';
 import 'ui/screens/record_screen.dart';
+import 'ui/screens/reset_password_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/sign_in_screen.dart';
 import 'ui/shell.dart';
@@ -38,6 +39,14 @@ class _AwakeAppState extends State<AwakeApp> {
     refreshListenable: _repo,
     redirect: (context, state) {
       final onSignIn = state.matchedLocation == '/sign-in';
+      final onReset = state.matchedLocation == '/reset-password';
+      // The recovery link signs the member in only to choose a new password.
+      if (_repo.passwordRecoveryPending) {
+        return onReset ? null : '/reset-password';
+      }
+      // Signed in without a pending recovery (a reload, or a restored tab,
+      // forgets the flag): stay, since the member may not know their password.
+      if (onReset) return _repo.isSignedIn ? null : '/sign-in';
       if (!_repo.isSignedIn) return onSignIn ? null : '/sign-in';
       if (onSignIn) return '/';
       return null;
@@ -47,6 +56,13 @@ class _AwakeAppState extends State<AwakeApp> {
         path: '/sign-in',
         pageBuilder: (context, state) =>
             NoTransitionPage(key: state.pageKey, child: const SignInScreen()),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        pageBuilder: (context, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const ResetPasswordScreen(),
+        ),
       ),
       ShellRoute(
         builder: (context, state, child) {

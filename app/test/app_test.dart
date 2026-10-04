@@ -199,6 +199,280 @@ void main() {
     expect(tester.widget<Text>(error).style?.color, loss);
   });
 
+  /// Opens the app signed out and asks for a reset link for [email].
+  Future<void> forgotPasswordFor(
+    WidgetTester tester,
+    DemoLadderRepository repo,
+    String email,
+  ) async {
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), email);
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('forgot password sends a link and says where it went', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await forgotPasswordFor(tester, repo, ' $anaEmail ');
+
+    expect(repo.passwordResets, [anaEmail]);
+    expect(find.text('Check your inbox'), findsOneWidget);
+    expect(find.text('We sent a link to'), findsOneWidget);
+    expect(find.text(anaEmail), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Email'), findsNothing);
+
+    await tester.tap(find.text('Back to sign in'));
+    await tester.pumpAndSettle();
+    expect(find.text('Check your inbox'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(find.text(anaEmail), findsOneWidget);
+  });
+
+  testWidgets('forgot password can be retried with another email', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
+    await forgotPasswordFor(tester, repo, 'typo@example.com');
+
+    await tester.tap(find.text('Use a different email'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Email'),
+      'right@example.com',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordResets, ['typo@example.com', 'right@example.com']);
+  });
+
+  testWidgets('forgot password asks for an email and shows send failures', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()
+      ..passwordResetError = const LadderException('Give it a minute.');
+    await forgotPasswordFor(tester, repo, 'nope');
+    expect(find.text('Enter an email address'), findsOneWidget);
+    expect(repo.passwordResets, isEmpty);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Email'),
+      'ana@example.com',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pumpAndSettle();
+    final error = find.text('Give it a minute.');
+    expect(error, findsOneWidget);
+    expect(
+      tester.widget<Text>(error).style?.color,
+      tester.element(error).design.loss,
+    );
+    expect(find.text('Check your inbox'), findsNothing);
+  });
+
+  testWidgets('every password field can show and hide what is typed', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    bool obscured() => tester
+        .widget<EditableText>(
+          find.descendant(
+            of: find.widgetWithText(TextFormField, 'Password'),
+            matching: find.byType(EditableText),
+          ),
+        )
+        .obscureText;
+    expect(obscured(), isTrue);
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pump();
+    expect(obscured(), isFalse);
+    await tester.tap(find.byTooltip('Hide password'));
+    await tester.pump();
+    expect(obscured(), isTrue);
+
+    // Creating a profile has the same field.
+    await tester.tap(find.text('New here? Create a profile'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Show password'), findsOneWidget);
+  });
+
+  testWidgets('a recovery link lands on a new-password form, then the ladder', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await repo.openRecoveryLink(anaEmail);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    expect(repo.passwordRecoveryPending, isTrue);
+    expect(find.text('Choose a new password'), findsOneWidget);
+    expect(find.text('The ladder'), findsNothing);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'short');
+    await tester.enterText(fields.at(1), 'short');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least 8 characters'), findsOneWidget);
+
+    await tester.enterText(fields.at(0), 'longenough');
+    await tester.enterText(fields.at(1), 'different1');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pumpAndSettle();
+    expect(find.text('Passwords don\'t match'), findsOneWidget);
+    expect(repo.passwordChanges, isEmpty);
+
+    await tester.enterText(fields.at(1), 'longenough');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordChanges, [anaEmail]);
+    expect(repo.passwordRecoveryPending, isFalse);
+    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.textContaining('You\'re '), findsOneWidget);
+  });
+
+  testWidgets('a recovery in progress cannot wander off to the ladder', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await repo.openRecoveryLink(anaEmail);
+    await tester.pumpWidget(AwakeApp(repository: repo, initialLocation: '/me'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsOneWidget);
+  });
+
+  testWidgets('a recovery link opened while sign-in is showing', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+
+    // Supabase can replay the recovery event after the router has started.
+    await repo.openRecoveryLink(anaEmail);
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsOneWidget);
+  });
+
+  testWidgets('a broken recovery link explains itself and asks again', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    repo.openBrokenRecoveryLink();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    final error = find.text(brokenResetLinkMessage);
+    expect(error, findsOneWidget);
+    expect(
+      tester.widget<Text>(error).style?.color,
+      tester.element(error).design.loss,
+    );
+    final email = find.widgetWithText(TextFormField, 'Email');
+    expect(email, findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Password'), findsNothing);
+
+    await tester.enterText(email, anaEmail);
+    await tester.tap(find.widgetWithText(FilledButton, 'Send reset link'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordResets, [anaEmail]);
+    expect(repo.authLinkError, isNull);
+    expect(find.text(brokenResetLinkMessage), findsNothing);
+    expect(
+      find.textContaining('on this device, in this browser'),
+      findsOneWidget,
+    );
+
+    // "Use a different email" returns to the reset form, not sign-in.
+    await tester.tap(find.text('Use a different email'));
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(FilledButton, 'Send reset link'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a broken recovery link can be left for sign-in', (tester) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..openBrokenRecoveryLink();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Back to sign in'));
+    await tester.pumpAndSettle();
+    expect(repo.authLinkError, isNull);
+    expect(find.text(brokenResetLinkMessage), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
+
+  testWidgets('the reset page signed out goes to sign-in', (tester) async {
+    _phone(tester);
+    final repo = DemoLadderRepository();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/reset-password'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
+
+  testWidgets('a reloaded reset page keeps its form, then goes to the ladder', (
+    tester,
+  ) async {
+    _phone(tester);
+    // Signed in by the recovery link, but the reload forgot the recovery.
+    final repo = await anaAndBogdan();
+    expect(repo.passwordRecoveryPending, isFalse);
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/reset-password'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a new password'), findsOneWidget);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'longenough');
+    await tester.enterText(fields.at(1), 'longenough');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordChanges, [anaEmail]);
+    expect(find.text('The ladder'), findsOneWidget);
+  });
+
+  testWidgets('cancelling a recovery signs out', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await repo.signOut();
+    await repo.openRecoveryLink(anaEmail);
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cancel and sign out'));
+    await tester.pumpAndSettle();
+    expect(repo.passwordRecoveryPending, isFalse);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
+
   testWidgets('a recorded game waits for the opponent to confirm', (
     tester,
   ) async {
@@ -494,7 +768,7 @@ void main() {
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
 
-    final field = find.byType(TextFormField);
+    final field = find.widgetWithText(TextFormField, 'Display name');
     final save = find.widgetWithText(FilledButton, 'Save name');
     Rect rectOf(Finder f) => tester.getRect(f);
     expect(rectOf(save).top, rectOf(field).top);
@@ -515,6 +789,55 @@ void main() {
     await tester.tap(find.text('You').last);
     await tester.pumpAndSettle();
     expect(find.text('Ana Banana'), findsOneWidget);
+  });
+
+  testWidgets('settings shows the signed-in email', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/settings'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Signed in as $anaEmail'), findsOneWidget);
+  });
+
+  testWidgets('changing the password from settings', (tester) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/settings'),
+    );
+    await tester.pumpAndSettle();
+
+    final change = find.widgetWithText(FilledButton, 'Change password');
+    await tester.scrollUntilVisible(change, 200, scrollable: _list);
+    final newPassword = find.widgetWithText(TextFormField, 'New password');
+    final confirm = find.widgetWithText(TextFormField, 'Confirm new password');
+
+    await tester.enterText(newPassword, 'longenough');
+    await tester.enterText(confirm, 'longenougH');
+    await tester.tap(change);
+    await tester.pumpAndSettle();
+    expect(find.text('Passwords don\'t match'), findsOneWidget);
+    expect(repo.passwordChanges, isEmpty);
+
+    await tester.enterText(newPassword, 'short');
+    await tester.enterText(confirm, 'short');
+    await tester.tap(change);
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least 8 characters'), findsOneWidget);
+
+    await tester.enterText(newPassword, 'longenough');
+    await tester.enterText(confirm, 'longenough');
+    await tester.tap(change);
+    await tester.pumpAndSettle();
+    expect(repo.passwordChanges, [anaEmail]);
+    expect(find.text('Password updated.'), findsOneWidget);
+    // Stays in Settings, signed in, with the fields emptied.
+    expect(find.text('Settings'), findsWidgets);
+    expect(repo.isSignedIn, isTrue);
+    expect(tester.widget<TextFormField>(newPassword).controller!.text, '');
+    expect(tester.widget<TextFormField>(confirm).controller!.text, '');
   });
 
   testWidgets('signing out returns to sign-in', (tester) async {

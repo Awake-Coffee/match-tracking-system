@@ -47,9 +47,12 @@ make dev    # debug build with hot reload
 make test   # Flutter tests + SQL tests (needs Postgres binaries on PATH)
 ```
 
-Sign-up confirmation emails link back to the host the member signed up on,
-as long as Supabase allows it: the Site URL and Redirect URLs live in
-`supabase/auth.json` and are deployed with the migrations (see below).
+Sign-up confirmation and password-reset emails link back to the host the
+member used: confirmations to `/`, reset links to `/reset-password`. Supabase
+only allows the Site URL and Redirect URLs in `supabase/auth.json`, which are
+deployed with the migrations (see below). Each host is listed with a `/**`
+wildcard, which covers `/reset-password`; a host listed without one needs
+`<host>/reset-password` added too.
 
 ## Database changes
 

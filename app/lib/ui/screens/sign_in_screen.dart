@@ -7,6 +7,7 @@ import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../design/design_spec.dart';
 import '../app_scope.dart';
+import '../widgets/password_field.dart';
 import '../widgets/surface.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -22,12 +23,18 @@ class _SignInScreenState extends State<SignInScreen> {
   final _password = TextEditingController();
   final _name = TextEditingController();
   bool _creating = false;
+
+  /// Asking for a password-reset email instead of signing in.
+  bool _resetting = false;
   bool _busy = false;
   String? _error;
 
   /// The address a confirmation email was sent to; set after a sign-up that
   /// needs the emailed link, and replaces the form until the member goes back.
   String? _confirming;
+
+  /// The address a reset link was sent to; replaces the form like [_confirming].
+  String? _resetSent;
 
   @override
   void dispose() {
@@ -44,8 +51,16 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     final repo = context.repo;
+    // Asking for a fresh link is moving on from the broken one.
+    if (repo.authLinkError != null) {
+      _resetting = true;
+      repo.clearAuthLinkError();
+    }
     try {
-      if (_creating) {
+      if (_resetting) {
+        await repo.sendPasswordReset(_email.text);
+        if (mounted) setState(() => _resetSent = _email.text.trim());
+      } else if (_creating) {
         final result = await repo.signUp(
           email: _email.text,
           password: _password.text,
@@ -109,10 +124,8 @@ class _SignInScreenState extends State<SignInScreen> {
           (v == null || !v.contains('@')) ? 'Enter an email address' : null,
     ),
     const SizedBox(height: 16),
-    TextFormField(
+    PasswordField(
       controller: _password,
-      decoration: const InputDecoration(labelText: 'Password'),
-      obscureText: true,
       autofillHints: [
         _creating ? AutofillHints.newPassword : AutofillHints.password,
       ],
@@ -121,12 +134,22 @@ class _SignInScreenState extends State<SignInScreen> {
         if (v == null || v.isEmpty) {
           return 'Enter your password';
         }
-        if (_creating && v.length < 8) {
-          return 'Use at least 8 characters';
-        }
-        return null;
+        return _creating ? validateNewPassword(v) : null;
       },
     ),
+    if (!_creating)
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: _busy
+              ? null
+              : () => setState(() {
+                  _resetting = true;
+                  _error = null;
+                }),
+          child: const Text('Forgot password?'),
+        ),
+      ),
     if (_error != null) ...[
       const SizedBox(height: 16),
       Text(
@@ -158,19 +181,72 @@ class _SignInScreenState extends State<SignInScreen> {
     ),
   ];
 
-  /// Leaves the confirmation panel for the sign-in form, email filled in.
-  void _backToSignIn() => setState(() {
-    _email.text = _confirming ?? _email.text;
-    _password.clear();
-    _confirming = null;
-    _creating = false;
-  });
+  /// The email form that asks for a password-reset link. [linkError] says why
+  /// the link the app was opened from didn't work; the member came for a new
+  /// password, so the form is ready for the next request.
+  List<Widget> _resetFields(DesignSpec d, String? linkError) => [
+    Text(
+      'Enter the email you signed up with and we\'ll send you a link to '
+      'choose a new password.',
+      style: d.body(16, color: d.muted),
+    ),
+    const SizedBox(height: 28),
+    TextFormField(
+      controller: _email,
+      autofocus: linkError != null,
+      decoration: const InputDecoration(labelText: 'Email'),
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.done,
+      autofillHints: const [AutofillHints.email],
+      onFieldSubmitted: (_) => _submit(),
+      validator: (v) =>
+          (v == null || !v.contains('@')) ? 'Enter an email address' : null,
+    ),
+    if ((_error ?? linkError) case final error?) ...[
+      const SizedBox(height: 16),
+      Text(
+        error,
+        style: d.body(15, color: d.loss, weight: FontWeight.w600),
+      ),
+    ],
+    const SizedBox(height: 24),
+    FilledButton(
+      onPressed: _busy ? null : _submit,
+      child: _busy
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Text('Send reset link'),
+    ),
+    const SizedBox(height: 8),
+    TextButton(
+      onPressed: _busy ? null : _backToSignIn,
+      child: const Text('Back to sign in'),
+    ),
+  ];
+
+  /// Leaves the confirmation or reset panel for the sign-in form, email filled in.
+  void _backToSignIn() {
+    context.repo.clearAuthLinkError();
+    setState(() {
+      _email.text = _confirming ?? _resetSent ?? _email.text;
+      _password.clear();
+      _confirming = null;
+      _resetSent = null;
+      _resetting = false;
+      _creating = false;
+      _error = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final note = context.repo.modeNote;
+    final linkError = context.repo.authLinkError;
     final confirming = _confirming;
+    final resetSent = _resetSent;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -200,6 +276,14 @@ class _SignInScreenState extends State<SignInScreen> {
                           email: confirming,
                           onBack: _backToSignIn,
                         )
+                      else if (resetSent != null)
+                        _ResetSentPanel(
+                          email: resetSent,
+                          onBack: _backToSignIn,
+                          onTryAgain: () => setState(() => _resetSent = null),
+                        )
+                      else if (_resetting || linkError != null)
+                        ..._resetFields(d, linkError)
                       else
                         ..._formFields(d),
                       if (note != null) ...[
@@ -217,6 +301,72 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Confirms a password-reset email is on its way. A success, so it matches
+/// [_ConfirmationPanel] rather than using the loss colour. It is shown for
+/// any address, since the backend doesn't say whether an account exists.
+class _ResetSentPanel extends StatelessWidget {
+  const _ResetSentPanel({
+    required this.email,
+    required this.onBack,
+    required this.onTryAgain,
+  });
+
+  final String email;
+  final VoidCallback onBack;
+  final VoidCallback onTryAgain;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SpecSurface(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.mark_email_read_outlined, color: d.accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    // Replaces the focused form, so announce it to screen readers.
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text('Check your inbox', style: d.display(24)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('We sent a link to', style: d.body(16)),
+              const SizedBox(height: 2),
+              Text(
+                email,
+                style: d.body(16, color: d.accent, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Open it on this device, in this browser, to choose a new '
+                'password. It can take a minute, and may land in spam.',
+                style: d.body(15, color: d.muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(onPressed: onBack, child: const Text('Back to sign in')),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: onTryAgain,
+          child: const Text('Use a different email'),
+        ),
+      ],
     );
   }
 }
