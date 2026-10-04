@@ -81,8 +81,9 @@ class _AppShellState extends State<AppShell> {
   /// The member's standing per game. Results waiting for their confirmation
   /// are badged on that game's Ladder tab, where they're confirmed, and on
   /// the game picker while another game is open.
-  // ponytail: refreshes only when this client changes data; push updates if
-  // members miss requests from others.
+  // Reloads whenever the repository's revision moves: this client changed
+  // data, or the repository heard of someone else's change (Realtime,
+  // returning to the app, the fallback poll).
   Future<Map<Game, _Standing>>? _standings;
   int? _revision;
 
@@ -602,6 +603,13 @@ class _WideHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 28),
                 ],
+                // Wide screens are mouse driven, so no pull-to-refresh.
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: context.repo.reload,
+                  icon: Icon(Icons.refresh, color: d.muted),
+                ),
+                const SizedBox(width: 12),
                 FilledButton(
                   onPressed: () => context.go(game.path(_Tab.record.page)),
                   style: FilledButton.styleFrom(

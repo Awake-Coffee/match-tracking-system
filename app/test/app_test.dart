@@ -152,6 +152,48 @@ void main() {
     expect(find.text('Backgammon rating'), findsOneWidget);
   });
 
+  testWidgets('a result reported elsewhere appears without any action', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    final anaId = repo.me!.id;
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(_awaitingBadge('1'), findsOneWidget);
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+
+    // Bogdan reports another game from his own client. This one only hears
+    // of it through the revision moving, as on a Realtime event.
+    await repo.signIn(email: bogdanEmail, password: 'x');
+    await repo.requestMatch(
+      opponentId: anaId,
+      myColor: PieceColor.black,
+      myOutcome: Outcome.draw,
+      clock: const ClockSetting(TimeControl.sudden5),
+    );
+    await repo.signIn(email: anaEmail, password: 'x');
+    await tester.pumpAndSettle();
+
+    expect(_awaitingBadge('2'), findsOneWidget);
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+    expect(find.text('Bogdan says it was a draw'), findsOneWidget);
+  });
+
+  testWidgets('wide screens refresh from the header', (tester) async {
+    _phone(tester, width: 1024);
+    final repo = await anaAndBogdan();
+    await tester.pumpWidget(AwakeApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    final before = repo.revision;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(repo.revision, before + 1);
+    expect(find.text('Bogdan says you lost'), findsOneWidget);
+  });
+
   testWidgets('every screen renders at 360px', (tester) async {
     _phone(tester);
     final repo = await anaAndBogdan();

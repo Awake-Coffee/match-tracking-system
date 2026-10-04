@@ -33,6 +33,10 @@ abstract class LadderRepository extends ChangeNotifier {
   /// retry).
   void refresh() {}
 
+  /// Refetches everything on screen, as if data had changed: the manual
+  /// refresh for screens where pull-to-refresh isn't available (mouse).
+  void reload();
+
   Future<void> signIn({required String email, required String password});
 
   Future<void> signUp({
