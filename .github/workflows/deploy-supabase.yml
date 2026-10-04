@@ -1,0 +1,57 @@
+name: Deploy Supabase
+
+# Applies new migrations and the auth URL settings to the production project.
+on:
+  push:
+    branches: [main]
+    paths:
+      - supabase/migrations/**
+      - supabase/auth.json
+      - .github/workflows/deploy-supabase.yml
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-supabase
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: SQL tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: supabase/tests/run.sh
+
+  deploy:
+    name: Deploy to production
+    needs: test
+    runs-on: ubuntu-24.04
+    environment: supabase-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check settings
+        run: |
+          missing=0
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_URL SUPABASE_PROJECT_REF; do
+            if [ -z "${!name}" ]; then echo "::error::$name is not set"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Apply migrations
+        run: npx --yes supabase@2.119.0 db push --db-url "$SUPABASE_DB_URL" --yes
+
+      - name: Apply auth URL settings
+        # PATCH only changes the fields in auth.json; the rest of the auth
+        # config is left as it is in the dashboard.
+        run: |
+          curl -sS --fail-with-body -o /dev/null -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @supabase/auth.json \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/config/auth"
+          echo "Auth URLs set from supabase/auth.json"
