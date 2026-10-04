@@ -7,9 +7,12 @@ import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:awake_ladder/domain/swu.dart';
 import 'package:awake_ladder/design/design_scope.dart';
+import 'package:awake_ladder/design/designs.dart';
 import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
 import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
+import 'package:awake_ladder/ui/widgets/match_request_list.dart';
+import 'package:awake_ladder/ui/widgets/match_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1408,6 +1411,142 @@ void main() {
       200,
       scrollable: _list,
     );
+  });
+
+  group('pending result cards', () {
+    testWidgets('an incoming chess result previews the confirmer\'s rating', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdan();
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      // Ana (1020) lost to Bogdan (980) on the board.
+      expect(find.text('Bogdan says you lost'), findsOneWidget);
+      expect(find.text('Confirm and you go to 998 ('), findsOneWidget);
+      expect(find.text('−22'), findsOneWidget);
+      expect(find.text('Reported just now'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.pumpAndSettle();
+      expect(repo.me!.rating, 998, reason: 'the preview matches the server');
+    });
+
+    testWidgets('an outgoing chess result previews the reporter\'s rating', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdan();
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Waiting for Ana to confirm'), findsOneWidget);
+      expect(find.text('Once confirmed you go to 1002 ('), findsOneWidget);
+      expect(find.text('+22'), findsOneWidget);
+      expect(find.text('Reported just now'), findsOneWidget);
+    });
+
+    testWidgets('an unrated result says ratings stay put', (tester) async {
+      _phone(tester);
+      final repo = await anaAndBogdan();
+      final bogdanId = (await repo.ladder())
+          .firstWhere((p) => p.id != repo.me!.id)
+          .id;
+      await repo.requestMatch(
+        opponentId: bogdanId,
+        myColor: PieceColor.black,
+        myOutcome: Outcome.win,
+        clock: const ClockSetting(TimeControl.sudden5),
+        rated: false,
+      );
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ratings stay put.'), findsOneWidget);
+      expect(find.textContaining(' you go to '), findsOneWidget);
+      expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
+    });
+
+    testWidgets('backgammon and SWU cards preview with their own ratings', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = await anaAndBogdanWithSwu();
+      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Backgammon'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bogdan says you lost 1-3'), findsOneWidget);
+      expect(find.text('Confirm and you go to 1504 ('), findsOneWidget);
+      expect(find.text('−18'), findsOneWidget);
+      expect(find.text('Reported just now'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.pumpAndSettle();
+      expect(repo.me!.backgammon.rating, 1504);
+
+      await tester.tap(find.byTooltip('Switch game'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Star Wars: Unlimited'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bogdan says you lost 0-2'), findsOneWidget);
+      expect(find.text('Confirm and you go to 998 ('), findsOneWidget);
+      expect(find.text('−22'), findsOneWidget);
+      expect(find.text('Reported just now'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.pumpAndSettle();
+      expect(repo.me!.swu.rating, 998);
+    });
+
+    testWidgets('a card says how long ago it was reported', (tester) async {
+      _phone(tester);
+      PendingResult card(Duration age) => PendingResult(
+        headline: 'Bogdan says you lost',
+        detail: 'You had white',
+        rated: true,
+        incoming: true,
+        reportedAt: DateTime.now().subtract(age),
+        impact: (after: 984, delta: -16),
+        respond: ({required accept}) async => null,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DesignScope(
+            spec: roastPawns,
+            child: Scaffold(
+              body: PendingResultList(
+                results: [
+                  card(const Duration(hours: 2, minutes: 5)),
+                  card(const Duration(hours: 30)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Reported 2 h ago'), findsOneWidget);
+      expect(find.text('Reported yesterday'), findsOneWidget);
+      expect(find.text('Confirm and you go to 984 ('), findsNWidgets(2));
+      expect(find.text('−16'), findsNWidgets(2));
+    });
+  });
+
+  test('relativeAge counts minutes and hours, then falls back to days', () {
+    final now = DateTime(2026, 10, 4, 12, 30);
+    String age(Duration ago) => relativeAge(now.subtract(ago), now: now);
+    expect(age(const Duration(seconds: 20)), 'just now');
+    expect(age(const Duration(minutes: 5)), '5 min ago');
+    expect(age(const Duration(hours: 2, minutes: 40)), '2 h ago');
+    expect(age(const Duration(hours: 23)), '23 h ago');
+    expect(age(const Duration(hours: 30)), 'yesterday');
+    expect(age(const Duration(days: 3)), '3 days ago');
+    expect(age(const Duration(days: 10)), '24 Sep');
+    expect(age(const Duration(minutes: -3)), 'just now');
   });
 }
 
