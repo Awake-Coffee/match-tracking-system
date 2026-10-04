@@ -31,18 +31,32 @@ class Player implements FideRated {
     this.swu = const SwuStats(),
   });
 
-  factory Player.fromRow(Map<String, dynamic> row) => Player(
-    id: row['id'] as String,
-    displayName: row['display_name'] as String,
-    rating: row['rating'] as int,
-    peakRating: row['peak_rating'] as int,
-    gamesPlayed: row['games_played'] as int,
-    wins: row['wins'] as int,
-    losses: row['losses'] as int,
-    draws: row['draws'] as int,
-    backgammon: BackgammonStats.fromRow(row),
-    swu: SwuStats.fromRow(row),
-  );
+  /// A profile selected with its `ratings(*)`. A game with no rating row
+  /// yet reads as the starting standing.
+  factory Player.fromRow(Map<String, dynamic> row) {
+    final ratings = {
+      for (final r
+          in (row['ratings'] as List? ?? const []).cast<Map<String, dynamic>>())
+        r['match_type'] as String: r,
+    };
+    final chess = ratings['chess'];
+    final backgammon = ratings['backgammon'];
+    final swu = ratings['swu'];
+    return Player(
+      id: row['id'] as String,
+      displayName: row['display_name'] as String,
+      rating: chess?['rating'] as int? ?? startingRating,
+      peakRating: chess?['peak_rating'] as int? ?? startingRating,
+      gamesPlayed: chess?['played'] as int? ?? 0,
+      wins: chess?['wins'] as int? ?? 0,
+      losses: chess?['losses'] as int? ?? 0,
+      draws: chess?['draws'] as int? ?? 0,
+      backgammon: backgammon == null
+          ? const BackgammonStats()
+          : BackgammonStats.fromRow(backgammon),
+      swu: swu == null ? const SwuStats() : SwuStats.fromRow(swu),
+    );
+  }
 
   final String id;
   final String displayName;
@@ -261,6 +275,11 @@ abstract class GameReport {
   };
 }
 
+/// The two sides of a `matches` or `match_requests` row. In chess player1
+/// has white; in the other games player1 reported the result.
+const player1 = 'player1';
+const player2 = 'player2';
+
 /// A player's display name: embedded by a `side:profiles!...` select on a
 /// request, or the `<side>_name` copy a confirmed result keeps so it still
 /// reads right after that member deleted their account.
@@ -272,6 +291,19 @@ String joinedName(Map<String, dynamic> row, String side) =>
 /// A nullable timestamp column as local time.
 DateTime? parseTime(String? value) =>
     value == null ? null : DateTime.parse(value).toLocal();
+
+/// A side's score in a result row: 1, 0 or 0.5 in chess, points in
+/// backgammon, games won in SWU.
+num sideScore(Map<String, dynamic> row, String side) =>
+    row['${side}_score'] as num;
+
+/// How a chess row ended, from white's (player1's) score.
+MatchResult _chessResult(Map<String, dynamic> row) =>
+    switch (sideScore(row, player1).compareTo(sideScore(row, player2))) {
+      > 0 => MatchResult.white,
+      < 0 => MatchResult.black,
+      _ => MatchResult.draw,
+    };
 
 /// A confirmed chess game, backgammon or SWU match, as a player's rating line
 /// sees it. Unrated ones change nothing, so their after equals their before.
@@ -301,17 +333,17 @@ class ChessMatch extends GameReport implements RatedGame {
 
   factory ChessMatch.fromRow(Map<String, dynamic> row) => ChessMatch(
     id: row['id'] as int,
-    whiteId: row['white_id'] as String,
-    blackId: row['black_id'] as String,
-    whiteName: joinedName(row, 'white'),
-    blackName: joinedName(row, 'black'),
-    result: MatchResult.values.byName(row['result'] as String),
+    whiteId: row['player1_id'] as String,
+    blackId: row['player2_id'] as String,
+    whiteName: joinedName(row, player1),
+    blackName: joinedName(row, player2),
+    result: _chessResult(row),
     clock: ClockSetting.fromRow(row),
     rated: row['rated'] as bool,
-    whiteRatingBefore: row['white_rating_before'] as int,
-    blackRatingBefore: row['black_rating_before'] as int,
-    whiteRatingDelta: row['white_rating_delta'] as int,
-    blackRatingDelta: row['black_rating_delta'] as int,
+    whiteRatingBefore: row['player1_rating_before'] as int,
+    blackRatingBefore: row['player2_rating_before'] as int,
+    whiteRatingDelta: row['player1_rating_delta'] as int,
+    blackRatingDelta: row['player2_rating_delta'] as int,
     playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
   );
 
@@ -358,11 +390,11 @@ class MatchRequest extends GameReport {
 
   factory MatchRequest.fromRow(Map<String, dynamic> row) => MatchRequest(
     id: row['id'] as int,
-    whiteId: row['white_id'] as String,
-    blackId: row['black_id'] as String,
-    whiteName: joinedName(row, 'white'),
-    blackName: joinedName(row, 'black'),
-    result: MatchResult.values.byName(row['result'] as String),
+    whiteId: row['player1_id'] as String,
+    blackId: row['player2_id'] as String,
+    whiteName: joinedName(row, player1),
+    blackName: joinedName(row, player2),
+    result: _chessResult(row),
     clock: ClockSetting.fromRow(row)!,
     rated: row['rated'] as bool,
     requestedBy: row['requested_by'] as String,
