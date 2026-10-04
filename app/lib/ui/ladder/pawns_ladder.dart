@@ -113,7 +113,8 @@ class PawnsLadder extends StatelessWidget {
 
 /// Makes a pawn a keyboard-reachable button: it takes Tab focus, Enter or
 /// Space opens the profile, and a ring in the design's accent shows where
-/// focus is. The tooltip names the player and rating on hover and long-press.
+/// focus is. The tooltip names the player and rating on hover, long-press and
+/// keyboard focus.
 class _PawnButton extends StatefulWidget {
   const _PawnButton({
     required this.label,
@@ -130,28 +131,62 @@ class _PawnButton extends StatefulWidget {
 }
 
 class _PawnButtonState extends State<_PawnButton> {
+  /// The pawn whose tooltip keyboard focus opened. Focus moving between pawns
+  /// notifies both in no fixed order, so only this one may close it.
+  static _PawnButtonState? _tooltipOwner;
+
+  final _tooltip = GlobalKey<TooltipState>();
+
   /// True only for keyboard focus, so a mouse click leaves no ring behind.
   bool _ring = false;
+
+  /// Material tooltips open on hover and long-press only, so a keyboard user
+  /// would see the ring but never the rating without this.
+  void _onHighlight(bool shown) {
+    setState(() => _ring = shown);
+    if (shown) {
+      Tooltip.dismissAllToolTips();
+      _tooltip.currentState?.ensureTooltipVisible();
+      _tooltipOwner = this;
+    } else if (_tooltipOwner == this) {
+      Tooltip.dismissAllToolTips();
+      _tooltipOwner = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_tooltipOwner == this) _tooltipOwner = null;
+    super.dispose();
+  }
+
+  void _open() => widget.onOpen();
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     return Tooltip(
+      key: _tooltip,
       message: widget.label,
       child: FocusableActionDetector(
         mouseCursor: SystemMouseCursors.click,
-        onShowFocusHighlight: (v) => setState(() => _ring = v),
+        onShowFocusHighlight: _onHighlight,
+        // The web build maps Enter to ButtonActivateIntent and Space to
+        // ActivateIntent; other platforms map both to ActivateIntent.
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              widget.onOpen();
-              return null;
-            },
+            onInvoke: (_) => _open(),
+          ),
+          ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+            onInvoke: (_) => _open(),
           ),
         },
         child: GestureDetector(
-          onTap: widget.onOpen,
+          onTap: _open,
+          // Foreground and padded, so the name label (accent on your own
+          // pawn) neither paints over the ring nor blends into it.
           child: DecoratedBox(
+            position: DecorationPosition.foreground,
             decoration: BoxDecoration(
               border: Border.all(
                 color: _ring ? d.accent : Colors.transparent,
@@ -159,7 +194,10 @@ class _PawnButtonState extends State<_PawnButton> {
               ),
               borderRadius: d.borderRadius,
             ),
-            child: widget.child,
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: widget.child,
+            ),
           ),
         ),
       ),

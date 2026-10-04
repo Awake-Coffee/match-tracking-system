@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../../design/design_scope.dart';
@@ -10,7 +11,7 @@ import '../../design/design_spec.dart';
 /// end marker labelled with the current rating, and a crosshair tooltip on
 /// hover or drag. It is also a keyboard control: once focused, left and right
 /// arrows step the active point, Home and End jump to the first and last, and
-/// the point is announced to screen readers. Single series, so the section
+/// each step is announced to screen readers. Single series, so the section
 /// title names it (no legend); the recent games list below is the table view.
 class RatingChart extends StatefulWidget {
   const RatingChart({super.key, required this.points, required this.describe});
@@ -25,12 +26,28 @@ class RatingChart extends StatefulWidget {
   State<RatingChart> createState() => _RatingChartState();
 }
 
+/// A keyboard step through the chart's points.
+enum _Move { back, forward, first, last }
+
+class _MoveIntent extends Intent {
+  const _MoveIntent(this.move);
+  final _Move move;
+}
+
 class _RatingChartState extends State<RatingChart> {
   int? _active;
   final _focus = FocusNode(debugLabel: 'Rating chart');
 
-  /// Keyboard focus is showing, so draw the ring.
+  /// Keyboard focus is showing, so draw the ring. Driven by the focus
+  /// highlight, so it follows switches between keyboard and pointer.
   bool _ring = false;
+
+  static const _keys = <ShortcutActivator, Intent>{
+    SingleActivator(LogicalKeyboardKey.arrowLeft): _MoveIntent(_Move.back),
+    SingleActivator(LogicalKeyboardKey.arrowRight): _MoveIntent(_Move.forward),
+    SingleActivator(LogicalKeyboardKey.home): _MoveIntent(_Move.first),
+    SingleActivator(LogicalKeyboardKey.end): _MoveIntent(_Move.last),
+  };
 
   @override
   void dispose() {
@@ -47,38 +64,34 @@ class _RatingChartState extends State<RatingChart> {
   }
 
   /// Pointer left or lifted. While the chart has keyboard focus the point
-  /// stays, so the tooltip and announcement don't vanish under the user.
+  /// stays, so the tooltip doesn't vanish under the user.
   void _clear() => setState(() => _active = _focus.hasFocus ? _active : null);
 
   void _onFocusChange(bool focused) => setState(() {
     // Start on the latest rating, the number the chart is labelled with.
-    if (focused) _active ??= widget.points.length - 1;
-    if (!focused) _active = null;
-    _ring =
-        focused &&
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    _active = focused ? _active ?? widget.points.length - 1 : null;
   });
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent) return KeyEventResult.ignored;
+  void _onMove(_MoveIntent intent) {
     final last = widget.points.length - 1;
-    final key = event.logicalKey;
-    final from = _active ?? last;
-    final int to;
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      to = from - 1;
-    } else if (key == LogicalKeyboardKey.arrowRight) {
-      to = from + 1;
-    } else if (key == LogicalKeyboardKey.home) {
-      to = 0;
-    } else if (key == LogicalKeyboardKey.end) {
-      to = last;
-    } else {
-      return KeyEventResult.ignored;
-    }
-    setState(() => _active = to.clamp(0, last));
-    return KeyEventResult.handled;
+    final from = (_active ?? last).clamp(0, last);
+    final to = switch (intent.move) {
+      _Move.back => from - 1,
+      _Move.forward => from + 1,
+      _Move.first => 0,
+      _Move.last => last,
+    }.clamp(0, last);
+    setState(() => _active = to);
+    // Spoken explicitly: the web engine's live regions only speak when the
+    // label changes, and the label here is the fixed summary.
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      _spoken(to),
+      Directionality.of(context),
+    );
   }
+
+  String _spoken(int index) => widget.describe(index).replaceAll('\n', ', ');
 
   @override
   Widget build(BuildContext context) {
@@ -90,19 +103,29 @@ class _RatingChartState extends State<RatingChart> {
       label:
           'Rating over ${points.length - 1} games, from ${points.first} '
           'to ${points.last}, peak ${points.reduce(math.max)}',
-      hint: 'Use left and right arrow keys to move between games',
-      // The active point is the value and a live region, so each arrow press
-      // is announced without moving the screen reader's cursor.
-      value: active == null
-          ? null
-          : widget.describe(active).replaceAll('\n', ', '),
-      liveRegion: active != null,
+      // Only keyboard users have arrow keys; touch screen readers skip it.
+      hint:
+          FocusManager.instance.highlightMode == FocusHighlightMode.traditional
+          ? 'Arrow keys, Home and End move between games'
+          : null,
+      // The active point is the value, read when the chart takes focus; each
+      // step after that is announced by _onMove.
+      value: active == null ? null : _spoken(active),
       focusable: true,
       focused: _focus.hasFocus,
-      child: Focus(
+      child: FocusableActionDetector(
         focusNode: _focus,
-        onKeyEvent: _onKey,
+        shortcuts: _keys,
+        actions: {
+          _MoveIntent: CallbackAction<_MoveIntent>(
+            onInvoke: (intent) {
+              _onMove(intent);
+              return null;
+            },
+          ),
+        },
         onFocusChange: _onFocusChange,
+        onShowFocusHighlight: (v) => setState(() => _ring = v),
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border.all(
