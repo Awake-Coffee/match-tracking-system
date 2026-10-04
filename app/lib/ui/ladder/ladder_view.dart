@@ -47,6 +47,18 @@ class LadderData {
     final place = ranked.indexWhere((p) => p.id == me.id) + 1;
     return 'You\'re ${ordinal(place)} of ${ranked.length} with $rating.';
   }
+
+  /// "10 to pass Irina": the points that lift [meId] past the ranked member
+  /// directly above, or null for first place, a member who has not played and
+  /// a signed-out viewer. One more than the gap, because a tie does not pass.
+  String? get chase {
+    final ranked = this.ranked;
+    final i = ranked.indexWhere((p) => p.id == meId);
+    if (i < 1) return null;
+    final above = ranked[i - 1];
+    final points = game.ratingOf(above) - game.ratingOf(ranked[i]) + 1;
+    return '$points to pass ${above.displayName}';
+  }
 }
 
 String ordinal(int n) {
