@@ -4,6 +4,7 @@ import 'package:awake_ladder/domain/models.dart';
 import 'package:awake_ladder/ui/screens/history_screen.dart';
 import 'package:awake_ladder/ui/widgets/match_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +17,29 @@ void _tall(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 }
+
+/// A club sentence such as "Ana beat Bogdan". Linked names are inline
+/// widgets, so the paragraph holds a placeholder where each sits: put the
+/// names back, in order, before comparing.
+Finder _sentence(String text) => find.byElementPredicate((e) {
+  final widget = e.widget;
+  if (widget is! RichText) return false;
+  final names = <String>[];
+  void collect(Element el) => el.widget is Text
+      ? names.add((el.widget as Text).data!)
+      : el.visitChildren(collect);
+  e.visitChildren(collect);
+  final placeholder = String.fromCharCode(PlaceholderSpan.placeholderCodeUnit);
+  final parts = widget.text.toPlainText().split(placeholder);
+  if (parts.length != names.length + 1) return false;
+  final plain = StringBuffer(parts.first);
+  for (final (i, name) in names.indexed) {
+    plain
+      ..write(name)
+      ..write(parts[i + 1]);
+  }
+  return plain.toString() == text;
+});
 
 Future<String> _idOf(DemoLadderRepository repo, String name) async =>
     (await repo.ladder()).firstWhere((p) => p.displayName == name).id;
@@ -98,10 +122,12 @@ Future<DemoLadderRepository> _anaPagesAndCleo() async {
   return repo;
 }
 
+/// Picks [name] in the Player menu. The menu entry, not a linked name in
+/// the history behind it.
 Future<void> _pick(WidgetTester tester, String name) async {
   await tester.tap(find.byType(DropdownMenu<String>));
   await tester.pumpAndSettle();
-  await tester.tap(find.text(name).last);
+  await tester.tap(find.widgetWithText(MenuItemButton, name).last);
   await tester.pumpAndSettle();
 }
 
@@ -151,7 +177,7 @@ void main() {
     final repo = await anaAndBogdan();
     await _openHistory(tester, repo);
 
-    final sentence = find.text('Ana beat Bogdan', findRichText: true);
+    final sentence = _sentence('Ana beat Bogdan');
     expect(sentence, findsOneWidget);
     await tester.tapOnText(find.textRange.ofSubstring('Bogdan'));
     await tester.pumpAndSettle();
@@ -174,8 +200,15 @@ void main() {
 
     // The club history: Ana is plain bold, Bogdan still a link.
     await _openHistory(tester, repo);
-    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
-    expect(_nameSpan(tester, 'Ana').recognizer, isNull);
+    final sentence = _sentence('Ana beat Bogdan');
+    expect(sentence, findsOneWidget);
+    expect(
+      find.descendant(
+        of: sentence,
+        matching: find.byType(FocusableActionDetector),
+      ),
+      findsOneWidget,
+    );
     expect(_nameSpan(tester, 'Ana').style!.decoration, isNot(underline));
     expect(_nameSpan(tester, 'Bogdan').style!.decoration, underline);
 
@@ -187,6 +220,50 @@ void main() {
     final tile = find.ancestor(of: row, matching: find.byType(InkWell)).first;
     expect(tester.widget<InkWell>(tile).onTap, isNull);
     expect(_nameSpan(tester, 'Ana').style!.decoration, isNot(underline));
+  });
+
+  testWidgets('Tab reaches a name in the club history and Enter opens it', (
+    tester,
+  ) async {
+    _tall(tester);
+    final semantics = tester.ensureSemantics();
+    final repo = await anaAndBogdan();
+    await _openHistory(tester, repo);
+
+    final bogdan = find
+        .descendant(
+          of: _sentence('Ana beat Bogdan'),
+          matching: find.byType(FocusableActionDetector),
+        )
+        .last;
+    expect(
+      tester.getSemantics(bogdan),
+      isSemantics(label: 'Bogdan', isLink: true, isFocusable: true),
+    );
+    bool onBogdan() {
+      final focus = FocusManager.instance.primaryFocus?.context;
+      return focus != null &&
+          find
+              .descendant(
+                of: bogdan,
+                matching: find.byElementPredicate((e) => e == focus),
+              )
+              .evaluate()
+              .isNotEmpty;
+    }
+
+    // Tab until focus reaches the name, however many controls precede it.
+    for (var i = 0; i < 30 && !onBogdan(); i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(onBogdan(), isTrue, reason: 'Tab never reached the name');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('Bogdan'), findsWidgets);
+    semantics.dispose();
   });
 
   testWidgets('a name in the backgammon history opens that player', (
@@ -232,18 +309,12 @@ void main() {
     await _openHistory(tester, repo);
 
     expect(find.byType(MatchTile), findsNWidgets(2));
-    await tester.tap(find.byType(DropdownMenu<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cleo').last);
-    await tester.pumpAndSettle();
+    await _pick(tester, 'Cleo');
 
     expect(find.byType(MatchTile), findsOneWidget);
-    expect(find.text('Bogdan beat Cleo', findRichText: true), findsOneWidget);
+    expect(_sentence('Bogdan beat Cleo'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownMenu<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Everyone').last);
-    await tester.pumpAndSettle();
+    await _pick(tester, 'Everyone');
     expect(find.byType(MatchTile), findsNWidgets(2));
   });
 
@@ -258,10 +329,7 @@ void main() {
     await repo.signIn(email: anaEmail, password: 'x');
     await _openHistory(tester, repo);
 
-    await tester.tap(find.byType(DropdownMenu<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cleo').last);
-    await tester.pumpAndSettle();
+    await _pick(tester, 'Cleo');
 
     expect(find.text('No games for this player yet.'), findsOneWidget);
     expect(find.text('Record the first game'), findsNothing);
@@ -276,12 +344,12 @@ void main() {
     await _openHistory(tester, repo);
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
-    expect(find.text('Ana beat Bogdan', findRichText: true), findsNothing);
+    expect(_sentence('Ana beat Bogdan'), findsNothing);
     await tester.tap(find.text('Load more'));
     await tester.pumpAndSettle();
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
-    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
+    expect(_sentence('Ana beat Bogdan'), findsOneWidget);
     expect(find.text('Load more'), findsNothing);
   });
 
@@ -305,8 +373,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
-    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
-    expect(find.text('Bogdan beat Cleo', findRichText: true), findsNothing);
+    expect(_sentence('Ana beat Bogdan'), findsOneWidget);
+    expect(_sentence('Bogdan beat Cleo'), findsNothing);
     expect(find.text('Load more'), findsNothing);
   });
 
@@ -323,7 +391,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
-    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
+    expect(_sentence('Ana beat Bogdan'), findsOneWidget);
   });
 
   testWidgets('a new filter starts again from its first page', (tester) async {
@@ -337,7 +405,7 @@ void main() {
     await _pick(tester, 'Ana');
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
-    expect(find.text('Bogdan beat Cleo', findRichText: true), findsNothing);
+    expect(_sentence('Bogdan beat Cleo'), findsNothing);
     expect(find.text('Load more'), findsOneWidget);
   });
 
