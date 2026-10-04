@@ -5,8 +5,10 @@ import 'data/ladder_repository.dart';
 import 'design/design_scope.dart';
 import 'ui/app_scope.dart';
 import 'ui/game.dart';
+import 'ui/navigation.dart';
 import 'ui/screens/history_screen.dart';
 import 'ui/screens/ladder_screen.dart';
+import 'ui/screens/not_found_screen.dart';
 import 'ui/screens/profile_screen.dart';
 import 'ui/screens/record_screen.dart';
 import 'ui/screens/reset_password_screen.dart';
@@ -28,16 +30,51 @@ class AwakeApp extends StatefulWidget {
   State<AwakeApp> createState() => _AwakeAppState();
 }
 
+typedef _Access = ({bool signedIn, bool recovering});
+
 class _AwakeAppState extends State<AwakeApp> {
   late final GoRouter _router = _buildRouter();
+
+  /// Whether the member was signed in at the last redirect, to tell signing
+  /// out from arriving signed out.
+  bool _wasSignedIn = false;
+
+  /// What the redirect decides by, as of the last change to the repository.
+  late _Access _access;
   final _themes = {for (final g in Game.values) g: g.design.toTheme()};
 
   LadderRepository get _repo => widget.repository;
 
+  _Access get _accessNow =>
+      (signedIn: _repo.isSignedIn, recovering: _repo.passwordRecoveryPending);
+
+  @override
+  void initState() {
+    super.initState();
+    _access = _accessNow;
+    _repo.addListener(_repositoryChanged);
+  }
+
+  /// Re-runs the redirect for the repository's news. Signing in or out
+  /// replaces the browser's current entry rather than adding one, so the
+  /// sign-in page doesn't sit behind the page it led to, where Back would
+  /// only bounce off it.
+  void _repositoryChanged() {
+    final access = _accessNow;
+    final context = _router.routerDelegate.navigatorKey.currentContext;
+    if (access == _access || context == null) {
+      _router.refresh();
+      return;
+    }
+    _access = access;
+    Router.neglect(context, _router.refresh);
+  }
+
   GoRouter _buildRouter() => GoRouter(
     initialLocation: widget.initialLocation,
-    refreshListenable: _repo,
     redirect: (context, state) {
+      final wasSignedIn = _wasSignedIn;
+      _wasSignedIn = _repo.isSignedIn;
       final onSignIn = state.matchedLocation == '/sign-in';
       final onReset = state.matchedLocation == '/reset-password';
       // The recovery link signs the member in only to choose a new password.
@@ -47,10 +84,25 @@ class _AwakeAppState extends State<AwakeApp> {
       // Signed in without a pending recovery (a reload, or a restored tab,
       // forgets the flag): stay, since the member may not know their password.
       if (onReset) return _repo.isSignedIn ? null : '/sign-in';
-      if (!_repo.isSignedIn) return onSignIn ? null : '/sign-in';
-      if (onSignIn) return '/';
+      if (!_repo.isSignedIn) {
+        if (onSignIn) return null;
+        // A link opened signed out is where signing in leads. Signing out
+        // starts afresh rather than returning to the page it was done from.
+        if (wasSignedIn || state.uri.path == '/') return '/sign-in';
+        return Uri(
+          path: '/sign-in',
+          queryParameters: {'from': state.uri.toString()},
+        ).toString();
+      }
+      if (onSignIn) return returnPath(state.uri.queryParameters['from']) ?? '/';
       return null;
     },
+    // Unknown addresses match the catch-all route below; this is for what
+    // the router itself can't resolve, such as a redirect loop.
+    errorPageBuilder: (context, state) => NoTransitionPage(
+      key: state.pageKey,
+      child: const Scaffold(body: NotFoundScreen(game: Game.chess)),
+    ),
     routes: [
       GoRoute(
         path: '/sign-in',
@@ -79,7 +131,19 @@ class _AwakeAppState extends State<AwakeApp> {
             ),
           );
         },
-        routes: [for (final game in Game.values) ..._gameRoutes(game)],
+        routes: [
+          for (final game in Game.values) ..._gameRoutes(game),
+          // Last, so it only catches what no page matched. A page of its own
+          // rather than the router's error page, which would leave the
+          // address bar on the previous address.
+          GoRoute(
+            path: '/:unknown(.*)',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: NotFoundScreen(game: Game.at(state.uri.path)),
+            ),
+          ),
+        ],
       ),
     ],
   );
@@ -107,7 +171,10 @@ class _AwakeAppState extends State<AwakeApp> {
       path: game.path('history'),
       pageBuilder: (context, state) => NoTransitionPage(
         key: state.pageKey,
-        child: HistoryScreen(game: game),
+        child: HistoryScreen(
+          game: game,
+          playerId: state.uri.queryParameters['player'],
+        ),
       ),
     ),
     GoRoute(
@@ -119,17 +186,21 @@ class _AwakeAppState extends State<AwakeApp> {
     ),
     GoRoute(
       path: game.path('settings'),
-      builder: (context, state) => const SettingsScreen(),
+      pageBuilder: (context, state) =>
+          NoTransitionPage(key: state.pageKey, child: const SettingsScreen()),
     ),
     GoRoute(
       path: game.path('players/:id'),
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['id']!;
-        return ProfileScreen(
-          key: ValueKey((game, id)),
-          game: game,
-          playerId: id,
-          isMe: id == _repo.me?.id,
+        return NoTransitionPage(
+          key: state.pageKey,
+          child: ProfileScreen(
+            key: ValueKey((game, id)),
+            game: game,
+            playerId: id,
+            isMe: id == _repo.me?.id,
+          ),
         );
       },
     ),
@@ -137,6 +208,7 @@ class _AwakeAppState extends State<AwakeApp> {
 
   @override
   void dispose() {
+    _repo.removeListener(_repositoryChanged);
     _router.dispose();
     super.dispose();
   }

@@ -74,7 +74,7 @@ class LadderScreen extends StatelessWidget {
           now: DateTime.now(),
           onOpen: (p) => p.id == meId
               ? context.go(game.path('me'))
-              : context.push(game.path('players/${p.id}')),
+              : context.go(game.path('players/${p.id}')),
         );
         return ListView(
           children: [
