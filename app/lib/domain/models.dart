@@ -198,6 +198,7 @@ abstract class GameReport {
     required this.blackName,
     required this.result,
     required this.clock,
+    this.rated = true,
   });
 
   final String whiteId;
@@ -208,6 +209,9 @@ abstract class GameReport {
 
   /// Null for games recorded before time controls were tracked.
   final ClockSetting? clock;
+
+  /// False for a game that's kept in history but moves no rating.
+  final bool rated;
 
   bool involves(String playerId) => playerId == whiteId || playerId == blackId;
 
@@ -248,13 +252,15 @@ abstract class GameReport {
 String joinedName(Map<String, dynamic> row, String side) =>
     (row[side] as Map?)?['display_name'] as String? ?? '';
 
-/// A rated chess game, backgammon or SWU match, as a player's rating line sees it.
+/// A confirmed chess game, backgammon or SWU match, as a player's rating line
+/// sees it. Unrated ones change nothing, so their after equals their before.
 abstract interface class RatedGame {
+  bool get rated;
   int ratingBeforeFor(String playerId);
   int ratingAfterFor(String playerId);
 }
 
-/// A rated game.
+/// A confirmed game, rated unless [rated] is false.
 class ChessMatch extends GameReport implements RatedGame {
   const ChessMatch({
     required this.id,
@@ -264,6 +270,7 @@ class ChessMatch extends GameReport implements RatedGame {
     required super.blackName,
     required super.result,
     super.clock,
+    super.rated,
     required this.whiteRatingBefore,
     required this.blackRatingBefore,
     required this.whiteRatingDelta,
@@ -279,6 +286,7 @@ class ChessMatch extends GameReport implements RatedGame {
     blackName: joinedName(row, 'black'),
     result: MatchResult.values.byName(row['result'] as String),
     clock: ClockSetting.fromRow(row),
+    rated: row['rated'] as bool,
     whiteRatingBefore: row['white_rating_before'] as int,
     blackRatingBefore: row['black_rating_before'] as int,
     whiteRatingDelta: row['white_rating_delta'] as int,
@@ -315,6 +323,7 @@ class MatchRequest extends GameReport {
     required super.blackName,
     required super.result,
     required ClockSetting super.clock,
+    super.rated,
     required this.requestedBy,
     required this.createdAt,
   });
@@ -327,6 +336,7 @@ class MatchRequest extends GameReport {
     blackName: joinedName(row, 'black'),
     result: MatchResult.values.byName(row['result'] as String),
     clock: ClockSetting.fromRow(row)!,
+    rated: row['rated'] as bool,
     requestedBy: row['requested_by'] as String,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
   );

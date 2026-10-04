@@ -91,6 +91,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
   TimeControl? _timeControl;
   int? _customBaseMinutes;
   int? _customExtraSeconds;
+  bool _rated = true;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
@@ -202,8 +203,14 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             selected: {?outcome},
             onSelectionChanged: (s) => setState(() => _outcome = s.firstOrNull),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
+          RatedSwitch(
+            rated: _rated,
+            onChanged: (v) => setState(() => _rated = v),
+          ),
+          const SizedBox(height: 20),
           RatingPreview(
+            rated: _rated,
             emptyHint:
                 'Pick an opponent and a result to see how ratings change.',
             rows: preview == null
@@ -229,11 +236,13 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
                 : () => sendForConfirmation(
                     game: Game.chess,
                     opponentName: opponent.displayName,
+                    rated: _rated,
                     request: (repo) => repo.requestMatch(
                       opponentId: opponent.id,
                       myColor: _color,
                       myOutcome: outcome,
                       clock: clock,
+                      rated: _rated,
                     ),
                   ),
           ),

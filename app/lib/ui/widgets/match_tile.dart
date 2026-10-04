@@ -73,6 +73,7 @@ class MatchTile extends StatelessWidget {
         opponentName: m.opponentName(me),
         opponentPath: '/players/${m.opponentId(me)}',
         detail: fullDetail,
+        rated: m.rated,
         delta: m.deltaFor(me),
         ratingAfter: m.ratingAfterFor(me),
       );
@@ -86,6 +87,7 @@ class MatchTile extends StatelessWidget {
       verb: m.result == MatchResult.draw ? 'drew with' : 'beat',
       secondName: m.loserName ?? m.blackName,
       detail: fullDetail,
+      rated: m.rated,
       firstDelta: m.deltaFor(firstId),
       secondDelta: m.deltaFor(secondId),
     );
@@ -119,6 +121,7 @@ class BackgammonMatchTile extends StatelessWidget {
         opponentName: m.opponentName(me),
         opponentPath: '${Game.backgammon.path('players')}/${m.opponentId(me)}',
         detail: detail,
+        rated: m.rated,
         delta: m.deltaFor(me),
         ratingAfter: m.ratingAfterFor(me),
       );
@@ -128,6 +131,7 @@ class BackgammonMatchTile extends StatelessWidget {
       verb: 'beat',
       secondName: m.loserName,
       detail: detail,
+      rated: m.rated,
       firstDelta: m.winnerRatingDelta,
       secondDelta: m.loserRatingDelta,
     );
@@ -159,6 +163,7 @@ class SwuMatchTile extends StatelessWidget {
         opponentName: m.opponentName(me),
         opponentPath: Game.swu.path('players/${m.opponentId(me)}'),
         detail: detail,
+        rated: m.rated,
         delta: m.deltaFor(me),
         ratingAfter: m.ratingAfterFor(me),
       );
@@ -171,6 +176,7 @@ class SwuMatchTile extends StatelessWidget {
       verb: m.winnerId == null ? 'drew with' : 'beat',
       secondName: m.nameOf(secondId),
       detail: detail,
+      rated: m.rated,
       firstDelta: m.deltaFor(firstId),
       secondDelta: m.deltaFor(secondId),
     );
@@ -178,7 +184,8 @@ class SwuMatchTile extends StatelessWidget {
 }
 
 /// The row all tiles share: "Won against **Bo**" with your change and new
-/// rating, or "**Ana** beat **Bo**" with both changes.
+/// rating, or "**Ana** beat **Bo**" with both changes. An unrated result says
+/// so in place of the changes.
 class _ResultRow extends StatelessWidget {
   const _ResultRow.forPlayer({
     this.leading,
@@ -186,6 +193,7 @@ class _ResultRow extends StatelessWidget {
     required String opponentName,
     required String this.opponentPath,
     required this.detail,
+    required this.rated,
     required int delta,
     required int this.ratingAfter,
   }) : firstName = null,
@@ -199,6 +207,7 @@ class _ResultRow extends StatelessWidget {
     required this.verb,
     required this.secondName,
     required this.detail,
+    required this.rated,
     required this.firstDelta,
     required int this.secondDelta,
   }) : opponentPath = null,
@@ -211,6 +220,7 @@ class _ResultRow extends StatelessWidget {
   final String verb;
   final String secondName;
   final String detail;
+  final bool rated;
   final int firstDelta;
   final int? secondDelta;
   final int? ratingAfter;
@@ -238,15 +248,23 @@ class _ResultRow extends StatelessWidget {
     );
     final after = ratingAfter;
     final second = secondDelta;
-    final trailing = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: after != null
-          ? [
-              DeltaText(firstDelta, size: 16),
-              Text('$after', style: d.number(13, color: d.muted)),
-            ]
-          : [DeltaText(firstDelta, size: 15), DeltaText(second!, size: 15)],
-    );
+    final trailing = rated
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: after != null
+                ? [
+                    DeltaText(firstDelta, size: 16),
+                    Text('$after', style: d.number(13, color: d.muted)),
+                  ]
+                : [
+                    DeltaText(firstDelta, size: 15),
+                    DeltaText(second!, size: 15),
+                  ],
+          )
+        : Text(
+            'Unrated',
+            style: d.body(13, color: d.muted, weight: FontWeight.w600),
+          );
     final path = opponentPath;
 
     return InkWell(

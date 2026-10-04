@@ -22,6 +22,9 @@ screen moves between them.
   (win, draw or loss; the game score is shown but not weighted). Everyone
   starts at 1000.
   Full spec: [`specs/003-star-wars-unlimited/spec.md`](specs/003-star-wars-unlimited/spec.md).
+- **Unrated games**: switch "Rated" off when recording a friendly. It is
+  confirmed and kept in history but moves no rating or record.
+  Full spec: [`specs/004-unrated-games/spec.md`](specs/004-unrated-games/spec.md).
 
 ## Run locally
 

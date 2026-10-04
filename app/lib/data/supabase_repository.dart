@@ -217,8 +217,8 @@ class SupabaseLadderRepository extends LadderRepository {
     return request;
   });
 
-  /// Calls a game's respond RPC; returns the rated result, or null when the
-  /// request was dropped.
+  /// Calls a game's respond RPC; returns the confirmed result, or null when
+  /// the request was dropped.
   Future<T?> _respond<T>(
     String rpc,
     int requestId,
@@ -260,6 +260,7 @@ class SupabaseLadderRepository extends LadderRepository {
     required PieceColor myColor,
     required Outcome myOutcome,
     required ClockSetting clock,
+    bool rated = true,
   }) => _request('request_chess_match', {
     'p_opponent_id': opponentId,
     'p_my_color': myColor.name,
@@ -267,6 +268,7 @@ class SupabaseLadderRepository extends LadderRepository {
     'p_dgt_option': clock.preset.dgtOption,
     'p_custom_base_minutes': clock.customBaseMinutes,
     'p_custom_extra_seconds': clock.customExtraSeconds,
+    'p_rated': rated,
   }, _chessRequests);
 
   @override
@@ -299,11 +301,13 @@ class SupabaseLadderRepository extends LadderRepository {
     required int matchLength,
     required int myScore,
     required int opponentScore,
+    bool rated = true,
   }) => _request('request_backgammon_match', {
     'p_opponent_id': opponentId,
     'p_match_length': matchLength,
     'p_my_score': myScore,
     'p_opponent_score': opponentScore,
+    'p_rated': rated,
   }, _backgammonRequests);
 
   @override
@@ -338,10 +342,12 @@ class SupabaseLadderRepository extends LadderRepository {
     required String opponentId,
     required int myGames,
     required int opponentGames,
+    bool rated = true,
   }) => _request('request_swu_match', {
     'p_opponent_id': opponentId,
     'p_my_games': myGames,
     'p_opponent_games': opponentGames,
+    'p_rated': rated,
   }, _swuRequests);
 
   @override

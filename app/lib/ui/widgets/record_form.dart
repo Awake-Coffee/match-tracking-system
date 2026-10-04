@@ -17,6 +17,7 @@ mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
   Future<void> sendForConfirmation({
     required Game game,
     required String opponentName,
+    required bool rated,
     required Future<void> Function(LadderRepository repo) request,
   }) async {
     setState(() {
@@ -31,7 +32,10 @@ mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Sent to $opponentName. Ratings update once they confirm.',
+            rated
+                ? 'Sent to $opponentName. Ratings update once they confirm.'
+                : 'Sent to $opponentName. It goes in the history once they '
+                      'confirm.',
           ),
         ),
       );
@@ -95,19 +99,67 @@ class OpponentPicker extends StatelessWidget {
   }
 }
 
+/// Whether the result counts toward ratings. Off, it's a friendly: confirmed
+/// and kept in history, but no rating or record moves.
+class RatedSwitch extends StatelessWidget {
+  const RatedSwitch({super.key, required this.rated, required this.onChanged});
+
+  final bool rated;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    return MergeSemantics(
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Rated', style: d.body(15, weight: FontWeight.w700)),
+                Text(
+                  rated
+                      ? 'Counts toward both ratings.'
+                      : 'A friendly: kept in history, ratings stay put.',
+                  style: d.body(13, color: d.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch(value: rated, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
 /// How each player's rating moves, or [emptyHint] until the form says enough.
+/// An unrated result moves nothing, so it says that instead.
 class RatingPreview extends StatelessWidget {
-  const RatingPreview({super.key, required this.rows, required this.emptyHint});
+  const RatingPreview({
+    super.key,
+    required this.rows,
+    required this.emptyHint,
+    this.rated = true,
+  });
 
   final List<({String name, int before, int delta})>? rows;
   final String emptyHint;
+  final bool rated;
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final rows = this.rows;
     return SpecSurface(
-      child: rows == null
+      child: !rated
+          ? Text(
+              'Unrated: neither rating changes.',
+              style: d.body(15, color: d.muted),
+            )
+          : rows == null
           ? Text(emptyHint, style: d.body(15, color: d.muted))
           : Column(
               children: [

@@ -37,6 +37,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
   late String? _opponentId = widget.initialOpponentId;
   Outcome? _outcome;
   (int, int)? _score;
+  bool _rated = true;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
@@ -113,6 +114,11 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                       setState(() => _score = s.firstOrNull),
                 ),
               ],
+              const SizedBox(height: 24),
+              RatedSwitch(
+                rated: _rated,
+                onChanged: (v) => setState(() => _rated = v),
+              ),
             ],
           ),
         ),
@@ -128,6 +134,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     RatingPreview(
+                      rated: _rated,
                       emptyHint:
                           'Pick an opponent, the result and the games to see '
                           'how ratings change.',
@@ -154,10 +161,12 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                           : () => sendForConfirmation(
                               game: Game.swu,
                               opponentName: opponent.displayName,
+                              rated: _rated,
                               request: (repo) => repo.requestSwuMatch(
                                 opponentId: opponent.id,
                                 myGames: score.$1,
                                 opponentGames: score.$2,
+                                rated: _rated,
                               ),
                             ),
                     ),

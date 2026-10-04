@@ -52,20 +52,22 @@ abstract class LadderRepository extends ChangeNotifier {
   Future<List<ChessMatch>> matches({String? playerId, int limit = 50});
 
   /// Reports a game the signed-in member played. It is rated only once the
-  /// opponent accepts it with [respondToMatchRequest].
+  /// opponent accepts it with [respondToMatchRequest], and never when
+  /// [rated] is false.
   Future<MatchRequest> requestMatch({
     required String opponentId,
     required PieceColor myColor,
     required Outcome myOutcome,
     required ClockSetting clock,
+    bool rated = true,
   });
 
   /// Games involving the signed-in member that wait for confirmation,
   /// newest first.
   Future<List<MatchRequest>> matchRequests();
 
-  /// The opponent accepts ([accept]) and gets the rated game back, or either
-  /// player drops the request and gets null.
+  /// The opponent accepts ([accept]) and gets the confirmed game back, or
+  /// either player drops the request and gets null.
   Future<ChessMatch?> respondToMatchRequest(
     int requestId, {
     required bool accept,
@@ -81,20 +83,22 @@ abstract class LadderRepository extends ChangeNotifier {
   });
 
   /// Reports a match the signed-in member played. It is rated only once the
-  /// opponent accepts it with [respondToBackgammonMatchRequest].
+  /// opponent accepts it with [respondToBackgammonMatchRequest], and never
+  /// when [rated] is false.
   Future<BackgammonMatchRequest> requestBackgammonMatch({
     required String opponentId,
     required int matchLength,
     required int myScore,
     required int opponentScore,
+    bool rated = true,
   });
 
   /// Matches involving the signed-in member that wait for confirmation,
   /// newest first.
   Future<List<BackgammonMatchRequest>> backgammonMatchRequests();
 
-  /// The opponent accepts ([accept]) and gets the rated match back, or either
-  /// player drops the request and gets null.
+  /// The opponent accepts ([accept]) and gets the confirmed match back, or
+  /// either player drops the request and gets null.
   Future<BackgammonMatch?> respondToBackgammonMatchRequest(
     int requestId, {
     required bool accept,
@@ -107,19 +111,21 @@ abstract class LadderRepository extends ChangeNotifier {
   Future<List<SwuMatch>> swuMatches({String? playerId, int limit = 50});
 
   /// Reports a best of three the signed-in member played. It is rated only
-  /// once the opponent accepts it with [respondToSwuMatchRequest].
+  /// once the opponent accepts it with [respondToSwuMatchRequest], and never
+  /// when [rated] is false.
   Future<SwuMatchRequest> requestSwuMatch({
     required String opponentId,
     required int myGames,
     required int opponentGames,
+    bool rated = true,
   });
 
   /// Matches involving the signed-in member that wait for confirmation,
   /// newest first.
   Future<List<SwuMatchRequest>> swuMatchRequests();
 
-  /// The opponent accepts ([accept]) and gets the rated match back, or either
-  /// player drops the request and gets null.
+  /// The opponent accepts ([accept]) and gets the confirmed match back, or
+  /// either player drops the request and gets null.
   Future<SwuMatch?> respondToSwuMatchRequest(
     int requestId, {
     required bool accept,

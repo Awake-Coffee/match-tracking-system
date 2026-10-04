@@ -7,12 +7,21 @@ import '../../domain/models.dart';
 import '../../domain/swu.dart';
 import 'surface.dart';
 
+/// What to tell a member who just confirmed [match].
+String _confirmedMessage(String noun, RatedGame match, String meId) {
+  if (!match.rated) return '$noun confirmed as unrated. Ratings stay put.';
+  final after = match.ratingAfterFor(meId);
+  final delta = after - match.ratingBeforeFor(meId);
+  return '$noun confirmed. You\'re now $after (${formatDelta(delta)}).';
+}
+
 /// A reported result involving the signed-in member that still waits for
 /// the opponent, in either game.
 class PendingResult {
   const PendingResult({
     required this.headline,
     required this.detail,
+    required this.rated,
     required this.incoming,
     required this.respond,
   });
@@ -34,13 +43,11 @@ class PendingResult {
           : 'Waiting for ${r.opponentName(meId)} to confirm',
       detail:
           'You had ${r.colorOf(meId).name}${incoming ? '' : ', $myResult'} · ${r.clock.label}',
+      rated: r.rated,
       incoming: incoming,
       respond: ({required accept}) async {
         final match = await repo.respondToMatchRequest(r.id, accept: accept);
-        return match == null
-            ? null
-            : 'Game confirmed. You\'re now ${match.ratingAfterFor(meId)} '
-                  '(${formatDelta(match.deltaFor(meId))}).';
+        return match == null ? null : _confirmedMessage('Game', match, meId);
       },
     );
   }
@@ -58,16 +65,14 @@ class PendingResult {
           ? '${r.opponentName(meId)} says $myResult'
           : 'Waiting for ${r.opponentName(meId)} to confirm',
       detail: 'Match to ${r.matchLength}${incoming ? '' : ', $myResult'}',
+      rated: r.rated,
       incoming: incoming,
       respond: ({required accept}) async {
         final match = await repo.respondToBackgammonMatchRequest(
           r.id,
           accept: accept,
         );
-        return match == null
-            ? null
-            : 'Match confirmed. You\'re now ${match.ratingAfterFor(meId)} '
-                  '(${formatDelta(match.deltaFor(meId))}).';
+        return match == null ? null : _confirmedMessage('Match', match, meId);
       },
     );
   }
@@ -90,19 +95,20 @@ class PendingResult {
       detail: incoming
           ? 'Best of three'
           : 'Best of three, $myResult ${r.scoreFor(meId)}',
+      rated: r.rated,
       incoming: incoming,
       respond: ({required accept}) async {
         final match = await repo.respondToSwuMatchRequest(r.id, accept: accept);
-        return match == null
-            ? null
-            : 'Match confirmed. You\'re now ${match.ratingAfterFor(meId)} '
-                  '(${formatDelta(match.deltaFor(meId))}).';
+        return match == null ? null : _confirmedMessage('Match', match, meId);
       },
     );
   }
 
   final String headline;
   final String detail;
+
+  /// False for a result that won't move ratings once confirmed.
+  final bool rated;
 
   /// Reported against the member, who confirms or declines it; otherwise the
   /// member reported it and can only withdraw it.
@@ -179,7 +185,10 @@ class _PendingResultCardState extends State<_PendingResultCard> {
         children: [
           Text(r.headline, style: d.body(16, weight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(r.detail, style: d.body(13, color: d.muted)),
+          Text(
+            r.rated ? r.detail : '${r.detail} · Unrated',
+            style: d.body(13, color: d.muted),
+          ),
           const SizedBox(height: 12),
           Wrap(
             alignment: WrapAlignment.end,

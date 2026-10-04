@@ -31,6 +31,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
   int _matchLength = 5;
   int _myScore = 0;
   int _opponentScore = 0;
+  bool _rated = true;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
@@ -110,8 +111,14 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
               ),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
+          RatedSwitch(
+            rated: _rated,
+            onChanged: (v) => setState(() => _rated = v),
+          ),
+          const SizedBox(height: 20),
           RatingPreview(
+            rated: _rated,
             emptyHint:
                 'Pick an opponent and the final score to see how ratings '
                 'change. The winner\'s score is the match length.',
@@ -138,11 +145,13 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
                 : () => sendForConfirmation(
                     game: Game.backgammon,
                     opponentName: opponent.displayName,
+                    rated: _rated,
                     request: (repo) => repo.requestBackgammonMatch(
                       opponentId: opponent.id,
                       matchLength: _matchLength,
                       myScore: _myScore,
                       opponentScore: _opponentScore,
+                      rated: _rated,
                     ),
                   ),
           ),

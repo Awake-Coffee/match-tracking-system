@@ -78,6 +78,7 @@ class DemoLadderRepository extends LadderRepository {
     required PieceColor myColor,
     required Outcome myOutcome,
     required ClockSetting clock,
+    required bool rated,
   }) {
     final (:whiteId, :blackId) = _sides(by, opponentId, myColor);
     final request = MatchRequest(
@@ -88,6 +89,7 @@ class DemoLadderRepository extends LadderRepository {
       blackName: _players[blackId]!.displayName,
       result: resultFor(myColor, myOutcome),
       clock: clock,
+      rated: rated,
       requestedBy: by,
       createdAt: DateTime.now(),
     );
@@ -101,6 +103,7 @@ class DemoLadderRepository extends LadderRepository {
     required PieceColor myColor,
     required Outcome myOutcome,
     ClockSetting? clock,
+    bool rated = true,
   }) {
     final (:whiteId, :blackId) = _sides(me, opponentId, myColor);
     final white = _players[whiteId]!;
@@ -111,25 +114,29 @@ class DemoLadderRepository extends LadderRepository {
       MatchResult.black => 0.0,
       MatchResult.draw => 0.5,
     };
-    final whiteDelta = fideRatingChange(white, black, whiteScore);
-    final blackDelta = fideRatingChange(black, white, 1 - whiteScore);
+    final whiteDelta = rated ? fideRatingChange(white, black, whiteScore) : 0;
+    final blackDelta = rated
+        ? fideRatingChange(black, white, 1 - whiteScore)
+        : 0;
 
-    _players[whiteId] = white.copyWith(
-      rating: white.rating + whiteDelta,
-      peakRating: math.max(white.peakRating, white.rating + whiteDelta),
-      gamesPlayed: white.gamesPlayed + 1,
-      wins: white.wins + (result == MatchResult.white ? 1 : 0),
-      losses: white.losses + (result == MatchResult.black ? 1 : 0),
-      draws: white.draws + (result == MatchResult.draw ? 1 : 0),
-    );
-    _players[blackId] = black.copyWith(
-      rating: black.rating + blackDelta,
-      peakRating: math.max(black.peakRating, black.rating + blackDelta),
-      gamesPlayed: black.gamesPlayed + 1,
-      wins: black.wins + (result == MatchResult.black ? 1 : 0),
-      losses: black.losses + (result == MatchResult.white ? 1 : 0),
-      draws: black.draws + (result == MatchResult.draw ? 1 : 0),
-    );
+    if (rated) {
+      _players[whiteId] = white.copyWith(
+        rating: white.rating + whiteDelta,
+        peakRating: math.max(white.peakRating, white.rating + whiteDelta),
+        gamesPlayed: white.gamesPlayed + 1,
+        wins: white.wins + (result == MatchResult.white ? 1 : 0),
+        losses: white.losses + (result == MatchResult.black ? 1 : 0),
+        draws: white.draws + (result == MatchResult.draw ? 1 : 0),
+      );
+      _players[blackId] = black.copyWith(
+        rating: black.rating + blackDelta,
+        peakRating: math.max(black.peakRating, black.rating + blackDelta),
+        gamesPlayed: black.gamesPlayed + 1,
+        wins: black.wins + (result == MatchResult.black ? 1 : 0),
+        losses: black.losses + (result == MatchResult.white ? 1 : 0),
+        draws: black.draws + (result == MatchResult.draw ? 1 : 0),
+      );
+    }
 
     final match = ChessMatch(
       id: _matches.length + 1,
@@ -139,6 +146,7 @@ class DemoLadderRepository extends LadderRepository {
       blackName: black.displayName,
       result: result,
       clock: clock,
+      rated: rated,
       whiteRatingBefore: white.rating,
       blackRatingBefore: black.rating,
       whiteRatingDelta: whiteDelta,
@@ -157,6 +165,7 @@ class DemoLadderRepository extends LadderRepository {
     blackName: _players[m.blackId]!.displayName,
     result: m.result,
     clock: m.clock,
+    rated: m.rated,
     whiteRatingBefore: m.whiteRatingBefore,
     blackRatingBefore: m.blackRatingBefore,
     whiteRatingDelta: m.whiteRatingDelta,
@@ -228,6 +237,7 @@ class DemoLadderRepository extends LadderRepository {
     required PieceColor myColor,
     required Outcome myOutcome,
     required ClockSetting clock,
+    bool rated = true,
   }) async {
     final me = _requireMe();
     if (opponentId == me.id) {
@@ -245,6 +255,7 @@ class DemoLadderRepository extends LadderRepository {
       myColor: myColor,
       myOutcome: myOutcome,
       clock: clock,
+      rated: rated,
     );
     _revision++;
     notifyListeners();
@@ -283,6 +294,7 @@ class DemoLadderRepository extends LadderRepository {
             myColor: request.colorOf(reporter),
             myOutcome: request.outcomeFor(reporter),
             clock: request.clock,
+            rated: request.rated,
           )
         : null;
     _revision++;
@@ -299,6 +311,7 @@ class DemoLadderRepository extends LadderRepository {
         loserName: _players[m.loserId]!.displayName,
         matchLength: m.matchLength,
         loserScore: m.loserScore,
+        rated: m.rated,
         winnerRatingBefore: m.winnerRatingBefore,
         loserRatingBefore: m.loserRatingBefore,
         winnerRatingDelta: m.winnerRatingDelta,
@@ -310,32 +323,39 @@ class DemoLadderRepository extends LadderRepository {
     final winner = _players[request.winnerId]!;
     final loser = _players[request.loserId]!;
     final length = request.matchLength;
-    final winnerDelta = fibsRatingChange(
-      winner.backgammon,
-      loser.backgammon,
-      won: true,
-      matchLength: length,
-    );
-    final loserDelta = fibsRatingChange(
-      loser.backgammon,
-      winner.backgammon,
-      won: false,
-      matchLength: length,
-    );
-    _players[winner.id] = winner.copyWith(
-      backgammon: winner.backgammon.afterMatch(
-        delta: winnerDelta,
-        won: true,
-        matchLength: length,
-      ),
-    );
-    _players[loser.id] = loser.copyWith(
-      backgammon: loser.backgammon.afterMatch(
-        delta: loserDelta,
-        won: false,
-        matchLength: length,
-      ),
-    );
+    final rated = request.rated;
+    final winnerDelta = rated
+        ? fibsRatingChange(
+            winner.backgammon,
+            loser.backgammon,
+            won: true,
+            matchLength: length,
+          )
+        : 0;
+    final loserDelta = rated
+        ? fibsRatingChange(
+            loser.backgammon,
+            winner.backgammon,
+            won: false,
+            matchLength: length,
+          )
+        : 0;
+    if (rated) {
+      _players[winner.id] = winner.copyWith(
+        backgammon: winner.backgammon.afterMatch(
+          delta: winnerDelta,
+          won: true,
+          matchLength: length,
+        ),
+      );
+      _players[loser.id] = loser.copyWith(
+        backgammon: loser.backgammon.afterMatch(
+          delta: loserDelta,
+          won: false,
+          matchLength: length,
+        ),
+      );
+    }
     final match = BackgammonMatch(
       id: _backgammonMatches.length + 1,
       winnerId: winner.id,
@@ -344,6 +364,7 @@ class DemoLadderRepository extends LadderRepository {
       loserName: loser.displayName,
       matchLength: length,
       loserScore: request.loserScore,
+      rated: rated,
       winnerRatingBefore: winner.backgammon.rating,
       loserRatingBefore: loser.backgammon.rating,
       winnerRatingDelta: winnerDelta,
@@ -374,6 +395,7 @@ class DemoLadderRepository extends LadderRepository {
     required int matchLength,
     required int myScore,
     required int opponentScore,
+    bool rated = true,
   }) async {
     final me = _requireMe();
     if (opponentId == me.id) {
@@ -398,6 +420,7 @@ class DemoLadderRepository extends LadderRepository {
       loserName: loser.displayName,
       matchLength: matchLength,
       loserScore: math.min(myScore, opponentScore),
+      rated: rated,
       requestedBy: me.id,
       createdAt: DateTime.now(),
     );
@@ -447,6 +470,7 @@ class DemoLadderRepository extends LadderRepository {
     respondentName: _players[m.respondentId]!.displayName,
     reporterGames: m.reporterGames,
     respondentGames: m.respondentGames,
+    rated: m.rated,
     reporterRatingBefore: m.reporterRatingBefore,
     respondentRatingBefore: m.respondentRatingBefore,
     reporterRatingDelta: m.reporterRatingDelta,
@@ -459,28 +483,31 @@ class DemoLadderRepository extends LadderRepository {
     final respondent = _players[request.respondentId]!;
     final reporterOutcome = request.outcomeFor(reporter.id);
     final respondentOutcome = request.outcomeFor(respondent.id);
-    final reporterDelta = fideRatingChange(
-      reporter.swu,
-      respondent.swu,
-      reporterOutcome.score,
-    );
-    final respondentDelta = fideRatingChange(
-      respondent.swu,
-      reporter.swu,
-      respondentOutcome.score,
-    );
-    _players[reporter.id] = reporter.copyWith(
-      swu: reporter.swu.afterMatch(
-        delta: reporterDelta,
-        outcome: reporterOutcome,
-      ),
-    );
-    _players[respondent.id] = respondent.copyWith(
-      swu: respondent.swu.afterMatch(
-        delta: respondentDelta,
-        outcome: respondentOutcome,
-      ),
-    );
+    final rated = request.rated;
+    final reporterDelta = rated
+        ? fideRatingChange(reporter.swu, respondent.swu, reporterOutcome.score)
+        : 0;
+    final respondentDelta = rated
+        ? fideRatingChange(
+            respondent.swu,
+            reporter.swu,
+            respondentOutcome.score,
+          )
+        : 0;
+    if (rated) {
+      _players[reporter.id] = reporter.copyWith(
+        swu: reporter.swu.afterMatch(
+          delta: reporterDelta,
+          outcome: reporterOutcome,
+        ),
+      );
+      _players[respondent.id] = respondent.copyWith(
+        swu: respondent.swu.afterMatch(
+          delta: respondentDelta,
+          outcome: respondentOutcome,
+        ),
+      );
+    }
     final match = SwuMatch(
       id: _swuMatches.length + 1,
       reporterId: reporter.id,
@@ -489,6 +516,7 @@ class DemoLadderRepository extends LadderRepository {
       respondentName: respondent.displayName,
       reporterGames: request.reporterGames,
       respondentGames: request.respondentGames,
+      rated: rated,
       reporterRatingBefore: reporter.swu.rating,
       respondentRatingBefore: respondent.swu.rating,
       reporterRatingDelta: reporterDelta,
@@ -516,6 +544,7 @@ class DemoLadderRepository extends LadderRepository {
     required String opponentId,
     required int myGames,
     required int opponentGames,
+    bool rated = true,
   }) async {
     final me = _requireMe();
     if (opponentId == me.id) {
@@ -534,6 +563,7 @@ class DemoLadderRepository extends LadderRepository {
       respondentName: opponent.displayName,
       reporterGames: myGames,
       respondentGames: opponentGames,
+      rated: rated,
       createdAt: DateTime.now(),
     );
     _swuRequests.add(request);
