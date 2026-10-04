@@ -24,7 +24,7 @@ class RouteLadder extends StatelessWidget {
     final d = context.design;
     final game = data.game;
     final start = game.startingRating;
-    final players = data.players;
+    final players = data.ranked;
     final ratings = [for (final p in players) game.ratingOf(p), start];
     final spread = ratings.reduce(math.max) - ratings.reduce(math.min);
     final pixelsPerPoint = math.min(3.0, _routeBudget / math.max(1, spread));
@@ -84,6 +84,10 @@ class RouteLadder extends StatelessWidget {
             startLine: start,
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: UnplayedGroup(data: data),
+        ),
       ],
     );
   }
@@ -91,10 +95,11 @@ class RouteLadder extends StatelessWidget {
   /// "10 to pass Irina" for a ranked member below first place.
   String? _chase() {
     final game = data.game;
-    final i = data.players.indexWhere((p) => p.id == data.meId);
-    if (i < 1 || game.playedOf(data.players[i]) == 0) return null;
-    final above = data.players[i - 1];
-    final points = game.ratingOf(above) - game.ratingOf(data.players[i]) + 1;
+    final ranked = data.ranked;
+    final i = ranked.indexWhere((p) => p.id == data.meId);
+    if (i < 1) return null;
+    final above = ranked[i - 1];
+    final points = game.ratingOf(above) - game.ratingOf(ranked[i]) + 1;
     return '$points to pass ${above.displayName}';
   }
 }

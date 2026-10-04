@@ -9,7 +9,8 @@ import '../../domain/models.dart';
 import 'ladder_view.dart';
 
 /// Roast pawns: the top eight as one rank of pawns, each filled with coffee up
-/// to its rating; everyone is listed below on alternating board squares.
+/// to its rating; everyone who has played is listed below on alternating board
+/// squares, and those who have not follow unranked.
 class PawnsLadder extends StatelessWidget {
   const PawnsLadder({super.key, required this.data});
 
@@ -20,7 +21,7 @@ class PawnsLadder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final players = data.players;
+    final players = data.ranked;
     // Fill is relative to the furthest anyone has drifted from the start, so
     // pawns stay readable whether the ladder spans 50 points or 500.
     final maxDrift = players.fold(
@@ -86,6 +87,7 @@ class PawnsLadder extends StatelessWidget {
               rank: i + 1,
               child: _Row(player: p, rank: i + 1, isMe: p.id == data.meId),
             ),
+          UnplayedGroup(data: data),
         ],
       ),
     );

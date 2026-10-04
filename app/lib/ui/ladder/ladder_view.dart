@@ -16,7 +16,7 @@ class LadderData {
 
   final Game game;
 
-  /// Sorted, highest rating in [game] first.
+  /// Every member, sorted with the highest rating in [game] first.
   final List<Player> players;
   final String? meId;
   final void Function(Player) onOpen;
@@ -24,15 +24,28 @@ class LadderData {
 
   int get gamesLogged => players.fold(0, (sum, p) => sum + p.gamesPlayed) ~/ 2;
 
-  /// "You're 3rd of 8 with 1016." or null when signed out.
+  /// Members who have played [game], best first. Only they get a rank, a
+  /// pawn, a point or a stop on the route.
+  List<Player> get ranked => game.rankedIn(players);
+
+  /// Members with no results in [game] yet, listed apart and unranked.
+  List<Player> get unplayed => [
+    for (final p in players)
+      if (game.playedOf(p) == 0) p,
+  ];
+
+  /// "You're 3rd of 8 with 1016." or null when signed out. The 8 counts
+  /// ranked members only.
   String? get summary {
-    final i = players.indexWhere((p) => p.id == meId);
-    if (i < 0) return null;
-    final rating = game.ratingOf(players[i]);
-    if (game.playedOf(players[i]) == 0) {
+    final me = players.where((p) => p.id == meId).firstOrNull;
+    if (me == null) return null;
+    final rating = game.ratingOf(me);
+    if (game.playedOf(me) == 0) {
       return 'You start at $rating. Record a ${game.resultNoun} to climb.';
     }
-    return 'You\'re ${ordinal(i + 1)} of ${players.length} with $rating.';
+    final ranked = this.ranked;
+    final place = ranked.indexWhere((p) => p.id == me.id) + 1;
+    return 'You\'re ${ordinal(place)} of ${ranked.length} with $rating.';
   }
 }
 
@@ -48,6 +61,60 @@ String ordinal(int n) {
 }
 
 String record(Player p) => '${p.wins}-${p.losses}-${p.draws}';
+
+/// The members who have not played yet, below the ranked ladder: muted, with
+/// no rank number, still opening their profile. Empty when everyone has played.
+class UnplayedGroup extends StatelessWidget {
+  const UnplayedGroup({super.key, required this.data});
+
+  final LadderData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final unplayed = data.unplayed;
+    if (unplayed.isEmpty) return const SizedBox.shrink();
+    final d = context.design;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 20, bottom: 4),
+          child: Text('Not yet played', style: d.body(13, color: d.muted)),
+        ),
+        for (final p in unplayed)
+          LadderRowTap(
+            player: p,
+            data: data,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: p.id == data.meId ? d.highlight : null,
+                border: Border(bottom: BorderSide(color: d.surface)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      p.id == data.meId
+                          ? '${p.displayName} (you)'
+                          : p.displayName,
+                      overflow: TextOverflow.ellipsis,
+                      style: d.body(15, color: d.muted),
+                    ),
+                  ),
+                  Text(
+                    '${data.game.ratingOf(p)}',
+                    style: d.number(16, color: d.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 /// Tap target wrapper shared by ladder rows: the whole row opens the profile
 /// and gets a visible focus highlight for keyboard users.
