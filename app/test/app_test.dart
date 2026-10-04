@@ -1,5 +1,6 @@
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
+import 'package:awake_ladder/data/ladder_repository.dart';
 import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:awake_ladder/domain/swu.dart';
@@ -91,12 +92,33 @@ void main() {
     expect(colours, isNot(contains(loss)));
   });
 
+  testWidgets('resend waits out the sign-up email\'s rate limit', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()..requireEmailConfirmation = true;
+    await signUpAs(tester, repo, 'cleo@example.com');
+
+    final waiting = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'You can resend in a minute'),
+    );
+    expect(waiting.onPressed, isNull);
+    expect(find.widgetWithText(TextButton, 'Resend email'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 61));
+    final ready = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Resend email'),
+    );
+    expect(ready.onPressed, isNotNull);
+  });
+
   testWidgets('resending the confirmation acknowledges, then waits', (
     tester,
   ) async {
     _phone(tester);
     final repo = DemoLadderRepository()..requireEmailConfirmation = true;
     await signUpAs(tester, repo, ' Cleo@Example.com ');
+    await tester.pump(const Duration(seconds: 61));
 
     await tester.tap(find.widgetWithText(TextButton, 'Resend email'));
     await tester.pump();
@@ -107,11 +129,35 @@ void main() {
     );
     expect(sent.onPressed, isNull);
 
-    await tester.pump(const Duration(seconds: 31));
+    await tester.pump(const Duration(seconds: 61));
     final again = tester.widget<TextButton>(
       find.widgetWithText(TextButton, 'Resend email'),
     );
     expect(again.onPressed, isNotNull);
+  });
+
+  testWidgets('a failed resend is an error and can be retried', (tester) async {
+    _phone(tester);
+    final repo = DemoLadderRepository()
+      ..requireEmailConfirmation = true
+      ..resendError = const LadderException(
+        'Give it a minute, then try again.',
+      );
+    await signUpAs(tester, repo, 'cleo@example.com');
+    await tester.pump(const Duration(seconds: 61));
+
+    await tester.tap(find.widgetWithText(TextButton, 'Resend email'));
+    await tester.pump();
+    await tester.pump();
+    final error = find.text('Give it a minute, then try again.');
+    expect(error, findsOneWidget);
+    final loss = tester.element(error).design.loss;
+    expect(tester.widget<Text>(error).style?.color, loss);
+    expect(find.text('Sent again'), findsNothing);
+    final retry = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Resend email'),
+    );
+    expect(retry.onPressed, isNotNull);
   });
 
   testWidgets('back to sign in keeps the email and lets them sign in', (

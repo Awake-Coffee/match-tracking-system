@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
@@ -51,6 +52,9 @@ class _SignInScreenState extends State<SignInScreen> {
           displayName: _name.text,
         );
         if (result == SignUpResult.confirmationSent && mounted) {
+          // The form is about to go; tell the browser it was submitted so it
+          // offers to save the new password.
+          TextInput.finishAutofillContext();
           setState(() => _confirming = _email.text.trim());
         }
       } else {
@@ -229,13 +233,35 @@ class _ConfirmationPanel extends StatefulWidget {
 }
 
 class _ConfirmationPanelState extends State<_ConfirmationPanel> {
-  /// Keeps "Resend email" from being hammered; the email service rate-limits.
-  static const _cooldown = Duration(seconds: 30);
+  /// Supabase's default gap between auth emails to one address; the sign-up
+  /// email counts, so the panel starts out waiting too.
+  static const _cooldown = Duration(seconds: 60);
 
   Timer? _timer;
+  bool _waiting = false;
   bool _sending = false;
   bool _sentAgain = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _wait();
+  }
+
+  /// Disables "Resend email" until the email service will take another.
+  void _wait() {
+    _waiting = true;
+    _timer?.cancel();
+    _timer = Timer(_cooldown, () {
+      if (mounted) {
+        setState(() {
+          _waiting = false;
+          _sentAgain = false;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -251,9 +277,9 @@ class _ConfirmationPanelState extends State<_ConfirmationPanel> {
     try {
       await context.repo.resendSignUpConfirmation(widget.email);
       if (!mounted) return;
-      setState(() => _sentAgain = true);
-      _timer = Timer(_cooldown, () {
-        if (mounted) setState(() => _sentAgain = false);
+      setState(() {
+        _sentAgain = true;
+        _wait();
       });
     } on LadderException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -283,7 +309,11 @@ class _ConfirmationPanelState extends State<_ConfirmationPanel> {
                   Icon(Icons.mark_email_read_outlined, color: d.accent),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text('Check your inbox', style: d.display(24)),
+                    // Replaces the focused form, so announce it to screen readers.
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text('Check your inbox', style: d.display(24)),
+                    ),
                   ),
                 ],
               ),
@@ -317,12 +347,14 @@ class _ConfirmationPanelState extends State<_ConfirmationPanel> {
         ),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: _sending || _sentAgain ? null : _resend,
+          onPressed: _sending || _waiting ? null : _resend,
           child: Text(
             _sending
                 ? 'Sending…'
                 : _sentAgain
                 ? 'Sent again'
+                : _waiting
+                ? 'You can resend in a minute'
                 : 'Resend email',
           ),
         ),

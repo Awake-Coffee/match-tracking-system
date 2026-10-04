@@ -42,6 +42,9 @@ class DemoLadderRepository extends LadderRepository {
   /// Addresses [resendSignUpConfirmation] was asked to email, oldest first.
   final List<String> resentConfirmations = [];
 
+  /// When set, [resendSignUpConfirmation] throws it, as a refused send would.
+  LadderException? resendError;
+
   @override
   String? get modeNote =>
       'Demo mode: no Supabase project is connected. Any email and password '
@@ -226,6 +229,8 @@ class DemoLadderRepository extends LadderRepository {
 
   @override
   Future<void> resendSignUpConfirmation(String email) async {
+    final error = resendError;
+    if (error != null) throw error;
     resentConfirmations.add(email.trim().toLowerCase());
   }
 

@@ -205,13 +205,22 @@ class SupabaseLadderRepository extends LadderRepository {
   String? get _confirmationRedirect => kIsWeb ? '${Uri.base.origin}/' : null;
 
   @override
-  Future<void> resendSignUpConfirmation(String email) => _guard(
-    () => _client.auth.resend(
-      type: OtpType.signup,
-      email: email.trim(),
-      emailRedirectTo: _confirmationRedirect,
-    ),
-  );
+  Future<void> resendSignUpConfirmation(String email) => _guard(() async {
+    try {
+      await _client.auth.resend(
+        type: OtpType.signup,
+        email: email.trim(),
+        emailRedirectTo: _confirmationRedirect,
+      );
+    } on AuthException catch (e) {
+      // The sign-up email counts too, so an early resend is refused; the raw
+      // "only request this after N seconds" reads as alarming.
+      if (e.statusCode == '429' || e.code == 'over_email_send_rate_limit') {
+        throw const LadderException('Give it a minute, then try again.');
+      }
+      rethrow;
+    }
+  });
 
   @override
   Future<void> signOut() => _guard(() async {
