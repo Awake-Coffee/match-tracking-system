@@ -269,28 +269,33 @@ class _ResultRow extends StatefulWidget {
 }
 
 class _ResultRowState extends State<_ResultRow> {
-  /// Tap handlers for the names in the club sentence; they own state, so the
-  /// row disposes them.
-  final _recognizers = <TapGestureRecognizer>[];
+  /// Tap handlers for the names in the club sentence. Made once and reading
+  /// the paths at tap time, so a rebuild mid-tap (a reload, a new page)
+  /// doesn't cancel the gesture.
+  late final _firstTap = TapGestureRecognizer()
+    ..onTap = () => _open(widget.firstPath);
+  late final _secondTap = TapGestureRecognizer()
+    ..onTap = () => _open(widget.secondPath);
+
+  void _open(String? path) {
+    if (path != null) context.push(path);
+  }
 
   @override
   void dispose() {
-    _disposeRecognizers();
+    _firstTap.dispose();
+    _secondTap.dispose();
     super.dispose();
   }
 
-  void _disposeRecognizers() {
-    for (final r in _recognizers) {
-      r.dispose();
-    }
-    _recognizers.clear();
-  }
-
-  /// A bold name that opens [path] when tapped, or plain bold when null.
-  TextSpan _name(String name, String? path, TextStyle bold) {
+  /// A bold name that [tap] opens when [path] is set, or plain bold.
+  TextSpan _name(
+    String name,
+    String? path,
+    TapGestureRecognizer tap,
+    TextStyle bold,
+  ) {
     if (path == null) return TextSpan(text: name, style: bold);
-    final tap = TapGestureRecognizer()..onTap = () => context.push(path);
-    _recognizers.add(tap);
     return TextSpan(
       text: name,
       style: bold.copyWith(decoration: TextDecoration.underline),
@@ -304,18 +309,16 @@ class _ResultRowState extends State<_ResultRow> {
     final w = widget;
     final d = context.design;
     final bold = d.body(16, weight: FontWeight.w700);
-    // Rebuilt with the row, so drop the previous build's recognizers.
-    _disposeRecognizers();
     final first = w.firstName;
     final headline = Text.rich(
       TextSpan(
         children: [
           if (first != null) ...[
-            _name(first, w.firstPath, bold),
+            _name(first, w.firstPath, _firstTap, bold),
             TextSpan(text: ' ${w.verb} '),
           ] else
             TextSpan(text: '${w.verb} '),
-          _name(w.secondName, w.secondPath, bold),
+          _name(w.secondName, w.secondPath, _secondTap, bold),
         ],
       ),
       style: d.body(16),

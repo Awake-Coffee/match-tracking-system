@@ -62,6 +62,60 @@ Future<DemoLadderRepository> _withDraws(int draws) async {
   return repo;
 }
 
+/// [_withDraws] for a page of draws, with Bogdan beating Cleo once before
+/// them and once after: Ana's games fill more than a page and Cleo's sit on
+/// either side. Signed in as Ana.
+Future<DemoLadderRepository> _anaPagesAndCleo() async {
+  final repo = await anaAndBogdan();
+  await repo.signUp(
+    email: 'cleo@example.com',
+    password: 'x',
+    displayName: 'Cleo',
+  );
+  await repo.signIn(email: anaEmail, password: 'x');
+  Future<void> bogdanBeatsCleo() => _play(
+    repo,
+    reporter: 'Bogdan',
+    reporterEmail: bogdanEmail,
+    opponent: 'Cleo',
+    opponentEmail: 'cleo@example.com',
+    outcome: Outcome.win,
+    backTo: anaEmail,
+  );
+  await bogdanBeatsCleo();
+  for (var i = 0; i < HistoryScreen.pageSize; i++) {
+    await _play(
+      repo,
+      reporter: 'Ana',
+      reporterEmail: anaEmail,
+      opponent: 'Bogdan',
+      opponentEmail: bogdanEmail,
+      outcome: Outcome.draw,
+      backTo: anaEmail,
+    );
+  }
+  await bogdanBeatsCleo();
+  return repo;
+}
+
+Future<void> _pick(WidgetTester tester, String name) async {
+  await tester.tap(find.byType(DropdownMenu<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(name).last);
+  await tester.pumpAndSettle();
+}
+
+/// What the Player dropdown says.
+String _filterText(WidgetTester tester) => tester
+    .widget<TextField>(
+      find.descendant(
+        of: find.byType(DropdownMenu<String>),
+        matching: find.byType(TextField),
+      ),
+    )
+    .controller!
+    .text;
+
 Future<void> _openHistory(
   WidgetTester tester,
   DemoLadderRepository repo,
@@ -196,6 +250,76 @@ void main() {
 
     expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
     expect(find.text('Load more'), findsNothing);
+  });
+
+  testWidgets('Load more keeps the player filter', (tester) async {
+    _tall(tester);
+    final repo = await _anaPagesAndCleo();
+    await _openHistory(tester, repo);
+    await _pick(tester, 'Ana');
+
+    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
+    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
+    expect(find.text('Bogdan beat Cleo', findRichText: true), findsNothing);
+    expect(find.text('Load more'), findsNothing);
+  });
+
+  testWidgets('pages loaded with Load more survive a background reload', (
+    tester,
+  ) async {
+    _tall(tester);
+    final repo = await _withDraws(HistoryScreen.pageSize);
+    await _openHistory(tester, repo);
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+
+    repo.reload();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 1));
+    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('a new filter starts again from its first page', (tester) async {
+    _tall(tester);
+    final repo = await _anaPagesAndCleo();
+    await _openHistory(tester, repo);
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize + 3));
+
+    await _pick(tester, 'Ana');
+
+    expect(find.byType(MatchTile), findsNWidgets(HistoryScreen.pageSize));
+    expect(find.text('Bogdan beat Cleo', findRichText: true), findsNothing);
+    expect(find.text('Load more'), findsOneWidget);
+  });
+
+  testWidgets('a filter that fails to load goes back to what is shown', (
+    tester,
+  ) async {
+    _tall(tester);
+    final repo = SharedLadder();
+    await anaAndBogdan(into: repo);
+    await _openHistory(tester, repo);
+    expect(find.byType(MatchTile), findsOneWidget);
+
+    repo.offline = true;
+    await _pick(tester, 'Bogdan');
+
+    expect(find.textContaining('Couldn\'t show that player'), findsOneWidget);
+    expect(_filterText(tester), 'Everyone');
+    expect(find.byType(MatchTile), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    repo.offline = false;
+    await _pick(tester, 'Bogdan');
+    expect(_filterText(tester), 'Bogdan');
+    expect(find.byType(MatchTile), findsOneWidget);
   });
 
   group('the before cursor', () {
