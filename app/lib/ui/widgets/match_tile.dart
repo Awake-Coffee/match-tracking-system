@@ -57,12 +57,25 @@ String relativeAge(DateTime when, {DateTime? now}) {
   return relativeDate(when, now: current);
 }
 
+/// [id]'s profile in [game], or null once that member deleted their account:
+/// their results stay in the history, but there is no profile to open.
+String? _profilePath(Game game, String id, Set<String> memberIds) =>
+    memberIds.contains(id) ? game.path('players/$id') : null;
+
 /// One game in a list. From the club's view it reads "Ana beat Bo"; from a
 /// player's view ([perspectiveId]) it reads "Won against Bo".
 class MatchTile extends StatelessWidget {
-  const MatchTile({super.key, required this.match, this.perspectiveId});
+  const MatchTile({
+    super.key,
+    required this.match,
+    required this.memberIds,
+    this.perspectiveId,
+  });
 
   final ChessMatch match;
+
+  /// Members who still have a profile; anyone else's name links nowhere.
+  final Set<String> memberIds;
   final String? perspectiveId;
 
   @override
@@ -91,7 +104,7 @@ class MatchTile extends StatelessWidget {
         leading: leading,
         verb: verb,
         opponentName: m.opponentName(me),
-        opponentPath: Game.chess.path('players/${m.opponentId(me)}'),
+        opponentPath: _profilePath(Game.chess, m.opponentId(me), memberIds),
         detail: fullDetail,
         rated: m.rated,
         delta: m.deltaFor(me),
@@ -104,10 +117,10 @@ class MatchTile extends StatelessWidget {
     return _ResultRow.forClub(
       leading: leading,
       firstName: m.winnerName ?? m.whiteName,
-      firstPath: Game.chess.path('players/$firstId'),
+      firstPath: _profilePath(Game.chess, firstId, memberIds),
       verb: m.result == MatchResult.draw ? 'drew with' : 'beat',
       secondName: m.loserName ?? m.blackName,
-      secondPath: Game.chess.path('players/$secondId'),
+      secondPath: _profilePath(Game.chess, secondId, memberIds),
       detail: fullDetail,
       rated: m.rated,
       firstDelta: m.deltaFor(firstId),
@@ -122,10 +135,14 @@ class BackgammonMatchTile extends StatelessWidget {
   const BackgammonMatchTile({
     super.key,
     required this.match,
+    required this.memberIds,
     this.perspectiveId,
   });
 
   final BackgammonMatch match;
+
+  /// Members who still have a profile; anyone else's name links nowhere.
+  final Set<String> memberIds;
   final String? perspectiveId;
 
   @override
@@ -141,7 +158,11 @@ class BackgammonMatchTile extends StatelessWidget {
       return _ResultRow.forPlayer(
         verb: m.wonBy(me) ? 'Won against' : 'Lost to',
         opponentName: m.opponentName(me),
-        opponentPath: Game.backgammon.path('players/${m.opponentId(me)}'),
+        opponentPath: _profilePath(
+          Game.backgammon,
+          m.opponentId(me),
+          memberIds,
+        ),
         detail: detail,
         rated: m.rated,
         delta: m.deltaFor(me),
@@ -150,10 +171,10 @@ class BackgammonMatchTile extends StatelessWidget {
     }
     return _ResultRow.forClub(
       firstName: m.winnerName,
-      firstPath: Game.backgammon.path('players/${m.winnerId}'),
+      firstPath: _profilePath(Game.backgammon, m.winnerId, memberIds),
       verb: 'beat',
       secondName: m.loserName,
-      secondPath: Game.backgammon.path('players/${m.loserId}'),
+      secondPath: _profilePath(Game.backgammon, m.loserId, memberIds),
       detail: detail,
       rated: m.rated,
       firstDelta: m.winnerRatingDelta,
@@ -165,9 +186,17 @@ class BackgammonMatchTile extends StatelessWidget {
 /// One Star Wars: Unlimited match in a list, from the club's or a player's
 /// view like [MatchTile].
 class SwuMatchTile extends StatelessWidget {
-  const SwuMatchTile({super.key, required this.match, this.perspectiveId});
+  const SwuMatchTile({
+    super.key,
+    required this.match,
+    required this.memberIds,
+    this.perspectiveId,
+  });
 
   final SwuMatch match;
+
+  /// Members who still have a profile; anyone else's name links nowhere.
+  final Set<String> memberIds;
   final String? perspectiveId;
 
   @override
@@ -185,7 +214,7 @@ class SwuMatchTile extends StatelessWidget {
           Outcome.draw => 'Drew with',
         },
         opponentName: m.opponentName(me),
-        opponentPath: Game.swu.path('players/${m.opponentId(me)}'),
+        opponentPath: _profilePath(Game.swu, m.opponentId(me), memberIds),
         detail: detail,
         rated: m.rated,
         delta: m.deltaFor(me),
@@ -197,10 +226,10 @@ class SwuMatchTile extends StatelessWidget {
     final secondId = m.opponentId(firstId);
     return _ResultRow.forClub(
       firstName: m.nameOf(firstId),
-      firstPath: Game.swu.path('players/$firstId'),
+      firstPath: _profilePath(Game.swu, firstId, memberIds),
       verb: m.winnerId == null ? 'drew with' : 'beat',
       secondName: m.nameOf(secondId),
-      secondPath: Game.swu.path('players/$secondId'),
+      secondPath: _profilePath(Game.swu, secondId, memberIds),
       detail: detail,
       rated: m.rated,
       firstDelta: m.deltaFor(firstId),
@@ -219,7 +248,7 @@ class _ResultRow extends StatefulWidget {
     this.leading,
     required this.verb,
     required String opponentName,
-    required String this.opponentPath,
+    required this.opponentPath,
     required this.detail,
     required this.rated,
     required int delta,
@@ -234,10 +263,10 @@ class _ResultRow extends StatefulWidget {
   const _ResultRow.forClub({
     this.leading,
     required String this.firstName,
-    required String this.firstPath,
+    required this.firstPath,
     required this.verb,
     required this.secondName,
-    required String this.secondPath,
+    required this.secondPath,
     required this.detail,
     required this.rated,
     required this.firstDelta,
@@ -258,9 +287,11 @@ class _ResultRow extends StatefulWidget {
   final int? ratingAfter;
 
   /// Where tapping the row goes: the opponent's profile, from a player's view.
+  /// Null when there is nowhere to go (a deleted member), as from the club's.
   final String? opponentPath;
 
-  /// Where tapping each name goes, from the club's view.
+  /// Where tapping each name goes, from the club's view; null for a deleted
+  /// member, whose name is then plain bold.
   final String? firstPath;
   final String? secondPath;
 

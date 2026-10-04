@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
@@ -1395,7 +1397,7 @@ void main() {
     tester,
   ) async {
     _phone(tester);
-    final repo = await anaAndBogdan();
+    final repo = await anaAndBogdan(into: _SlowDelete()) as _SlowDelete;
     await tester.pumpWidget(
       AwakeApp(repository: repo, initialLocation: '/settings'),
     );
@@ -1450,11 +1452,60 @@ void main() {
     await tester.pump();
     expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
     await tester.tap(confirm);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
+    // While the server works: a spinner, and nothing else to start.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    for (final label in ['Delete account', 'Sign out']) {
+      final button = find.widgetWithText(OutlinedButton, label);
+      expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
+    }
+
+    repo.hold.complete();
+    await tester.pumpAndSettle();
     expect(repo.isSignedIn, isFalse);
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(find.text('Your account was deleted.'), findsOneWidget);
     expect((await repo.ladder()).map((p) => p.displayName), ['Bogdan']);
+  });
+
+  testWidgets('a failed account deletion says so and can be tried again', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan(into: _SlowDelete()) as _SlowDelete;
+    repo.error = const LadderException('Couldn\'t delete your account.');
+    repo.hold.complete();
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/settings'),
+    );
+    await tester.pumpAndSettle();
+    final delete = find.widgetWithText(OutlinedButton, 'Delete account');
+    await tester.scrollUntilVisible(delete, 200, scrollable: _list);
+    await tester.pumpAndSettle();
+    await tester.tap(delete);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Ana',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Delete account'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Couldn\'t delete your account.'), findsOneWidget);
+    expect(repo.isSignedIn, isTrue);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(tester.widget<OutlinedButton>(delete).onPressed, isNotNull);
   });
 
   testWidgets('each game has its own ladder, picked from its card', (
@@ -2399,5 +2450,19 @@ class _CountedGames extends DemoLadderRepository {
   }) {
     if (playerId != null) ownGamesFetches++;
     return super.matches(playerId: playerId, limit: limit, before: before);
+  }
+}
+
+/// A demo ladder whose account deletion waits on [hold], like a slow
+/// connection, then fails with [error] when set.
+class _SlowDelete extends DemoLadderRepository {
+  final hold = Completer<void>();
+  LadderException? error;
+
+  @override
+  Future<void> deleteAccount() async {
+    await hold.future;
+    if (error case final error?) throw error;
+    await super.deleteAccount();
   }
 }

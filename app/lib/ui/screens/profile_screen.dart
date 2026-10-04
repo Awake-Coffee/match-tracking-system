@@ -30,21 +30,26 @@ class ProfileScreen extends StatelessWidget {
     return LoadView<_GameRecord>(
       load: (repo) async {
         final player = await repo.player(playerId);
+        // Opponents who deleted their account stay in the results unlinked.
+        final memberIds = {for (final p in await repo.ladder()) p.id};
         final chase = isMe ? await _chase(repo) : null;
         return switch (game) {
           Game.chess => _GameRecord.chess(
             player,
             await repo.matches(playerId: playerId, limit: 500),
+            memberIds,
             chase,
           ),
           Game.backgammon => _GameRecord.backgammon(
             player,
             await repo.backgammonMatches(playerId: playerId, limit: 500),
+            memberIds,
             chase,
           ),
           Game.swu => _GameRecord.swu(
             player,
             await repo.swuMatches(playerId: playerId, limit: 500),
+            memberIds,
             chase,
           ),
         };
@@ -78,7 +83,13 @@ class _GameRecord {
   });
 
   /// [matches] newest first; only rated ones are on the rating line.
-  factory _GameRecord.chess(Player p, List<ChessMatch> matches, String? chase) {
+  /// [memberIds] are the members who still have a profile to link to.
+  factory _GameRecord.chess(
+    Player p,
+    List<ChessMatch> matches,
+    Set<String> memberIds,
+    String? chase,
+  ) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst);
     return _GameRecord(
@@ -105,7 +116,7 @@ class _GameRecord {
       },
       tiles: [
         for (final m in matches.take(20))
-          MatchTile(match: m, perspectiveId: p.id),
+          MatchTile(match: m, memberIds: memberIds, perspectiveId: p.id),
       ],
     );
   }
@@ -114,6 +125,7 @@ class _GameRecord {
   factory _GameRecord.backgammon(
     Player p,
     List<BackgammonMatch> matches,
+    Set<String> memberIds,
     String? chase,
   ) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
@@ -142,13 +154,22 @@ class _GameRecord {
       },
       tiles: [
         for (final m in matches.take(20))
-          BackgammonMatchTile(match: m, perspectiveId: p.id),
+          BackgammonMatchTile(
+            match: m,
+            memberIds: memberIds,
+            perspectiveId: p.id,
+          ),
       ],
     );
   }
 
   /// [matches] newest first; only rated ones are on the rating line.
-  factory _GameRecord.swu(Player p, List<SwuMatch> matches, String? chase) {
+  factory _GameRecord.swu(
+    Player p,
+    List<SwuMatch> matches,
+    Set<String> memberIds,
+    String? chase,
+  ) {
     final oldestFirst = matches.reversed.where((m) => m.rated).toList();
     final history = ratingHistory(p.id, oldestFirst, start: swuStartingRating);
     final swu = p.swu;
@@ -176,7 +197,7 @@ class _GameRecord {
       },
       tiles: [
         for (final m in matches.take(20))
-          SwuMatchTile(match: m, perspectiveId: p.id),
+          SwuMatchTile(match: m, memberIds: memberIds, perspectiveId: p.id),
       ],
     );
   }

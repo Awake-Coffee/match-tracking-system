@@ -126,6 +126,23 @@ Future<void> _openHistory(
   await tester.pumpAndSettle();
 }
 
+const underline = TextDecoration.underline;
+
+/// The bold span that holds [name] in a result's sentence.
+TextSpan _nameSpan(WidgetTester tester, String name) {
+  TextSpan? found;
+  for (final text in tester.widgetList<RichText>(find.byType(RichText))) {
+    text.text.visitChildren((span) {
+      if (span is TextSpan && span.text == name && span.children == null) {
+        found = span;
+      }
+      return found == null;
+    });
+    if (found != null) break;
+  }
+  return found!;
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -145,6 +162,31 @@ void main() {
       findsNothing,
     );
     expect(find.text('Bogdan'), findsWidgets);
+  });
+
+  testWidgets('a deleted member stays in the history without a link', (
+    tester,
+  ) async {
+    _tall(tester);
+    final repo = await anaAndBogdan();
+    await repo.deleteAccount();
+    await repo.signIn(email: bogdanEmail, password: 'x');
+
+    // The club history: Ana is plain bold, Bogdan still a link.
+    await _openHistory(tester, repo);
+    expect(find.text('Ana beat Bogdan', findRichText: true), findsOneWidget);
+    expect(_nameSpan(tester, 'Ana').recognizer, isNull);
+    expect(_nameSpan(tester, 'Ana').style!.decoration, isNot(underline));
+    expect(_nameSpan(tester, 'Bogdan').style!.decoration, underline);
+
+    // Bogdan's own results: the row against Ana opens nothing.
+    await tester.tapOnText(find.textRange.ofSubstring('Bogdan'));
+    await tester.pumpAndSettle();
+    final row = find.text('Lost to Ana', findRichText: true);
+    expect(row, findsOneWidget);
+    final tile = find.ancestor(of: row, matching: find.byType(InkWell)).first;
+    expect(tester.widget<InkWell>(tile).onTap, isNull);
+    expect(_nameSpan(tester, 'Ana').style!.decoration, isNot(underline));
   });
 
   testWidgets('a name in the backgammon history opens that player', (

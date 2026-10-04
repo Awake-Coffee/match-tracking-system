@@ -106,8 +106,8 @@ create trigger profiles_propagate_name after update of display_name on public.pr
 
 -- Deletes the caller's login; the profile (and with it their ratings and any
 -- open or declined requests) goes by cascade. Confirmed results stay in the
--- history under the names they were played under. Takes no arguments: nobody
--- can delete anybody else.
+-- history under the name they had when the account was deleted. Takes no
+-- arguments: nobody can delete anybody else.
 create or replace function public.delete_my_account()
 returns void
 language plpgsql

@@ -47,6 +47,16 @@ void main() {
     await expectLater(repo.player(ana.id), throwsA(isA<LadderException>()));
   });
 
+  test('a deleted member\'s results keep the name they had last', () async {
+    final repo = await anaAndBogdan();
+    await repo.updateDisplayName('Ana Maria');
+    await repo.deleteAccount();
+
+    await repo.signIn(email: bogdanEmail, password: 'x');
+    final games = await repo.matches();
+    expect(games.single.opponentName(repo.me!.id), 'Ana Maria');
+  });
+
   test('deleting an account needs a signed-in member', () async {
     await expectLater(
       DemoLadderRepository().deleteAccount(),

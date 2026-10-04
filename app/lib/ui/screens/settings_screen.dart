@@ -20,6 +20,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final _name = TextEditingController(text: context.repo.me?.displayName);
   bool _savingName = false;
 
+  /// While the deletion runs: it can take seconds, and nothing else on this
+  /// screen should start meanwhile.
+  bool _deleting = false;
+
   @override
   void dispose() {
     _name.dispose();
@@ -74,11 +78,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => _DeleteAccountDialog(name: name),
     );
     if (go != true || !mounted) return;
+    // Captured now: the sign-out that ends the deletion takes this screen
+    // away, and the confirmation shows on sign-in.
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _deleting = true);
     try {
-      // Signs out too, which takes this screen away.
       await repo.deleteAccount();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Your account was deleted.')),
+      );
     } on LadderException catch (e) {
-      _toast(e.message);
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -146,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
           child: OutlinedButton(
-            onPressed: _signOut,
+            onPressed: _deleting ? null : _signOut,
             child: const Text('Sign out'),
           ),
         ),
@@ -160,17 +172,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text(
                 'Removes your profile, your ratings and any games still '
                 'waiting for confirmation. Results already confirmed stay in '
-                'the history under the name you played them as. This can\'t '
-                'be undone.',
+                'the history under your current name. This can\'t be undone.',
               ),
               const SizedBox(height: 16),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: d.loss,
-                  side: BorderSide(color: d.loss),
-                ),
-                onPressed: _deleteAccount,
-                child: const Text('Delete account'),
+              Row(
+                children: [
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: d.loss,
+                      side: BorderSide(color: d.loss),
+                    ),
+                    onPressed: _deleting ? null : _deleteAccount,
+                    child: const Text('Delete account'),
+                  ),
+                  if (_deleting) ...[
+                    const SizedBox(width: 16),
+                    const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

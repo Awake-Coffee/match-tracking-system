@@ -224,7 +224,8 @@ class DemoLadderRepository extends LadderRepository {
     return match;
   }
 
-  /// Names follow renames, but a deleted member's stay as they were played.
+  /// Names follow renames; a deleted member's stay as they were when the
+  /// account was deleted.
   ChessMatch _withCurrentNames(ChessMatch m) => ChessMatch(
     id: m.id,
     whiteId: m.whiteId,
@@ -316,10 +317,17 @@ class DemoLadderRepository extends LadderRepository {
   @override
   Future<void> deleteAccount() async {
     final me = _requireMe();
+    // Confirmed results stay, under the name the member has now (as on the
+    // server, which keeps each result's names in step with renames).
+    _matches.setAll(0, _matches.map(_withCurrentNames).toList());
+    _backgammonMatches.setAll(
+      0,
+      _backgammonMatches.map(_backgammonWithCurrentNames).toList(),
+    );
+    _swuMatches.setAll(0, _swuMatches.map(_swuWithCurrentNames).toList());
     _emails.removeWhere((_, id) => id == me.id);
     _players.remove(me.id);
-    // Open requests go with the profile; confirmed results stay, and keep
-    // showing the name they were played under.
+    // Open requests go with the profile.
     _requests.removeWhere((r) => r.involves(me.id));
     _backgammonRequests.removeWhere((r) => r.involves(me.id));
     _swuRequests.removeWhere((r) => r.involves(me.id));
