@@ -10,6 +10,7 @@ import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ladder_fixture.dart';
 
@@ -28,6 +29,9 @@ Finder _awaitingBadge(String count) =>
     find.descendant(of: find.byType(Badge), matching: find.text(count));
 
 void main() {
+  // The chess form remembers the last clock in browser storage.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('signing in lands on the ladder', (tester) async {
     _phone(tester);
     final repo = await anaAndBogdan();
@@ -489,6 +493,11 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('I won'));
+    final more = find.widgetWithText(ChoiceChip, 'More…');
+    await tester.ensureVisible(more);
+    await tester.pumpAndSettle();
+    await tester.tap(more);
+    await tester.pumpAndSettle();
     final clock = find.byType(DropdownMenu<TimeControl>);
     await tester.ensureVisible(clock);
     await tester.pumpAndSettle();
@@ -520,6 +529,177 @@ void main() {
     expect(find.text('The ladder'), findsOneWidget);
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     expect(find.textContaining('Fischer 7 min + 4 s'), findsOneWidget);
+  });
+
+  group('chess time control', () {
+    final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    Finder chip(String label) => find.widgetWithText(ChoiceChip, label);
+
+    Future<void> open(
+      WidgetTester tester,
+      DemoLadderRepository repo, {
+      String location = '/record',
+    }) async {
+      _phone(tester);
+      await tester.pumpWidget(
+        AwakeApp(repository: repo, initialLocation: location),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapVisible(WidgetTester tester, Finder f) async {
+      await tester.ensureVisible(f);
+      await tester.pumpAndSettle();
+      await tester.tap(f);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the hint lists what is still missing', (tester) async {
+      await open(tester, await anaAndBogdan());
+      await tester.ensureVisible(send);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<FilledButton>(send).onPressed, isNull);
+      expect(
+        find.text('Pick an opponent, a result and a time control'),
+        findsOneWidget,
+      );
+
+      await tapVisible(tester, find.text('I won'));
+      expect(find.text('Pick an opponent and a time control'), findsOneWidget);
+    });
+
+    testWidgets('choosing a chip enables the button and clears the hint', (
+      tester,
+    ) async {
+      final repo = SharedLadder();
+      await anaAndBogdan(into: repo);
+      await open(tester, repo, location: '/record?opponent=demo-2');
+      await tapVisible(tester, find.text('I won'));
+
+      expect(find.text('Pick a time control'), findsOneWidget);
+      expect(tester.widget<FilledButton>(send).onPressed, isNull);
+      // Ana has played sudden death 5 min; the Fischer 5 + 3 game against her
+      // is Bogdan's report and is still unconfirmed.
+      await tapVisible(tester, chip('Sudden death 5 min'));
+
+      expect(find.textContaining('Pick a'), findsNothing);
+      expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
+    });
+
+    testWidgets('a member with no history gets the default chips', (
+      tester,
+    ) async {
+      final repo = DemoLadderRepository();
+      await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
+      await repo.signOut();
+      await repo.signUp(
+        email: bogdanEmail,
+        password: 'x',
+        displayName: 'Bogdan',
+      );
+      await open(tester, repo);
+
+      for (final label in [
+        'Fischer 5 min + 3 s',
+        'Fischer 10 min + 10 s',
+        'Fischer 15 min + 10 s',
+        'Sudden death 5 min',
+        'More…',
+      ]) {
+        expect(chip(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('the last clock is preselected on the next visit', (
+      tester,
+    ) async {
+      final repo = DemoLadderRepository();
+      await anaAndBogdan(into: repo);
+      await open(tester, repo, location: '/record?opponent=demo-2');
+      await tapVisible(tester, find.text('I won'));
+      await tapVisible(tester, chip('More…'));
+      await tester.tap(find.byType(DropdownMenu<TimeControl>));
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Fischer custom').last);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Minutes each'),
+        '7',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Increment (s)'),
+        '4',
+      );
+      await tester.pumpAndSettle();
+      await tapVisible(tester, send);
+      expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
+
+      // A later visit, with the pending request not yet confirmed: only the
+      // stored preference knows the custom clock.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        AwakeApp(repository: repo, initialLocation: '/record?opponent=demo-2'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<ChoiceChip>(chip('Fischer 7 min + 4 s')).selected,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, 'Minutes each'))
+            .controller!
+            .text,
+        '7',
+      );
+      await tapVisible(tester, find.text('I won'));
+      expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
+    });
+
+    testWidgets('a clock recorded on another device shows as a chip', (
+      tester,
+    ) async {
+      // No stored preference: the chip comes from the member's own games.
+      await open(tester, await anaAndBogdan());
+      expect(chip('Sudden death 5 min'), findsOneWidget);
+      expect(
+        tester.widget<ChoiceChip>(chip('Sudden death 5 min')).selected,
+        isFalse,
+      );
+    });
+  });
+
+  testWidgets('backgammon and SWU forms say what is still missing', (
+    tester,
+  ) async {
+    _phone(tester);
+    final repo = await anaAndBogdan();
+    final send = find.widgetWithText(FilledButton, 'Send for confirmation');
+    await tester.pumpWidget(
+      AwakeApp(repository: repo, initialLocation: '/backgammon/record'),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick an opponent and a final score'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      AwakeApp(
+        repository: repo,
+        initialLocation: '/swu/record?opponent=demo-2',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick a result'), findsOneWidget);
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick the games'), findsOneWidget);
   });
 
   testWidgets('confirming a game reported against you rates it', (

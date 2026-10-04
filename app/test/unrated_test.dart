@@ -3,6 +3,7 @@ import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ladder_fixture.dart';
 
@@ -23,6 +24,8 @@ void _phone(WidgetTester tester) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   test('an unrated chess game is kept but moves nothing', () async {
     final (repo, ana, bogdan) = await _fresh();
     final request = await repo.requestMatch(
@@ -121,12 +124,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('I won'));
-    final clock = find.byType(DropdownMenu<TimeControl>);
+    final clock = find.widgetWithText(ChoiceChip, 'Sudden death 5 min');
     await tester.ensureVisible(clock);
     await tester.pumpAndSettle();
     await tester.tap(clock);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Sudden death 5 min').last);
     await tester.pumpAndSettle();
     expect(find.text('1000 to '), findsNWidgets(2), reason: 'rated preview');
 

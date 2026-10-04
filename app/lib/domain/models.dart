@@ -172,6 +172,19 @@ class ClockSetting {
   final int? customBaseMinutes;
   final int? customExtraSeconds;
 
+  /// Two settings are the same clock when preset and custom times match, so
+  /// a member's recent time controls can be deduplicated.
+  @override
+  bool operator ==(Object other) =>
+      other is ClockSetting &&
+      other.preset == preset &&
+      other.customBaseMinutes == customBaseMinutes &&
+      other.customExtraSeconds == customExtraSeconds;
+
+  @override
+  int get hashCode =>
+      Object.hash(preset, customBaseMinutes, customExtraSeconds);
+
   /// Whether the custom values are exactly the ones the preset needs.
   bool get isComplete => preset.custom
       ? customBaseMinutes != null &&
