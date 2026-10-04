@@ -196,7 +196,7 @@ void main() {
     final repo = await anaAndBogdanWithBackgammon();
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Switch game'));
+    await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();

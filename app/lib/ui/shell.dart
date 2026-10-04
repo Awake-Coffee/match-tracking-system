@@ -213,8 +213,10 @@ class _GamePicker extends StatelessWidget {
       },
     );
 
+    // On phones the header shows the short name, so the tooltip names the
+    // game in full for mouse users in narrow windows.
     Widget button(VoidCallback onTap) => Tooltip(
-      message: 'Switch game',
+      message: wide ? 'Switch game' : 'Switch game (${current.label})',
       child: InkWell(
         onTap: onTap,
         borderRadius: d.borderRadius,
