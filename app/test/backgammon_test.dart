@@ -2,21 +2,8 @@ import 'package:awake_ladder/domain/backgammon.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Player _p(String id, int rating, {int experience = 0}) => Player(
-  id: id,
-  displayName: id,
-  rating: 1000,
-  peakRating: 1000,
-  gamesPlayed: 0,
-  wins: 0,
-  losses: 0,
-  draws: 0,
-  backgammon: BackgammonStats(
-    rating: rating,
-    peakRating: rating,
-    experience: experience,
-  ),
-);
+Standing _p(int rating, {int experience = 0}) =>
+    Standing(rating: rating, peakRating: rating, experience: experience);
 
 void main() {
   group('fibsRatingChange', () {
@@ -36,8 +23,8 @@ void main() {
           '${won ? 'winning' : 'losing'} to $length: $expected', () {
         expect(
           fibsRatingChange(
-            BackgammonStats(rating: rating, experience: experience),
-            BackgammonStats(rating: opponent),
+            _p(rating, experience: experience),
+            _p(opponent),
             won: won,
             matchLength: length,
           ),
@@ -48,14 +35,30 @@ void main() {
   });
 
   test('preview moves each player by their own experience', () {
-    final preview = BackgammonPreview(
-      me: _p('me', 1500),
-      opponent: _p('them', 1500, experience: 400),
-      won: true,
-      matchLength: 5,
+    expect(
+      ratingChanges(MatchType.backgammon, [
+        (playerId: 'me', side: 1, score: 5, standing: _p(1500)),
+        (
+          playerId: 'them',
+          side: 2,
+          score: 0,
+          standing: _p(1500, experience: 400),
+        ),
+      ]),
+      {'me': 22, 'them': -4},
     );
-    expect(preview.myDelta, 22);
-    expect(preview.opponentDelta, -4);
+  });
+
+  // Same numbers as supabase/tests/game_modes_test.sql.
+  test('a chouette box plays each team member', () {
+    expect(
+      ratingChanges(MatchType.backgammon, [
+        (playerId: 'box', side: 1, score: 3, standing: _p(1500)),
+        for (final id in ['a', 'b', 'c'])
+          (playerId: id, side: 2, score: 5, standing: _p(1500)),
+      ]),
+      {'box': -22, 'a': 22, 'b': 22, 'c': 22},
+    );
   });
 
   test('a final score has exactly one player at the match length', () {
@@ -67,21 +70,34 @@ void main() {
   });
 
   test('ratingHistory starts a backgammon line at 1500', () {
-    final match = BackgammonMatch(
+    final match = GameResult(
       id: 1,
-      winnerId: 'a',
-      loserId: 'b',
-      winnerName: 'A',
-      loserName: 'B',
-      matchLength: 5,
-      loserScore: 3,
-      winnerRatingBefore: 1500,
-      loserRatingBefore: 1500,
-      winnerRatingDelta: 22,
-      loserRatingDelta: -22,
+      mode: GameMode.standardBackgammon,
+      seats: const [
+        RatedSeat(
+          playerId: 'a',
+          name: 'A',
+          side: 1,
+          score: 5,
+          ratingBefore: 1500,
+          ratingDelta: 22,
+        ),
+        RatedSeat(
+          playerId: 'b',
+          name: 'B',
+          side: 2,
+          score: 3,
+          ratingBefore: 1500,
+          ratingDelta: -22,
+        ),
+      ],
+      recordedBy: 'a',
       playedAt: DateTime(2026),
     );
-    expect(ratingHistory('b', [match]), [1500, 1478]);
+    expect(ratingHistory('b', [match], start: backgammonStartingRating), [
+      1500,
+      1478,
+    ]);
     expect(ratingHistory('a', [], start: backgammonStartingRating), [1500]);
     expect(match.scoreFor('b'), '3-5');
     expect(match.scoreFor(), '5-3');

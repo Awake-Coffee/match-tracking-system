@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/backgammon.dart';
 import '../domain/models.dart';
-import '../domain/swu.dart';
 
 /// Thrown with a message that can be shown to the member as-is.
 class LadderException implements Exception {
@@ -81,150 +79,60 @@ abstract class LadderRepository extends ChangeNotifier {
   Future<void> signOut();
 
   /// Deletes the signed-in member's account and signs them out: their login,
-  /// profile, rating and open requests go; confirmed results stay in the
+  /// profile, ratings and open requests go; confirmed results stay in the
   /// history under the name they had when the account was deleted.
   Future<void> deleteAccount();
 
-  /// Every member, highest rating first.
-  Future<List<Player>> ladder();
+  /// Every member, with their standing in every mode they've played.
+  Future<List<Player>> members();
 
   Future<Player> player(String id);
 
-  /// Newest first. When [playerId] is set, only that member's games. When
-  /// [before] is set, only games played before it: pass the `playedAt` of the
-  /// oldest game already loaded to fetch the next page.
-  Future<List<ChessMatch>> matches({
+  /// Confirmed results of [type], newest first. When [mode] is set, only that
+  /// mode's; when [playerId] is set, only that member's. When [before] is
+  /// set, only results played before it: pass the `playedAt` of the oldest
+  /// result already loaded to fetch the next page.
+  Future<List<GameResult>> results(
+    MatchType type, {
+    GameMode? mode,
     String? playerId,
     int limit = 50,
     DateTime? before,
   });
 
-  /// Reports a game the signed-in member played. It is rated only once the
-  /// opponent accepts it with [respondToMatchRequest], and never when
-  /// [rated] is false.
-  Future<MatchRequest> requestMatch({
-    required String opponentId,
-    required PieceColor myColor,
-    required Outcome myOutcome,
-    required ClockSetting clock,
-    bool rated = true,
-  });
+  /// Reports a result the signed-in member played. It is rated only once
+  /// every other player accepts it with [respondToRequest], and never when
+  /// the report isn't rated.
+  Future<ResultRequest> reportResult(ResultReport report);
 
-  /// Games involving the signed-in member that wait for confirmation, newest
-  /// first, plus the ones they reported that the opponent declined, until
-  /// they [dismissMatchRequest].
-  Future<List<MatchRequest>> matchRequests();
+  /// Results in every game involving the signed-in member that wait for
+  /// confirmation, newest first, plus the ones they reported that someone
+  /// declined, until they [dismissRequest].
+  Future<List<ResultRequest>> requests();
 
-  /// The opponent accepts ([accept]) and gets the confirmed game back, or
-  /// either player drops the request and gets null.
-  Future<ChessMatch?> respondToMatchRequest(
-    int requestId, {
-    required bool accept,
-  });
+  /// A player confirms ([accept]) and gets the rated result back once every
+  /// player has (null while others still have to), or drops the request
+  /// (declines it, or withdraws their own report) and gets null.
+  Future<GameResult?> respondToRequest(int requestId, {required bool accept});
 
-  /// The reporter clears a game the opponent declined.
-  Future<void> dismissMatchRequest(int requestId);
-
-  /// Every member, best backgammon rating first.
-  Future<List<Player>> backgammonLadder();
-
-  /// Newest first. When [playerId] is set, only that member's matches. When
-  /// [before] is set, only matches played before it, like [matches].
-  Future<List<BackgammonMatch>> backgammonMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  });
-
-  /// Reports a match the signed-in member played. It is rated only once the
-  /// opponent accepts it with [respondToBackgammonMatchRequest], and never
-  /// when [rated] is false.
-  Future<BackgammonMatchRequest> requestBackgammonMatch({
-    required String opponentId,
-    required int matchLength,
-    required int myScore,
-    required int opponentScore,
-    bool rated = true,
-  });
-
-  /// Matches involving the signed-in member that wait for confirmation,
-  /// newest first, plus the ones they reported that the opponent declined,
-  /// until they [dismissBackgammonMatchRequest].
-  Future<List<BackgammonMatchRequest>> backgammonMatchRequests();
-
-  /// The opponent accepts ([accept]) and gets the confirmed match back, or
-  /// either player drops the request and gets null.
-  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
-    int requestId, {
-    required bool accept,
-  });
-
-  /// The reporter clears a match the opponent declined.
-  Future<void> dismissBackgammonMatchRequest(int requestId);
-
-  /// Every member, best Star Wars: Unlimited rating first.
-  Future<List<Player>> swuLadder();
-
-  /// Newest first. When [playerId] is set, only that member's matches. When
-  /// [before] is set, only matches played before it, like [matches].
-  Future<List<SwuMatch>> swuMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  });
-
-  /// Reports a best of three the signed-in member played. It is rated only
-  /// once the opponent accepts it with [respondToSwuMatchRequest], and never
-  /// when [rated] is false.
-  Future<SwuMatchRequest> requestSwuMatch({
-    required String opponentId,
-    required int myGames,
-    required int opponentGames,
-    bool rated = true,
-  });
-
-  /// Matches involving the signed-in member that wait for confirmation,
-  /// newest first, plus the ones they reported that the opponent declined,
-  /// until they [dismissSwuMatchRequest].
-  Future<List<SwuMatchRequest>> swuMatchRequests();
-
-  /// The opponent accepts ([accept]) and gets the confirmed match back, or
-  /// either player drops the request and gets null.
-  Future<SwuMatch?> respondToSwuMatchRequest(
-    int requestId, {
-    required bool accept,
-  });
-
-  /// The reporter clears a match the opponent declined.
-  Future<void> dismissSwuMatchRequest(int requestId);
+  /// The reporter clears a result someone declined.
+  Future<void> dismissRequest(int requestId);
 
   Future<void> updateDisplayName(String displayName);
 }
 
-/// Ladder order in one game: rating, then more results played, then name.
-Comparator<Player> _ladderOrder(
-  ({int rating, int played}) Function(Player) standingIn,
-) => (a, b) {
-  final (rating: ratingA, played: playedA) = standingIn(a);
-  final (rating: ratingB, played: playedB) = standingIn(b);
-  final byRating = ratingB.compareTo(ratingA);
-  if (byRating != 0) return byRating;
-  final byPlayed = playedB.compareTo(playedA);
-  if (byPlayed != 0) return byPlayed;
-  return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
-};
-
-final compareLadder = _ladderOrder(
-  (p) => (rating: p.rating, played: p.gamesPlayed),
-);
-
-final compareBackgammonLadder = _ladderOrder(
-  (p) => (rating: p.backgammon.rating, played: p.backgammon.matchesPlayed),
-);
-
-final compareSwuLadder = _ladderOrder(
-  (p) => (rating: p.swu.rating, played: p.swu.matchesPlayed),
-);
+/// [players] in ladder order for [mode]: rating, then more results played,
+/// then name.
+List<Player> ladderOf(List<Player> players, GameMode mode) =>
+    players.toList()..sort((a, b) {
+      final standingA = a.standingIn(mode);
+      final standingB = b.standingIn(mode);
+      final byRating = standingB.rating.compareTo(standingA.rating);
+      if (byRating != 0) return byRating;
+      final byPlayed = standingB.played.compareTo(standingA.played);
+      if (byPlayed != 0) return byPlayed;
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
 
 String? validateDisplayName(String? value) {
   final name = value?.trim() ?? '';

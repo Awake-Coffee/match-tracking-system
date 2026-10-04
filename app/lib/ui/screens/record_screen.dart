@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../data/clock_memory.dart';
 import '../../data/ladder_repository.dart';
@@ -7,84 +6,143 @@ import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../app_scope.dart';
 import '../game.dart';
+import '../widgets/clock_picker.dart';
 import '../widgets/load_view.dart';
 import '../widgets/record_form.dart';
 import '../widgets/surface.dart';
 import 'backgammon_record_form.dart';
+import 'multiplayer_record_forms.dart';
 import 'swu_record_form.dart';
 
-class RecordScreen extends StatelessWidget {
-  const RecordScreen({super.key, required this.game, this.initialOpponentId});
+class RecordScreen extends StatefulWidget {
+  const RecordScreen({
+    super.key,
+    required this.game,
+    this.initialOpponentId,
+    this.initialMode,
+  });
 
   final Game game;
   final String? initialOpponentId;
 
+  /// The mode to record in; the game's first mode when null.
+  final GameMode? initialMode;
+
+  @override
+  State<RecordScreen> createState() => _RecordScreenState();
+}
+
+class _RecordScreenState extends State<RecordScreen> {
+  late GameMode _mode = widget.initialMode ?? widget.game.type.defaultMode;
+
   @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     final noun = game.resultNoun;
     return LoadView(
       load: (repo) async {
         final meId = repo.me?.id;
-        // Chess fetches the member's games once, for both the opponent and
-        // the clock chips.
-        final chessGames = game == Game.chess && meId != null
-            ? _ownChessGames(repo, meId)
-            : Future.value(const <ChessMatch>[]);
+        // The member's own results, fetched once for both the opponent and
+        // (in chess) the clock chips.
+        final ownResults = meId == null
+            ? Future.value(const <GameResult>[])
+            : _ownResults(repo, game.type, meId);
         final recent = meId == null
             ? Future.value(const <String>[])
-            : game.recentOpponentsOf(repo, meId, chessGames: chessGames);
-        final players = game.ladderOf(repo);
+            : game.recentOpponentsOf(repo, meId, ownResults: ownResults);
+        final members = repo.members();
         return (
-          players: await players,
+          members: await members,
           recentIds: await recent,
-          chessGames: await chessGames,
+          ownResults: await ownResults,
         );
       },
       builder: (context, data, _) {
-        final players = data.players;
-        final recentIds = data.recentIds;
+        final members = data.members;
         final meId = context.repo.me?.id;
-        final me = players.where((p) => p.id == meId).firstOrNull;
+        final me = members.where((p) => p.id == meId).firstOrNull;
         final initialOpponentId =
-            players.any((p) => p.id == this.initialOpponentId && p.id != meId)
-            ? this.initialOpponentId
+            members.any((p) => p.id == widget.initialOpponentId && p.id != meId)
+            ? widget.initialOpponentId
             : null;
+        final mode = _mode;
+        // Duel forms keep what was filled in when the mode changes between
+        // duels.
+        final formKey = ValueKey(mode.format);
         return ListView(
           children: [
             ScreenTitle(
               'Record a $noun',
-              subtitle:
-                  'Log a $noun you just played. Ratings update once your '
-                  'opponent confirms it.',
+              subtitle: mode.format.multiplayer
+                  ? 'Log a $noun you just played. Ratings update once '
+                        'everyone confirms it.'
+                  : 'Log a $noun you just played. Ratings update once your '
+                        'opponent confirms it.',
             ),
             if (me == null)
               MessageView(message: 'Sign in to record a $noun.')
-            else if (players.length < 2)
+            else if (members.length < 2)
               const MessageView(
                 message: 'You need an opponent. Ask someone to make a profile first.',
               )
-            else
-              switch (game) {
-                Game.chess => _ChessRecordForm(
+            else ...[
+              _ModePicker(
+                game: game,
+                me: me,
+                mode: mode,
+                onChanged: (m) => setState(() => _mode = m),
+              ),
+              switch ((mode.type, mode.format)) {
+                (MatchType.chess, ResultFormat.duel) => _ChessRecordForm(
+                  key: formKey,
+                  mode: mode,
                   me: me,
-                  players: players,
+                  players: members,
                   initialOpponentId: initialOpponentId,
-                  recentOpponentIds: recentIds,
-                  ownGames: data.chessGames,
+                  recentOpponentIds: data.recentIds,
+                  ownGames: data.ownResults,
                 ),
-                Game.backgammon => BackgammonRecordForm(
+                (MatchType.backgammon, ResultFormat.duel) =>
+                  BackgammonRecordForm(
+                    key: formKey,
+                    mode: mode,
+                    me: me,
+                    players: members,
+                    initialOpponentId: initialOpponentId,
+                    recentOpponentIds: data.recentIds,
+                  ),
+                (MatchType.swu, ResultFormat.duel) => SwuRecordForm(
+                  key: formKey,
+                  mode: mode,
                   me: me,
-                  players: players,
+                  players: members,
                   initialOpponentId: initialOpponentId,
-                  recentOpponentIds: recentIds,
+                  recentOpponentIds: data.recentIds,
                 ),
-                Game.swu => SwuRecordForm(
+                (_, ResultFormat.teams) => BughouseRecordForm(
+                  key: formKey,
+                  mode: mode,
                   me: me,
-                  players: players,
-                  initialOpponentId: initialOpponentId,
-                  recentOpponentIds: recentIds,
+                  players: members,
+                  recentOpponentIds: data.recentIds,
+                  ownGames: data.ownResults,
+                ),
+                (_, ResultFormat.boxVsTeam) => ChouetteRecordForm(
+                  key: formKey,
+                  mode: mode,
+                  me: me,
+                  players: members,
+                  recentOpponentIds: data.recentIds,
+                ),
+                (_, ResultFormat.freeForAll) => FreeForAllRecordForm(
+                  key: formKey,
+                  mode: mode,
+                  me: me,
+                  players: members,
+                  recentOpponentIds: data.recentIds,
                 ),
               },
+            ],
           ],
         );
       },
@@ -92,21 +150,81 @@ class RecordScreen extends StatelessWidget {
   }
 }
 
-/// The member's own chess games. Only the record form's shortcuts use them,
-/// so a failed load reads as no history rather than blocking the form.
-Future<List<ChessMatch>> _ownChessGames(
+/// The member's own results in [type]. Only the record form's shortcuts use
+/// them, so a failed load reads as no history rather than blocking the form.
+Future<List<GameResult>> _ownResults(
   LadderRepository repo,
+  MatchType type,
   String meId,
 ) async {
   try {
-    return await repo.matches(playerId: meId);
+    return await repo.results(type, playerId: meId);
   } catch (_) {
     return const [];
   }
 }
 
+/// Which mode the result was played in: a menu of the game's modes with the
+/// member's rating in each, the chosen one's rules, and where the member
+/// stands on its ladder.
+class _ModePicker extends StatelessWidget {
+  const _ModePicker({
+    required this.game,
+    required this.me,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final Game game;
+  final Player me;
+  final GameMode mode;
+  final ValueChanged<GameMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    final standing = me.standingIn(mode);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Mode', style: d.body(15, weight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          DropdownMenu<GameMode>(
+            initialSelection: mode,
+            expandedInsets: EdgeInsets.zero,
+            onSelected: (m) {
+              if (m != null) onChanged(m);
+            },
+            dropdownMenuEntries: [
+              for (final m in game.modes)
+                DropdownMenuEntry(
+                  value: m,
+                  label: m.label,
+                  trailingIcon: Text('${me.standingIn(m).rating}'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(mode.rules, style: d.body(13, color: d.muted)),
+          Text(
+            standing.played == 0
+                ? 'Rated on its own ladder · you start at ${standing.rating}'
+                : 'Rated on its own ladder · you: ${standing.rating} after '
+                      '${standing.played} ${standing.played == 1 ? game.resultNoun : game.resultNounPlural}',
+            style: d.body(13, color: d.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChessRecordForm extends StatefulWidget {
   const _ChessRecordForm({
+    super.key,
+    required this.mode,
     required this.me,
     required this.players,
     this.initialOpponentId,
@@ -114,13 +232,14 @@ class _ChessRecordForm extends StatefulWidget {
     this.ownGames = const [],
   });
 
+  final GameMode mode;
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
   final List<String> recentOpponentIds;
 
   /// The member's own games, newest first, for the clock chips.
-  final List<ChessMatch> ownGames;
+  final List<GameResult> ownGames;
 
   @override
   State<_ChessRecordForm> createState() => _ChessRecordFormState();
@@ -135,72 +254,29 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
   PieceColor? _color;
   Outcome? _outcome;
   TimeControl? _timeControl;
-  int? _customBaseMinutes;
-  int? _customExtraSeconds;
+  ClockSetting? _clock;
   bool _rated = true;
-
-  /// The one-tap clocks: the member's recent ones, padded with the defaults.
-  late List<ClockSetting> _recent = recentClocks(matches: widget.ownGames);
-  bool _showAllClocks = false;
-
-  /// Bumped when a chip sets the clock, so the full list re-reads it.
-  int _clockEpoch = 0;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
 
   @override
-  void initState() {
-    super.initState();
-    _loadLastClock();
-  }
-
-  /// Preselects the member's last clock, and puts it first among the chips,
-  /// as soon as local storage has it.
-  Future<void> _loadLastClock() async {
-    final last = await ClockMemory.last(widget.me.id);
-    if (!mounted || last == null) return;
-    setState(() {
-      // A choice made while this loaded wins, and keeps its chip.
-      _recent = recentClocks(last: _clock ?? last, matches: widget.ownGames);
-      if (_timeControl == null) _choose(last);
-    });
-  }
-
-  void _choose(ClockSetting clock) {
-    _timeControl = clock.preset;
-    _customBaseMinutes = clock.customBaseMinutes;
-    _customExtraSeconds = clock.customExtraSeconds;
-    _clockEpoch++;
-  }
-
-  /// The chosen time control, or null until it (and any custom time) is set.
-  ClockSetting? get _clock {
-    final preset = _timeControl;
-    if (preset == null) return null;
-    final clock = preset.custom
-        ? ClockSetting(
-            preset,
-            customBaseMinutes: _customBaseMinutes,
-            customExtraSeconds: preset.extraName == null
-                ? null
-                : _customExtraSeconds,
-          )
-        : ClockSetting(preset);
-    return clock.isComplete ? clock : null;
-  }
-
-  @override
   Widget build(BuildContext context) {
     final d = context.design;
+    final mode = widget.mode;
     final opponent = _opponent;
     final outcome = _outcome;
     final color = _color;
     final clock = _clock;
-    final preview = opponent != null && outcome != null
-        ? MatchPreview(me: widget.me, opponent: opponent, outcome: outcome)
-        : null;
     final label = d.body(15, weight: FontWeight.w700);
+    // White is side 1.
+    final mySide = color == PieceColor.black ? 2 : 1;
+    final seats = opponent == null || outcome == null
+        ? null
+        : <SeatReport>[
+            (playerId: widget.me.id, side: mySide, score: outcome.score),
+            (playerId: opponent.id, side: 3 - mySide, score: 1 - outcome.score),
+          ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -210,7 +286,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
           Text('Opponent', style: label),
           const SizedBox(height: 8),
           OpponentPicker(
-            game: Game.chess,
+            mode: mode,
             players: widget.players,
             meId: widget.me.id,
             selectedId: _opponentId,
@@ -247,74 +323,14 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
           const SizedBox(height: 24),
           Text('Time control', style: label),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final c in _recent)
-                ChoiceChip(
-                  label: Text(c.label),
-                  selected: c == clock,
-                  onSelected: (_) => setState(() => _choose(c)),
-                ),
-              ChoiceChip(
-                label: const Text('More…'),
-                selected: _showAllClocks,
-                onSelected: (v) => setState(() => _showAllClocks = v),
-              ),
-            ],
+          ClockPicker(
+            meId: widget.me.id,
+            ownGames: widget.ownGames,
+            onChanged: (preset, clock) => setState(() {
+              _timeControl = preset;
+              _clock = clock;
+            }),
           ),
-          // The full list also stays open while the choice has no chip, so
-          // the clock that will be sent (or the preset its custom time belongs
-          // to) is always on screen.
-          if (_showAllClocks ||
-              (_timeControl != null && !_recent.contains(clock))) ...[
-            const SizedBox(height: 12),
-            DropdownMenu<TimeControl>(
-              key: ValueKey(_clockEpoch),
-              initialSelection: _timeControl,
-              expandedInsets: EdgeInsets.zero,
-              hintText: 'All DGT 2500 presets',
-              menuHeight: 360,
-              onSelected: (t) => setState(() {
-                _timeControl = t;
-                _customBaseMinutes = null;
-                _customExtraSeconds = null;
-              }),
-              dropdownMenuEntries: [
-                for (final t in TimeControl.values)
-                  DropdownMenuEntry(
-                    value: t,
-                    label: t.label,
-                    trailingIcon: Text('${t.dgtOption}'),
-                  ),
-              ],
-            ),
-          ],
-          if (_timeControl case final preset? when preset.custom) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _NumberField(
-                    label: 'Minutes each',
-                    value: _customBaseMinutes,
-                    onChanged: (v) => setState(() => _customBaseMinutes = v),
-                  ),
-                ),
-                if (preset.extraName case final extraName?) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _NumberField(
-                      label: '$extraName (s)',
-                      value: _customExtraSeconds,
-                      onChanged: (v) => setState(() => _customExtraSeconds = v),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
           const SizedBox(height: 24),
           RatedSwitch(
             rated: _rated,
@@ -325,20 +341,9 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             rated: _rated,
             emptyHint:
                 'Pick an opponent and a result to see how ratings change.',
-            rows: preview == null
+            rows: seats == null
                 ? null
-                : [
-                    (
-                      name: 'You',
-                      before: preview.me.rating,
-                      delta: preview.myDelta,
-                    ),
-                    (
-                      name: preview.opponent.displayName,
-                      before: preview.opponent.rating,
-                      delta: preview.opponentDelta,
-                    ),
-                  ],
+                : previewRows(mode, widget.me.id, widget.players, seats),
           ),
           SendForConfirmationButton(
             error: error,
@@ -354,21 +359,22 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
             ],
             onPressed:
                 opponent == null ||
-                    outcome == null ||
+                    seats == null ||
                     color == null ||
                     clock == null
                 ? null
                 : () => sendForConfirmation(
                     game: Game.chess,
-                    opponentName: opponent.displayName,
+                    sentTo: opponent.displayName,
                     rated: _rated,
                     request: (repo) async {
-                      await repo.requestMatch(
-                        opponentId: opponent.id,
-                        myColor: color,
-                        myOutcome: outcome,
-                        clock: clock,
-                        rated: _rated,
+                      await repo.reportResult(
+                        ResultReport(
+                          mode: mode,
+                          seats: seats,
+                          rated: _rated,
+                          clock: clock,
+                        ),
                       );
                       await ClockMemory.remember(widget.me.id, clock);
                     },
@@ -378,53 +384,4 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
       ),
     );
   }
-}
-
-/// A whole-number input for the custom time on the clock. Follows [value]
-/// when a chip sets it from outside.
-class _NumberField extends StatefulWidget {
-  const _NumberField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final int? value;
-  final ValueChanged<int?> onChanged;
-
-  @override
-  State<_NumberField> createState() => _NumberFieldState();
-}
-
-class _NumberFieldState extends State<_NumberField> {
-  late final _controller = TextEditingController(
-    text: widget.value?.toString(),
-  );
-
-  @override
-  void didUpdateWidget(_NumberField old) {
-    super.didUpdateWidget(old);
-    if (widget.value != int.tryParse(_controller.text)) {
-      _controller.text = widget.value?.toString() ?? '';
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    controller: _controller,
-    decoration: InputDecoration(labelText: widget.label),
-    keyboardType: TextInputType.number,
-    inputFormatters: [
-      FilteringTextInputFormatter.digitsOnly,
-      LengthLimitingTextInputFormatter(3),
-    ],
-    onChanged: (text) => widget.onChanged(int.tryParse(text)),
-  );
 }

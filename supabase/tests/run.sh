@@ -31,6 +31,7 @@ psql_in postgres -f "$here/supabase_stub.sql"
 for f in "$root"/supabase/migrations/*.sql; do
   psql_in postgres -f "$f"
 done
+psql_in postgres -f "$here/helpers.sql"
 for f in "$here"/*_test.sql; do
   psql_in postgres -f "$f"
 done
@@ -48,5 +49,6 @@ for seed in "$here"/upgrade/*_seed.sql; do
     [ "$(basename "$f" .sql)" = "$migration" ] && psql_in "$db" -f "$seed"
     psql_in "$db" -f "$f"
   done
+  psql_in "$db" -f "$here/helpers.sql"
   psql_in "$db" -f "$here/upgrade/${migration}_test.sql"
 done

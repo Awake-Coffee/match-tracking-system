@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import 'data/ladder_repository.dart';
 import 'design/design_scope.dart';
+import 'domain/models.dart';
 import 'ui/app_scope.dart';
 import 'ui/game.dart';
 import 'ui/navigation.dart';
@@ -148,6 +149,11 @@ class _AwakeAppState extends State<AwakeApp> {
     ],
   );
 
+  /// The mode of [game] a page was opened for (`?mode=` or `:mode`), if
+  /// it names one.
+  GameMode? _mode(Game game, String? key) =>
+      game.modes.where((m) => m.key == key).firstOrNull;
+
   /// The same pages for each game, under its own prefix.
   List<RouteBase> _gameRoutes(Game game) => [
     GoRoute(
@@ -158,12 +164,23 @@ class _AwakeAppState extends State<AwakeApp> {
       ),
     ),
     GoRoute(
+      path: game.path('ladder/:mode'),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: state.pageKey,
+        child: switch (_mode(game, state.pathParameters['mode'])) {
+          final mode? => ModeLadderScreen(mode: mode),
+          null => NotFoundScreen(game: game),
+        },
+      ),
+    ),
+    GoRoute(
       path: game.path('record'),
       pageBuilder: (context, state) => NoTransitionPage(
         key: state.pageKey,
         child: RecordScreen(
           game: game,
           initialOpponentId: state.uri.queryParameters['opponent'],
+          initialMode: _mode(game, state.uri.queryParameters['mode']),
         ),
       ),
     ),
@@ -181,7 +198,12 @@ class _AwakeAppState extends State<AwakeApp> {
       path: game.path('me'),
       pageBuilder: (context, state) => NoTransitionPage(
         key: state.pageKey,
-        child: ProfileScreen(game: game, playerId: _repo.me!.id, isMe: true),
+        child: ProfileScreen(
+          game: game,
+          playerId: _repo.me!.id,
+          isMe: true,
+          initialMode: _mode(game, state.uri.queryParameters['mode']),
+        ),
       ),
     ),
     GoRoute(
@@ -193,13 +215,15 @@ class _AwakeAppState extends State<AwakeApp> {
       path: game.path('players/:id'),
       pageBuilder: (context, state) {
         final id = state.pathParameters['id']!;
+        final mode = _mode(game, state.uri.queryParameters['mode']);
         return NoTransitionPage(
           key: state.pageKey,
           child: ProfileScreen(
-            key: ValueKey((game, id)),
+            key: ValueKey((game, id, mode)),
             game: game,
             playerId: id,
             isMe: id == _repo.me?.id,
+            initialMode: mode,
           ),
         );
       },

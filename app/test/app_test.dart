@@ -34,6 +34,14 @@ final _list = find
     .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
     .first;
 
+/// Opens [mode]'s ladder from its game's ladders overview.
+Future<void> _openLadder(WidgetTester tester, String mode) async {
+  final card = find.text(mode);
+  await tester.scrollUntilVisible(card, 200, scrollable: _list);
+  await tester.tap(card);
+  await tester.pumpAndSettle();
+}
+
 Finder _awaitingBadge(String count) =>
     find.descendant(of: find.byType(Badge), matching: find.text(count));
 
@@ -64,8 +72,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('The ladder'), findsOneWidget);
-    expect(find.textContaining('You\'re '), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
+    // Ana won her one game: first on the standard ladder.
+    expect(find.text('1st'), findsOneWidget);
   });
 
   // Whether the longer headline fits a phone is in sign_in_layout_test.dart.
@@ -230,7 +239,7 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
   });
 
   testWidgets('a failed sign-up stays an error in the loss colour', (
@@ -392,8 +401,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.passwordChanges, [anaEmail]);
     expect(repo.passwordRecoveryPending, isFalse);
-    expect(find.text('The ladder'), findsOneWidget);
-    expect(find.textContaining('You\'re '), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
+    // Ana won her one game: first on the standard ladder.
+    expect(find.text('1st'), findsOneWidget);
   });
 
   testWidgets('a recovery in progress cannot wander off to the ladder', (
@@ -507,7 +517,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
     await tester.pumpAndSettle();
     expect(repo.passwordChanges, [anaEmail]);
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
   });
 
   testWidgets('cancelling a recovery signs out', (tester) async {
@@ -529,7 +539,7 @@ void main() {
   ) async {
     _phone(tester);
     final repo = await anaAndBogdan();
-    final before = repo.me!.rating;
+    final before = repo.me!.chess.rating;
     await tester.pumpWidget(
       AwakeApp(repository: repo, initialLocation: '/record?opponent=demo-2'),
     );
@@ -540,6 +550,8 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('I won'));
+    await tester.ensureVisible(find.text('White'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('White'));
     final more = find.widgetWithText(ChoiceChip, 'More…');
     await tester.ensureVisible(more);
@@ -573,9 +585,9 @@ void main() {
     await tester.tap(send);
     await tester.pumpAndSettle();
 
-    expect(repo.me!.rating, before);
+    expect(repo.me!.chess.rating, before);
     expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     expect(find.textContaining('Fischer 7 min + 4 s'), findsOneWidget);
   });
@@ -653,9 +665,8 @@ void main() {
       // would pass every test that only checks the button.
       final anaId = repo.me!.id;
       await tapVisible(tester, send);
-      final sent = (await repo.matchRequests()).singleWhere(
-        (r) => r.requestedBy == anaId,
-      );
+      final sent = (await repo.requestsIn(MatchType.chess))
+          .singleWhere((r) => r.requestedBy == anaId);
       expect(sent.colorOf(anaId), PieceColor.black);
       expect(sent.outcomeFor(anaId), Outcome.win);
     });
@@ -913,11 +924,7 @@ void main() {
       }
       await repo.signIn(email: anaEmail, password: 'x');
       for (final i in report ? [0, 1, 2, 3, 4, 1] : const <int>[]) {
-        await repo.requestSwuMatch(
-          opponentId: ids[i],
-          myGames: 2,
-          opponentGames: 0,
-        );
+        await repo.reportSwu(opponentId: ids[i], myGames: 2, opponentGames: 0);
       }
       return repo;
     }
@@ -981,16 +988,16 @@ void main() {
     testWidgets('confirmed and pending results merge by time; declined do not '
         'count', (tester) async {
       final repo = await regulars(report: false);
-      final ids = {for (final p in await repo.ladder()) p.displayName: p.id};
-      Future<void> report(String name) => repo.requestSwuMatch(
-        opponentId: ids[name]!,
-        myGames: 2,
-        opponentGames: 0,
-      );
+      final ids = {
+        for (final p in await repo.ladderIn(GameMode.standardChess))
+          p.displayName: p.id,
+      };
+      Future<void> report(String name) =>
+          repo.reportSwu(opponentId: ids[name]!, myGames: 2, opponentGames: 0);
       Future<void> answer(String name, {required bool accept}) async {
         await repo.signIn(email: '$name@example.com', password: 'x');
-        final request = (await repo.swuMatchRequests()).single;
-        await repo.respondToSwuMatchRequest(request.id, accept: accept);
+        final request = (await repo.requestsIn(MatchType.swu)).single;
+        await repo.respondToRequest(request.id, accept: accept);
         await repo.signIn(email: anaEmail, password: 'x');
       }
 
@@ -1059,7 +1066,7 @@ void main() {
   ) async {
     _phone(tester);
     final repo = await anaAndBogdan();
-    final before = repo.me!.rating;
+    final before = repo.me!.chess.rating;
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
@@ -1068,9 +1075,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
     await tester.pumpAndSettle();
 
-    expect(repo.me!.rating, lessThan(before));
+    expect(repo.me!.chess.rating, lessThan(before));
     expect(
-      find.textContaining('Game confirmed. You\'re now ${repo.me!.rating}'),
+      find.textContaining(
+        'Game confirmed. You\'re now ${repo.me!.chess.rating}',
+      ),
       findsOneWidget,
     );
     expect(find.text('Bogdan says you lost'), findsNothing);
@@ -1115,7 +1124,7 @@ void main() {
       repo.elsewhere(() async {
         final anaId = repo.me!.id;
         await repo.signIn(email: bogdanEmail, password: 'x');
-        await repo.requestMatch(
+        await repo.reportChess(
           opponentId: anaId,
           myColor: PieceColor.black,
           myOutcome: Outcome.draw,
@@ -1189,6 +1198,8 @@ void main() {
     await tester.pumpWidget(
       AwakeApp(repository: repo, initialLocation: '/record?opponent=demo-2'),
     );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Black'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Black'));
     final won = find.text('I won');
@@ -1276,6 +1287,7 @@ void main() {
     // Back to the ladder, then open another player's profile.
     await tester.tap(find.text('Ladder').last);
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Standard');
     final bogdan = find
         .descendant(
           of: find.byType(PawnsLadder),
@@ -1480,7 +1492,10 @@ void main() {
     expect(repo.isSignedIn, isFalse);
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
     expect(find.text('Your account was deleted.'), findsOneWidget);
-    expect((await repo.ladder()).map((p) => p.displayName), ['Bogdan']);
+    expect(
+      (await repo.ladderIn(GameMode.standardChess)).map((p) => p.displayName),
+      ['Bogdan'],
+    );
   });
 
   testWidgets('a failed account deletion says so and can be tried again', (
@@ -1530,6 +1545,8 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
+    expect(find.text('Ladders'), findsOneWidget);
+    await _openLadder(tester, 'Standard');
     expect(find.text('The ladder'), findsOneWidget);
     // Pending chess game on the Ladder tab, pending match on the picker.
     expect(_awaitingBadge('1'), findsNWidgets(2));
@@ -1539,12 +1556,16 @@ void main() {
     expect(find.text('YOUR LADDERS'), findsOneWidget);
     expect(find.text('1 to confirm'), findsNWidgets(2));
     expect(
-      find.text('${ana.backgammon.rating} · 1st of 2', findRichText: true),
+      find.text(
+        '${ana.backgammon.rating} · 1st of 2 in Standard',
+        findRichText: true,
+      ),
       findsOneWidget,
     );
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();
     expect(find.text('YOUR LADDERS'), findsNothing);
+    await _openLadder(tester, 'Standard');
     expect(find.text('The race'), findsOneWidget);
     expect(find.byType(PawnsLadder), findsNothing);
     final race = find.byType(BaizeLadder);
@@ -1556,7 +1577,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: race, matching: find.text('${ana.rating}')),
+      find.descendant(of: race, matching: find.text('${ana.chess.rating}')),
       findsNothing,
     );
     expect(find.text('Bogdan says you lost 1-3'), findsOneWidget);
@@ -1618,6 +1639,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    await _openLadder(tester, 'Standard');
     await expectUnranked(PawnsLadder);
 
     await tester.tap(switchGame);
@@ -1627,12 +1649,14 @@ void main() {
     expect(find.textContaining('of 3', findRichText: true), findsNothing);
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Standard');
     await expectUnranked(BaizeLadder);
 
     await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Premier');
     await expectUnranked(RouteLadder);
   });
 
@@ -1672,6 +1696,7 @@ void main() {
     }
 
     // No empty top-eight board: the summary leads straight to the group.
+    await _openLadder(tester, 'Standard');
     expect(find.text('No games yet.'), findsOneWidget);
     expect(find.textContaining('top eight'), findsNothing);
     await expectAllWaiting(PawnsLadder);
@@ -1680,12 +1705,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Backgammon'));
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Standard');
     await expectAllWaiting(BaizeLadder);
 
     await tester.tap(switchGame);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Premier');
     await expectAllWaiting(RouteLadder);
   });
 
@@ -1696,8 +1723,8 @@ void main() {
       Game game,
       String? meId,
     ) async => LadderData(
-      game: game,
-      players: await game.ladderOf(repo),
+      mode: game.type.defaultMode,
+      players: await repo.ladderIn(game.type.defaultMode),
       meId: meId,
       onOpen: (_) {},
       now: DateTime(2026, 10, 5),
@@ -1714,9 +1741,11 @@ void main() {
       // one point a tie falls short.
       final lead = {
         for (final g in Game.values)
-          g: switch (await g.ladderOf(repo)) {
+          g: switch (await repo.ladderIn(g.type.defaultMode)) {
             [final ana, final bogdan] =>
-              g.ratingOf(ana) - g.ratingOf(bogdan) + 1,
+              ana.standingIn(g.type.defaultMode).rating -
+                  bogdan.standingIn(g.type.defaultMode).rating +
+                  1,
             _ => fail('expected Ana and Bogdan on the ${g.label} ladder'),
           },
       };
@@ -1738,16 +1767,20 @@ void main() {
         );
       }
 
+      await _openLadder(tester, 'Standard');
+
       await expectChase(PawnsLadder, Game.chess);
       await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
+      await _openLadder(tester, 'Standard');
       await expectChase(BaizeLadder, Game.backgammon);
       await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();
+      await _openLadder(tester, 'Premier');
       await expectChase(RouteLadder, Game.swu);
     });
 
@@ -1775,7 +1808,7 @@ void main() {
       final repo = await anaAndBogdanWithSwu();
       await repo.signIn(email: bogdanEmail, password: 'x');
       final bogdanId = repo.me!.id;
-      final anaId = (await repo.ladder())
+      final anaId = (await repo.ladderIn(GameMode.standardChess))
           .firstWhere((p) => p.id != bogdanId)
           .id;
       Future<void> open(String location) async {
@@ -1853,9 +1886,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
-    expect(find.text('The race'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
-    expect(find.text('Match to 3, you won 3-1'), findsOneWidget);
+    expect(find.text('Standard · Match to 3, you won 3-1'), findsOneWidget);
     expect(repo.me!.backgammon.rating, backgammonStartingRating);
   });
 
@@ -1915,7 +1948,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(send);
     await tester.pumpAndSettle();
-    expect(find.text('Match to 3, you lost 2-3'), findsOneWidget);
+    expect(find.text('Standard · Match to 3, you lost 2-3'), findsOneWidget);
   });
 
   testWidgets('a match to 1 needs no loser score', (tester) async {
@@ -1948,7 +1981,7 @@ void main() {
     expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
     await tester.tap(send);
     await tester.pumpAndSettle();
-    expect(find.text('Match to 1, you won 1-0'), findsOneWidget);
+    expect(find.text('Standard · Match to 1, you won 1-0'), findsOneWidget);
   });
 
   testWidgets('confirming a backgammon match rates it', (tester) async {
@@ -2003,6 +2036,7 @@ void main() {
 
     await tester.tap(find.text('Ladder').last);
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Standard');
     final bogdan = find
         .descendant(
           of: find.byType(BaizeLadder),
@@ -2033,6 +2067,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Star Wars: Unlimited'));
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Premier');
 
     final route = find.byType(RouteLadder);
     expect(find.text('The route'), findsOneWidget);
@@ -2087,9 +2122,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
-    expect(find.text('The route'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
-    expect(find.text('Best of three, you won 1-0'), findsOneWidget);
+    expect(find.text('Premier · Best of three, you won 1-0'), findsOneWidget);
     expect(repo.me!.swu.rating, swuStartingRating);
   });
 
@@ -2186,6 +2221,7 @@ void main() {
 
     await tester.tap(find.text('Ladder').last);
     await tester.pumpAndSettle();
+    await _openLadder(tester, 'Premier');
     final bogdan = find
         .descendant(
           of: find.byType(RouteLadder),
@@ -2224,7 +2260,11 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
       await tester.pumpAndSettle();
-      expect(repo.me!.rating, 998, reason: 'the preview matches the server');
+      expect(
+        repo.me!.chess.rating,
+        998,
+        reason: 'the preview matches the server',
+      );
     });
 
     testWidgets('an outgoing chess result previews the reporter\'s rating', (
@@ -2248,10 +2288,10 @@ void main() {
     testWidgets('an unrated result says ratings stay put', (tester) async {
       _phone(tester);
       final repo = await anaAndBogdan();
-      final bogdanId = (await repo.ladder())
+      final bogdanId = (await repo.ladderIn(GameMode.standardChess))
           .firstWhere((p) => p.id != repo.me!.id)
           .id;
-      await repo.requestMatch(
+      await repo.reportChess(
         opponentId: bogdanId,
         myColor: PieceColor.black,
         myOutcome: Outcome.win,
@@ -2318,13 +2358,19 @@ void main() {
         find.text('Bogdan will be told, and the result won\'t count.'),
         findsOneWidget,
       );
-      expect((await repo.matchRequests()).single.awaits(repo.me!.id), isTrue);
+      expect(
+        (await repo.requestsIn(MatchType.chess)).single.awaits(repo.me!.id),
+        isTrue,
+      );
 
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
       expect(find.text('Bogdan says you lost'), findsOneWidget);
-      expect((await repo.matchRequests()).single.awaits(repo.me!.id), isTrue);
+      expect(
+        (await repo.requestsIn(MatchType.chess)).single.awaits(repo.me!.id),
+        isTrue,
+      );
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Decline'));
       await tester.pumpAndSettle();
@@ -2342,7 +2388,11 @@ void main() {
         findsNothing,
         reason: 'nothing left to answer',
       );
-      expect(repo.me!.rating, 1020, reason: 'declined results move no rating');
+      expect(
+        repo.me!.chess.rating,
+        1020,
+        reason: 'declined results move no rating',
+      );
     });
 
     testWidgets('the reporter sees the decline until they dismiss it', (
@@ -2350,8 +2400,8 @@ void main() {
     ) async {
       _phone(tester);
       final repo = await anaAndBogdan();
-      final request = (await repo.matchRequests()).single;
-      await repo.respondToMatchRequest(request.id, accept: false);
+      final request = (await repo.requestsIn(MatchType.chess)).single;
+      await repo.respondToRequest(request.id, accept: false);
       await repo.signIn(email: bogdanEmail, password: 'x');
       await tester.pumpWidget(AwakeApp(repository: repo));
       await tester.pumpAndSettle();
@@ -2372,7 +2422,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your game'), findsNothing);
-      expect(await repo.matchRequests(), isEmpty);
+      expect(await repo.requestsIn(MatchType.chess), isEmpty);
     });
 
     testWidgets('a declined backgammon or SWU match says so too', (
@@ -2380,11 +2430,11 @@ void main() {
     ) async {
       _phone(tester);
       final repo = await anaAndBogdanWithSwu();
-      for (final request in await repo.backgammonMatchRequests()) {
-        await repo.respondToBackgammonMatchRequest(request.id, accept: false);
+      for (final request in await repo.requestsIn(MatchType.backgammon)) {
+        await repo.respondToRequest(request.id, accept: false);
       }
-      for (final request in await repo.swuMatchRequests()) {
-        await repo.respondToSwuMatchRequest(request.id, accept: false);
+      for (final request in await repo.requestsIn(MatchType.swu)) {
+        await repo.respondToRequest(request.id, accept: false);
       }
       await repo.signIn(email: bogdanEmail, password: 'x');
       await tester.pumpWidget(AwakeApp(repository: repo));
@@ -2395,7 +2445,7 @@ void main() {
       await tester.tap(find.text('Backgammon'));
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your match'), findsOneWidget);
-      expect(find.text('Match to 3, you won 3-1'), findsOneWidget);
+      expect(find.text('Standard · Match to 3, you won 3-1'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your match'), findsNothing);
@@ -2405,7 +2455,7 @@ void main() {
       await tester.tap(find.text('Star Wars: Unlimited'));
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your match'), findsOneWidget);
-      expect(find.text('Best of three, you won 2-0'), findsOneWidget);
+      expect(find.text('Premier · Best of three, you won 2-0'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Dismiss'));
       await tester.pumpAndSettle();
       expect(find.text('Ana declined your match'), findsNothing);
@@ -2416,7 +2466,7 @@ void main() {
       PendingResult card(Duration age) => PendingResult(
         headline: 'Bogdan says you lost',
         detail: 'You had white',
-        opponentName: 'Bogdan',
+        reporterName: 'Bogdan',
         rated: true,
         incoming: true,
         reportedAt: DateTime.now().subtract(age),
@@ -2464,7 +2514,7 @@ void main() {
                   PendingResult(
                     headline: 'Ana declined your game',
                     detail: 'You had white, you won',
-                    opponentName: 'Ana',
+                    reporterName: 'Ana',
                     rated: false,
                     incoming: false,
                     declined: true,
@@ -2514,15 +2564,15 @@ void main() {
       final repo = await anaAndBogdan();
       final opened = <String>[];
       final data = LadderData(
-        game: Game.chess,
-        players: await Game.chess.ladderOf(repo),
+        mode: GameMode.standardChess,
+        players: await repo.ladderIn(GameMode.standardChess),
         meId: repo.me!.id,
         onOpen: (p) => opened.add(p.displayName),
         now: DateTime(2026, 10, 5),
       );
       await tester.pumpWidget(inDesign(PawnsLadder(data: data)));
-      final ana = 'Ana, rating ${data.ranked[0].rating}';
-      final bogdan = 'Bogdan, rating ${data.ranked[1].rating}';
+      final ana = 'Ana, rating ${data.ranked[0].chess.rating}';
+      final bogdan = 'Bogdan, rating ${data.ranked[1].chess.rating}';
 
       // Pawns come before the list in tab order, so the first Tab lands on
       // the top-ranked pawn (Ana, who won) and the second on Bogdan's.
@@ -2548,8 +2598,8 @@ void main() {
       final repo = await anaAndBogdan();
       final opened = <String>[];
       final data = LadderData(
-        game: Game.chess,
-        players: await Game.chess.ladderOf(repo),
+        mode: GameMode.standardChess,
+        players: await repo.ladderIn(GameMode.standardChess),
         meId: repo.me!.id,
         onOpen: (p) => opened.add(p.displayName),
         now: DateTime(2026, 10, 5),
@@ -2585,7 +2635,9 @@ void main() {
     ) async {
       _phone(tester, width: 400);
       final repo = await anaAndBogdan();
-      await tester.pumpWidget(AwakeApp(repository: repo));
+      await tester.pumpWidget(
+        AwakeApp(repository: repo, initialLocation: '/ladder/standard'),
+      );
       await tester.pumpAndSettle();
 
       final pawns = find.descendant(
@@ -2693,13 +2745,21 @@ class _CountedGames extends DemoLadderRepository {
   int ownGamesFetches = 0;
 
   @override
-  Future<List<ChessMatch>> matches({
+  Future<List<GameResult>> results(
+    MatchType type, {
+    GameMode? mode,
     String? playerId,
     int limit = 50,
     DateTime? before,
   }) {
-    if (playerId != null) ownGamesFetches++;
-    return super.matches(playerId: playerId, limit: limit, before: before);
+    if (type == MatchType.chess && playerId != null) ownGamesFetches++;
+    return super.results(
+      type,
+      mode: mode,
+      playerId: playerId,
+      limit: limit,
+      before: before,
+    );
   }
 }
 

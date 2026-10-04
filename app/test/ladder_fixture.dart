@@ -1,4 +1,5 @@
 import 'package:awake_ladder/data/demo_repository.dart';
+import 'package:awake_ladder/data/ladder_repository.dart';
 import 'package:awake_ladder/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -42,10 +43,86 @@ class SharedLadder extends DemoLadderRepository {
   }
 
   @override
-  Future<List<Player>> ladder() async {
+  Future<List<Player>> members() async {
     if (offline) throw Exception('connection dropped');
-    return super.ladder();
+    return super.members();
   }
+}
+
+/// The duels most tests report, from the signed-in member's side (white is
+/// side 1 in chess, the reporter otherwise), and reads per game.
+extension Duels on LadderRepository {
+  Future<ResultRequest> reportChess({
+    required String opponentId,
+    required PieceColor myColor,
+    required Outcome myOutcome,
+    required ClockSetting clock,
+    bool rated = true,
+    GameMode mode = GameMode.standardChess,
+  }) {
+    final mySide = myColor == PieceColor.white ? 1 : 2;
+    return reportResult(
+      ResultReport(
+        mode: mode,
+        seats: [
+          (playerId: me!.id, side: mySide, score: myOutcome.score),
+          (playerId: opponentId, side: 3 - mySide, score: 1 - myOutcome.score),
+        ],
+        rated: rated,
+        clock: clock,
+      ),
+    );
+  }
+
+  Future<ResultRequest> reportBackgammon({
+    required String opponentId,
+    required int myScore,
+    required int opponentScore,
+    bool rated = true,
+    GameMode mode = GameMode.standardBackgammon,
+  }) => _reportDuel(mode, opponentId, myScore, opponentScore, rated);
+
+  Future<ResultRequest> reportSwu({
+    required String opponentId,
+    required int myGames,
+    required int opponentGames,
+    bool rated = true,
+    GameMode mode = GameMode.premier,
+  }) => _reportDuel(mode, opponentId, myGames, opponentGames, rated);
+
+  Future<ResultRequest> _reportDuel(
+    GameMode mode,
+    String opponentId,
+    int myScore,
+    int opponentScore,
+    bool rated,
+  ) => reportResult(
+    ResultReport(
+      mode: mode,
+      seats: [
+        (playerId: me!.id, side: 1, score: myScore),
+        (playerId: opponentId, side: 2, score: opponentScore),
+      ],
+      rated: rated,
+    ),
+  );
+
+  /// Every member in [mode]'s ladder order.
+  Future<List<Player>> ladderIn(GameMode mode) async =>
+      ladderOf(await members(), mode);
+
+  /// The signed-in member's open and declined requests in [type].
+  Future<List<ResultRequest>> requestsIn(MatchType type) async => [
+    for (final r in await requests())
+      if (r.mode.type == type) r,
+  ];
+}
+
+/// A member's standing in each game's original mode.
+extension OriginalModes on Player {
+  Standing get chess => standingIn(GameMode.standardChess);
+  Standing get backgammon => standingIn(GameMode.standardBackgammon);
+  Standing get swu => standingIn(GameMode.premier);
 }
 
 /// Ana and Bogdan with one rated game (Ana won) and one Bogdan reported
@@ -61,15 +138,15 @@ Future<DemoLadderRepository> anaAndBogdan({DemoLadderRepository? into}) async {
   await repo.signOut();
 
   await repo.signIn(email: anaEmail, password: 'x');
-  final rated = await repo.requestMatch(
+  final rated = await repo.reportChess(
     opponentId: bogdanId,
     myColor: PieceColor.white,
     myOutcome: Outcome.win,
     clock: const ClockSetting(TimeControl.sudden5),
   );
   await repo.signIn(email: bogdanEmail, password: 'x');
-  await repo.respondToMatchRequest(rated.id, accept: true);
-  await repo.requestMatch(
+  await repo.respondToRequest(rated.id, accept: true);
+  await repo.reportChess(
     opponentId: anaId,
     myColor: PieceColor.white,
     myOutcome: Outcome.win,
@@ -84,22 +161,18 @@ Future<DemoLadderRepository> anaAndBogdan({DemoLadderRepository? into}) async {
 Future<DemoLadderRepository> anaAndBogdanWithBackgammon() async {
   final repo = await anaAndBogdan();
   final anaId = repo.me!.id;
-  final bogdanId = (await repo.ladder()).firstWhere((p) => p.id != anaId).id;
+  final bogdanId = (await repo.ladderIn(GameMode.standardChess))
+      .firstWhere((p) => p.id != anaId)
+      .id;
 
-  final rated = await repo.requestBackgammonMatch(
+  final rated = await repo.reportBackgammon(
     opponentId: bogdanId,
-    matchLength: 5,
     myScore: 5,
     opponentScore: 3,
   );
   await repo.signIn(email: bogdanEmail, password: 'x');
-  await repo.respondToBackgammonMatchRequest(rated.id, accept: true);
-  await repo.requestBackgammonMatch(
-    opponentId: anaId,
-    matchLength: 3,
-    myScore: 3,
-    opponentScore: 1,
-  );
+  await repo.respondToRequest(rated.id, accept: true);
+  await repo.reportBackgammon(opponentId: anaId, myScore: 3, opponentScore: 1);
   await repo.signIn(email: anaEmail, password: 'x');
   return repo;
 }
@@ -110,16 +183,18 @@ Future<DemoLadderRepository> anaAndBogdanWithBackgammon() async {
 Future<DemoLadderRepository> anaAndBogdanWithSwu() async {
   final repo = await anaAndBogdanWithBackgammon();
   final anaId = repo.me!.id;
-  final bogdanId = (await repo.ladder()).firstWhere((p) => p.id != anaId).id;
+  final bogdanId = (await repo.ladderIn(GameMode.standardChess))
+      .firstWhere((p) => p.id != anaId)
+      .id;
 
-  final rated = await repo.requestSwuMatch(
+  final rated = await repo.reportSwu(
     opponentId: bogdanId,
     myGames: 2,
     opponentGames: 1,
   );
   await repo.signIn(email: bogdanEmail, password: 'x');
-  await repo.respondToSwuMatchRequest(rated.id, accept: true);
-  await repo.requestSwuMatch(opponentId: anaId, myGames: 2, opponentGames: 0);
+  await repo.respondToRequest(rated.id, accept: true);
+  await repo.reportSwu(opponentId: anaId, myGames: 2, opponentGames: 0);
   await repo.signIn(email: anaEmail, password: 'x');
   return repo;
 }

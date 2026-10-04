@@ -1,24 +1,15 @@
-import 'dart:math' as math;
-
-import '../domain/backgammon.dart';
-import '../domain/elo.dart';
 import '../domain/models.dart';
-import '../domain/swu.dart';
 import 'ladder_repository.dart';
 
 /// In-memory ladder used when no Supabase project is configured.
 ///
-/// Applies the same Elo rules as the database so the app can be tried out
+/// Applies the same rules as the database so the app can be tried out
 /// without a backend. Starts empty and lives only in this tab.
 class DemoLadderRepository extends LadderRepository {
   final Map<String, Player> _players = {};
   final Map<String, String> _emails = {};
-  final List<ChessMatch> _matches = [];
-  final List<MatchRequest> _requests = [];
-  final List<BackgammonMatch> _backgammonMatches = [];
-  final List<BackgammonMatchRequest> _backgammonRequests = [];
-  final List<SwuMatch> _swuMatches = [];
-  final List<SwuMatchRequest> _swuRequests = [];
+  final List<GameResult> _results = [];
+  final List<ResultRequest> _requests = [];
   int _nextRequestId = 1;
 
   /// Never reused: a deleted member's id stays on their results, so a
@@ -102,16 +93,7 @@ class DemoLadderRepository extends LadderRepository {
 
   Player _addPlayer(String name, String email) {
     final id = 'demo-${_nextPlayerId++}';
-    final player = Player(
-      id: id,
-      displayName: _uniqueName(name),
-      rating: startingRating,
-      peakRating: startingRating,
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-    );
+    final player = Player(id: id, displayName: _uniqueName(name));
     _players[id] = player;
     _emails[email.trim().toLowerCase()] = id;
     return player;
@@ -130,121 +112,76 @@ class DemoLadderRepository extends LadderRepository {
     return candidate;
   }
 
-  ({String whiteId, String blackId}) _sides(
-    String me,
-    String opponentId,
-    PieceColor myColor,
-  ) => myColor == PieceColor.white
-      ? (whiteId: me, blackId: opponentId)
-      : (whiteId: opponentId, blackId: me);
-
-  /// A pending request is read by both players, a declined one only by its
+  /// A pending request is read by its players, a declined one only by its
   /// reporter (as the database's policies have it).
-  bool _visibleTo(String meId, RequestStatus status, String reporterId) =>
-      status == RequestStatus.pending || reporterId == meId;
-
-  MatchRequest _addRequest({
-    required String by,
-    required String opponentId,
-    required PieceColor myColor,
-    required Outcome myOutcome,
-    required ClockSetting clock,
-    required bool rated,
-  }) {
-    final (:whiteId, :blackId) = _sides(by, opponentId, myColor);
-    final request = MatchRequest(
-      id: _nextRequestId++,
-      whiteId: whiteId,
-      blackId: blackId,
-      whiteName: _players[whiteId]!.displayName,
-      blackName: _players[blackId]!.displayName,
-      result: resultFor(myColor, myOutcome),
-      clock: clock,
-      rated: rated,
-      requestedBy: by,
-      createdAt: DateTime.now(),
-    );
-    _requests.add(request);
-    return request;
-  }
-
-  ChessMatch _apply({
-    required String me,
-    required String opponentId,
-    required PieceColor myColor,
-    required Outcome myOutcome,
-    ClockSetting? clock,
-    bool rated = true,
-  }) {
-    final (:whiteId, :blackId) = _sides(me, opponentId, myColor);
-    final white = _players[whiteId]!;
-    final black = _players[blackId]!;
-    final result = resultFor(myColor, myOutcome);
-    final whiteScore = switch (result) {
-      MatchResult.white => 1.0,
-      MatchResult.black => 0.0,
-      MatchResult.draw => 0.5,
-    };
-    final whiteDelta = rated ? fideRatingChange(white, black, whiteScore) : 0;
-    final blackDelta = rated
-        ? fideRatingChange(black, white, 1 - whiteScore)
-        : 0;
-
-    if (rated) {
-      _players[whiteId] = white.copyWith(
-        rating: white.rating + whiteDelta,
-        peakRating: math.max(white.peakRating, white.rating + whiteDelta),
-        gamesPlayed: white.gamesPlayed + 1,
-        wins: white.wins + (result == MatchResult.white ? 1 : 0),
-        losses: white.losses + (result == MatchResult.black ? 1 : 0),
-        draws: white.draws + (result == MatchResult.draw ? 1 : 0),
-      );
-      _players[blackId] = black.copyWith(
-        rating: black.rating + blackDelta,
-        peakRating: math.max(black.peakRating, black.rating + blackDelta),
-        gamesPlayed: black.gamesPlayed + 1,
-        wins: black.wins + (result == MatchResult.black ? 1 : 0),
-        losses: black.losses + (result == MatchResult.white ? 1 : 0),
-        draws: black.draws + (result == MatchResult.draw ? 1 : 0),
-      );
-    }
-
-    final match = ChessMatch(
-      id: _matches.length + 1,
-      whiteId: whiteId,
-      blackId: blackId,
-      whiteName: white.displayName,
-      blackName: black.displayName,
-      result: result,
-      clock: clock,
-      rated: rated,
-      whiteRatingBefore: white.rating,
-      blackRatingBefore: black.rating,
-      whiteRatingDelta: whiteDelta,
-      blackRatingDelta: blackDelta,
-      playedAt: DateTime.now(),
-    );
-    _matches.add(match);
-    return match;
-  }
+  bool _visibleTo(String meId, ResultRequest r) =>
+      r.involves(meId) &&
+      (r.status == RequestStatus.pending || r.requestedBy == meId);
 
   /// Names follow renames; a deleted member's stay as they were when the
   /// account was deleted.
-  ChessMatch _withCurrentNames(ChessMatch m) => ChessMatch(
-    id: m.id,
-    whiteId: m.whiteId,
-    blackId: m.blackId,
-    whiteName: _players[m.whiteId]?.displayName ?? m.whiteName,
-    blackName: _players[m.blackId]?.displayName ?? m.blackName,
-    result: m.result,
-    clock: m.clock,
-    rated: m.rated,
-    whiteRatingBefore: m.whiteRatingBefore,
-    blackRatingBefore: m.blackRatingBefore,
-    whiteRatingDelta: m.whiteRatingDelta,
-    blackRatingDelta: m.blackRatingDelta,
-    playedAt: m.playedAt,
-  );
+  GameResult _withCurrentNames(GameResult r) =>
+      r.renamed((id) => _players[id]?.displayName);
+
+  /// Rates [request] once everyone confirmed it, as respond_to_match does.
+  GameResult _rate(ResultRequest request) {
+    final mode = request.mode;
+    final players = [for (final s in request.seats) _players[s.playerId]!];
+    final standings = {for (final p in players) p.id: p.standingIn(mode)};
+    final deltas = request.rated
+        ? ratingChanges(mode.type, [
+            for (final s in request.seats)
+              (
+                playerId: s.playerId,
+                side: s.side,
+                score: s.score,
+                standing: standings[s.playerId]!,
+              ),
+          ])
+        : {for (final p in players) p.id: 0};
+    if (request.rated) {
+      for (final p in players) {
+        _players[p.id] = p.copyWith(
+          standings: {
+            ...p.standings,
+            mode: standings[p.id]!.after(
+              delta: deltas[p.id]!,
+              outcome: request.outcomeFor(p.id),
+              experienceGained: mode.type == MatchType.backgammon
+                  ? request.matchLength
+                  : 0,
+            ),
+          },
+        );
+      }
+    }
+    final result = GameResult(
+      id: _results.length + 1,
+      mode: mode,
+      seats: [
+        for (final s in request.seats)
+          RatedSeat(
+            playerId: s.playerId,
+            name: _players[s.playerId]!.displayName,
+            side: s.side,
+            score: s.score,
+            ratingBefore: standings[s.playerId]!.rating,
+            ratingDelta: deltas[s.playerId]!,
+          ),
+      ],
+      rated: request.rated,
+      clock: request.clock,
+      recordedBy: request.requestedBy,
+      playedAt: DateTime.now(),
+    );
+    _results.add(result);
+    return result;
+  }
+
+  void _changed() {
+    _revision++;
+    notifyListeners();
+  }
 
   Player _requireMe() {
     final me = this.me;
@@ -323,25 +260,17 @@ class DemoLadderRepository extends LadderRepository {
     final me = _requireMe();
     // Confirmed results stay, under the name the member has now (as on the
     // server, which keeps each result's names in step with renames).
-    _matches.setAll(0, _matches.map(_withCurrentNames).toList());
-    _backgammonMatches.setAll(
-      0,
-      _backgammonMatches.map(_backgammonWithCurrentNames).toList(),
-    );
-    _swuMatches.setAll(0, _swuMatches.map(_swuWithCurrentNames).toList());
+    _results.setAll(0, _results.map(_withCurrentNames).toList());
     _emails.removeWhere((_, id) => id == me.id);
     _players.remove(me.id);
-    // Open requests go with the profile.
+    // Open requests go with any of their players.
     _requests.removeWhere((r) => r.involves(me.id));
-    _backgammonRequests.removeWhere((r) => r.involves(me.id));
-    _swuRequests.removeWhere((r) => r.involves(me.id));
     _revision++;
     await signOut();
   }
 
   @override
-  Future<List<Player>> ladder() async =>
-      _players.values.toList()..sort(compareLadder);
+  Future<List<Player>> members() async => _players.values.toList();
 
   @override
   Future<Player> player(String id) async {
@@ -351,473 +280,127 @@ class DemoLadderRepository extends LadderRepository {
   }
 
   @override
-  Future<List<ChessMatch>> matches({
+  Future<List<GameResult>> results(
+    MatchType type, {
+    GameMode? mode,
     String? playerId,
     int limit = 50,
     DateTime? before,
-  }) async => _matches.reversed
-      .where((m) => playerId == null || m.involves(playerId))
-      .where((m) => before == null || m.playedAt.isBefore(before))
+  }) async => _results.reversed
+      .where((r) => r.mode.type == type && (mode == null || r.mode == mode))
+      .where((r) => playerId == null || r.involves(playerId))
+      .where((r) => before == null || r.playedAt.isBefore(before))
       .take(limit)
       .map(_withCurrentNames)
       .toList();
 
   @override
-  Future<MatchRequest> requestMatch({
-    required String opponentId,
-    required PieceColor myColor,
-    required Outcome myOutcome,
-    required ClockSetting clock,
-    bool rated = true,
-  }) async {
+  Future<ResultRequest> reportResult(ResultReport report) async {
     final me = _requireMe();
-    if (opponentId == me.id) {
-      throw const LadderException('Choose an opponent other than yourself.');
+    final mode = report.mode;
+    final reason = invalidResultReason(mode, report.seats);
+    if (reason != null) throw LadderException('$reason.');
+    if (!report.seats.any((s) => s.playerId == me.id)) {
+      throw const LadderException('Record a result you played in.');
     }
-    if (!_players.containsKey(opponentId)) {
-      throw const LadderException('Opponent not found.');
+    final clock = report.clock;
+    if (mode.type == MatchType.chess) {
+      if (clock == null) {
+        throw const LadderException('Pick the time control you played.');
+      }
+      if (!clock.isComplete) {
+        throw const LadderException('Set the custom time you played.');
+      }
+    } else if (clock != null) {
+      throw const LadderException('Only chess has time controls.');
     }
-    if (!clock.isComplete) {
-      throw const LadderException('Set the custom time you played.');
+    if (report.seats.any((s) => !_players.containsKey(s.playerId))) {
+      throw const LadderException('Player not found.');
     }
-    final request = _addRequest(
-      by: me.id,
-      opponentId: opponentId,
-      myColor: myColor,
-      myOutcome: myOutcome,
-      clock: clock,
-      rated: rated,
-    );
-    _revision++;
-    notifyListeners();
-    return request;
-  }
-
-  @override
-  Future<List<MatchRequest>> matchRequests() async {
-    final me = _requireMe();
-    return _requests.reversed
-        .where(
-          (r) =>
-              r.involves(me.id) && _visibleTo(me.id, r.status, r.requestedBy),
-        )
-        .toList();
-  }
-
-  @override
-  Future<ChessMatch?> respondToMatchRequest(
-    int requestId, {
-    required bool accept,
-  }) async {
-    final me = _requireMe();
-    final request = _requests
-        .where(
-          (r) =>
-              r.id == requestId &&
-              r.involves(me.id) &&
-              r.status == RequestStatus.pending,
-        )
-        .firstOrNull;
-    if (request == null) {
-      throw const LadderException(
-        'That game is no longer waiting for confirmation.',
-      );
-    }
-    if (accept && !request.awaits(me.id)) {
-      throw const LadderException('Your opponent has to confirm this game.');
-    }
-    final reporter = request.requestedBy;
-    final index = _requests.indexOf(request);
-    // Declining tells the reporter; withdrawing just removes it.
-    if (!accept && reporter != me.id) {
-      _requests[index] = request.declined(DateTime.now());
-    } else {
-      _requests.removeAt(index);
-    }
-    final match = accept
-        ? _apply(
-            me: reporter,
-            opponentId: request.opponentId(reporter),
-            myColor: request.colorOf(reporter),
-            myOutcome: request.outcomeFor(reporter),
-            clock: request.clock,
-            rated: request.rated,
-          )
-        : null;
-    _revision++;
-    notifyListeners();
-    return match;
-  }
-
-  @override
-  Future<void> dismissMatchRequest(int requestId) async {
-    final me = _requireMe();
-    final removed = _requests.length;
-    _requests.removeWhere((r) => r.id == requestId && r.declinedFor(me.id));
-    if (_requests.length == removed) {
-      throw const LadderException('That game is not waiting to be dismissed.');
-    }
-    _revision++;
-    notifyListeners();
-  }
-
-  BackgammonMatch _backgammonWithCurrentNames(BackgammonMatch m) =>
-      BackgammonMatch(
-        id: m.id,
-        winnerId: m.winnerId,
-        loserId: m.loserId,
-        winnerName: _players[m.winnerId]?.displayName ?? m.winnerName,
-        loserName: _players[m.loserId]?.displayName ?? m.loserName,
-        matchLength: m.matchLength,
-        loserScore: m.loserScore,
-        rated: m.rated,
-        winnerRatingBefore: m.winnerRatingBefore,
-        loserRatingBefore: m.loserRatingBefore,
-        winnerRatingDelta: m.winnerRatingDelta,
-        loserRatingDelta: m.loserRatingDelta,
-        playedAt: m.playedAt,
-      );
-
-  BackgammonMatch _applyBackgammon(BackgammonMatchRequest request) {
-    final winner = _players[request.winnerId]!;
-    final loser = _players[request.loserId]!;
-    final length = request.matchLength;
-    final rated = request.rated;
-    final winnerDelta = rated
-        ? fibsRatingChange(
-            winner.backgammon,
-            loser.backgammon,
-            won: true,
-            matchLength: length,
-          )
-        : 0;
-    final loserDelta = rated
-        ? fibsRatingChange(
-            loser.backgammon,
-            winner.backgammon,
-            won: false,
-            matchLength: length,
-          )
-        : 0;
-    if (rated) {
-      _players[winner.id] = winner.copyWith(
-        backgammon: winner.backgammon.afterMatch(
-          delta: winnerDelta,
-          won: true,
-          matchLength: length,
-        ),
-      );
-      _players[loser.id] = loser.copyWith(
-        backgammon: loser.backgammon.afterMatch(
-          delta: loserDelta,
-          won: false,
-          matchLength: length,
-        ),
-      );
-    }
-    final match = BackgammonMatch(
-      id: _backgammonMatches.length + 1,
-      winnerId: winner.id,
-      loserId: loser.id,
-      winnerName: winner.displayName,
-      loserName: loser.displayName,
-      matchLength: length,
-      loserScore: request.loserScore,
-      rated: rated,
-      winnerRatingBefore: winner.backgammon.rating,
-      loserRatingBefore: loser.backgammon.rating,
-      winnerRatingDelta: winnerDelta,
-      loserRatingDelta: loserDelta,
-      playedAt: DateTime.now(),
-    );
-    _backgammonMatches.add(match);
-    return match;
-  }
-
-  @override
-  Future<List<Player>> backgammonLadder() async =>
-      _players.values.toList()..sort(compareBackgammonLadder);
-
-  @override
-  Future<List<BackgammonMatch>> backgammonMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  }) async => _backgammonMatches.reversed
-      .where((m) => playerId == null || m.involves(playerId))
-      .where((m) => before == null || m.playedAt.isBefore(before))
-      .take(limit)
-      .map(_backgammonWithCurrentNames)
-      .toList();
-
-  @override
-  Future<BackgammonMatchRequest> requestBackgammonMatch({
-    required String opponentId,
-    required int matchLength,
-    required int myScore,
-    required int opponentScore,
-    bool rated = true,
-  }) async {
-    final me = _requireMe();
-    if (opponentId == me.id) {
-      throw const LadderException('Choose an opponent other than yourself.');
-    }
-    final opponent = _players[opponentId];
-    if (opponent == null) throw const LadderException('Opponent not found.');
-    if (matchLength < 1 ||
-        matchLength > 25 ||
-        !isFinalScore(matchLength, myScore, opponentScore)) {
-      throw const LadderException(
-        'The winner\'s score must equal the match length.',
-      );
-    }
-    final iWon = myScore == matchLength;
-    final (winner, loser) = iWon ? (me, opponent) : (opponent, me);
-    final request = BackgammonMatchRequest(
+    final request = ResultRequest(
       id: _nextRequestId++,
-      winnerId: winner.id,
-      loserId: loser.id,
-      winnerName: winner.displayName,
-      loserName: loser.displayName,
-      matchLength: matchLength,
-      loserScore: math.min(myScore, opponentScore),
-      rated: rated,
+      mode: mode,
+      seats: [
+        for (final s in report.seats)
+          RequestSeat(
+            playerId: s.playerId,
+            name: _players[s.playerId]!.displayName,
+            side: s.side,
+            score: s.score,
+            confirmed: s.playerId == me.id,
+          ),
+      ],
+      rated: report.rated,
+      clock: clock,
       requestedBy: me.id,
       createdAt: DateTime.now(),
     );
-    _backgammonRequests.add(request);
-    _revision++;
-    notifyListeners();
+    _requests.add(request);
+    _changed();
     return request;
   }
 
   @override
-  Future<List<BackgammonMatchRequest>> backgammonMatchRequests() async {
+  Future<List<ResultRequest>> requests() async {
     final me = _requireMe();
-    return _backgammonRequests.reversed
-        .where(
-          (r) =>
-              r.involves(me.id) && _visibleTo(me.id, r.status, r.requestedBy),
-        )
-        .toList();
+    return _requests.reversed.where((r) => _visibleTo(me.id, r)).toList();
   }
 
   @override
-  Future<BackgammonMatch?> respondToBackgammonMatchRequest(
+  Future<GameResult?> respondToRequest(
     int requestId, {
     required bool accept,
   }) async {
     final me = _requireMe();
-    final request = _backgammonRequests
-        .where(
-          (r) =>
-              r.id == requestId &&
-              r.involves(me.id) &&
-              r.status == RequestStatus.pending,
-        )
-        .firstOrNull;
-    if (request == null) {
+    final index = _requests.indexWhere(
+      (r) =>
+          r.id == requestId &&
+          r.involves(me.id) &&
+          r.status == RequestStatus.pending,
+    );
+    if (index < 0) {
       throw const LadderException(
-        'That match is no longer waiting for confirmation.',
+        'That result is no longer waiting for confirmation.',
       );
     }
-    if (accept && !request.awaits(me.id)) {
-      throw const LadderException('Your opponent has to confirm this match.');
-    }
-    final index = _backgammonRequests.indexOf(request);
-    if (!accept && request.requestedBy != me.id) {
-      _backgammonRequests[index] = request.declined(DateTime.now());
+    final request = _requests[index];
+    GameResult? result;
+    if (!accept) {
+      // Declining tells the reporter; withdrawing just removes it.
+      if (request.requestedBy == me.id) {
+        _requests.removeAt(index);
+      } else {
+        _requests[index] = request.declined(me.id, DateTime.now());
+      }
     } else {
-      _backgammonRequests.removeAt(index);
+      if (request.requestedBy == me.id) {
+        throw const LadderException(
+          'The other players have to confirm this result.',
+        );
+      }
+      final confirmed = request.confirmedBy(me.id);
+      if (confirmed.waitingOn.isEmpty) {
+        _requests.removeAt(index);
+        result = _rate(confirmed);
+      } else {
+        _requests[index] = confirmed;
+      }
     }
-    final match = accept ? _applyBackgammon(request) : null;
-    _revision++;
-    notifyListeners();
-    return match;
+    _changed();
+    return result;
   }
 
   @override
-  Future<void> dismissBackgammonMatchRequest(int requestId) async {
+  Future<void> dismissRequest(int requestId) async {
     final me = _requireMe();
-    final before = _backgammonRequests.length;
-    _backgammonRequests.removeWhere(
-      (r) => r.id == requestId && r.declinedFor(me.id),
-    );
-    if (_backgammonRequests.length == before) {
-      throw const LadderException('That match is not waiting to be dismissed.');
-    }
-    _revision++;
-    notifyListeners();
-  }
-
-  SwuMatch _swuWithCurrentNames(SwuMatch m) => SwuMatch(
-    id: m.id,
-    reporterId: m.reporterId,
-    respondentId: m.respondentId,
-    reporterName: _players[m.reporterId]?.displayName ?? m.reporterName,
-    respondentName: _players[m.respondentId]?.displayName ?? m.respondentName,
-    reporterGames: m.reporterGames,
-    respondentGames: m.respondentGames,
-    rated: m.rated,
-    reporterRatingBefore: m.reporterRatingBefore,
-    respondentRatingBefore: m.respondentRatingBefore,
-    reporterRatingDelta: m.reporterRatingDelta,
-    respondentRatingDelta: m.respondentRatingDelta,
-    playedAt: m.playedAt,
-  );
-
-  SwuMatch _applySwu(SwuMatchRequest request) {
-    final reporter = _players[request.reporterId]!;
-    final respondent = _players[request.respondentId]!;
-    final reporterOutcome = request.outcomeFor(reporter.id);
-    final respondentOutcome = request.outcomeFor(respondent.id);
-    final rated = request.rated;
-    final reporterDelta = rated
-        ? fideRatingChange(reporter.swu, respondent.swu, reporterOutcome.score)
-        : 0;
-    final respondentDelta = rated
-        ? fideRatingChange(
-            respondent.swu,
-            reporter.swu,
-            respondentOutcome.score,
-          )
-        : 0;
-    if (rated) {
-      _players[reporter.id] = reporter.copyWith(
-        swu: reporter.swu.afterMatch(
-          delta: reporterDelta,
-          outcome: reporterOutcome,
-        ),
-      );
-      _players[respondent.id] = respondent.copyWith(
-        swu: respondent.swu.afterMatch(
-          delta: respondentDelta,
-          outcome: respondentOutcome,
-        ),
-      );
-    }
-    final match = SwuMatch(
-      id: _swuMatches.length + 1,
-      reporterId: reporter.id,
-      respondentId: respondent.id,
-      reporterName: reporter.displayName,
-      respondentName: respondent.displayName,
-      reporterGames: request.reporterGames,
-      respondentGames: request.respondentGames,
-      rated: rated,
-      reporterRatingBefore: reporter.swu.rating,
-      respondentRatingBefore: respondent.swu.rating,
-      reporterRatingDelta: reporterDelta,
-      respondentRatingDelta: respondentDelta,
-      playedAt: DateTime.now(),
-    );
-    _swuMatches.add(match);
-    return match;
-  }
-
-  @override
-  Future<List<Player>> swuLadder() async =>
-      _players.values.toList()..sort(compareSwuLadder);
-
-  @override
-  Future<List<SwuMatch>> swuMatches({
-    String? playerId,
-    int limit = 50,
-    DateTime? before,
-  }) async => _swuMatches.reversed
-      .where((m) => playerId == null || m.involves(playerId))
-      .where((m) => before == null || m.playedAt.isBefore(before))
-      .take(limit)
-      .map(_swuWithCurrentNames)
-      .toList();
-
-  @override
-  Future<SwuMatchRequest> requestSwuMatch({
-    required String opponentId,
-    required int myGames,
-    required int opponentGames,
-    bool rated = true,
-  }) async {
-    final me = _requireMe();
-    if (opponentId == me.id) {
-      throw const LadderException('Choose an opponent other than yourself.');
-    }
-    final opponent = _players[opponentId];
-    if (opponent == null) throw const LadderException('Opponent not found.');
-    if (!isSwuScore(myGames, opponentGames)) {
-      throw const LadderException('A best of three ends 2-0, 2-1, 1-0 or 1-1.');
-    }
-    final request = SwuMatchRequest(
-      id: _nextRequestId++,
-      reporterId: me.id,
-      respondentId: opponent.id,
-      reporterName: me.displayName,
-      respondentName: opponent.displayName,
-      reporterGames: myGames,
-      respondentGames: opponentGames,
-      rated: rated,
-      createdAt: DateTime.now(),
-    );
-    _swuRequests.add(request);
-    _revision++;
-    notifyListeners();
-    return request;
-  }
-
-  @override
-  Future<List<SwuMatchRequest>> swuMatchRequests() async {
-    final me = _requireMe();
-    return _swuRequests.reversed
-        .where(
-          (r) => r.involves(me.id) && _visibleTo(me.id, r.status, r.reporterId),
-        )
-        .toList();
-  }
-
-  @override
-  Future<SwuMatch?> respondToSwuMatchRequest(
-    int requestId, {
-    required bool accept,
-  }) async {
-    final me = _requireMe();
-    final request = _swuRequests
-        .where(
-          (r) =>
-              r.id == requestId &&
-              r.involves(me.id) &&
-              r.status == RequestStatus.pending,
-        )
-        .firstOrNull;
-    if (request == null) {
+    final before = _requests.length;
+    _requests.removeWhere((r) => r.id == requestId && r.declinedFor(me.id));
+    if (_requests.length == before) {
       throw const LadderException(
-        'That match is no longer waiting for confirmation.',
+        'That result is not waiting to be dismissed.',
       );
     }
-    if (accept && !request.awaits(me.id)) {
-      throw const LadderException('Your opponent has to confirm this match.');
-    }
-    final index = _swuRequests.indexOf(request);
-    if (!accept && request.reporterId != me.id) {
-      _swuRequests[index] = request.declined(DateTime.now());
-    } else {
-      _swuRequests.removeAt(index);
-    }
-    final match = accept ? _applySwu(request) : null;
-    _revision++;
-    notifyListeners();
-    return match;
-  }
-
-  @override
-  Future<void> dismissSwuMatchRequest(int requestId) async {
-    final me = _requireMe();
-    final before = _swuRequests.length;
-    _swuRequests.removeWhere((r) => r.id == requestId && r.declinedFor(me.id));
-    if (_swuRequests.length == before) {
-      throw const LadderException('That match is not waiting to be dismissed.');
-    }
-    _revision++;
-    notifyListeners();
+    _changed();
   }
 
   @override
@@ -829,7 +412,6 @@ class DemoLadderRepository extends LadderRepository {
     );
     if (taken) throw const LadderException('That name is taken. Try another.');
     _players[me.id] = me.copyWith(displayName: name);
-    _revision++;
-    notifyListeners();
+    _changed();
   }
 }

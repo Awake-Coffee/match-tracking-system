@@ -3,10 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../data/ladder_repository.dart';
 import '../design/design_spec.dart';
 import '../design/designs.dart';
-import '../domain/backgammon.dart';
-import '../domain/elo.dart' as chess_elo;
 import '../domain/models.dart';
-import '../domain/swu.dart';
 
 /// Noto Sans Symbols 2 cut to the three game marks, each recentred in its em
 /// box so it sits dead centre whatever platform renders it.
@@ -16,6 +13,7 @@ const _marksFont = 'GameMarks';
 /// ladder and routes, under one account.
 enum Game {
   chess(
+    type: MatchType.chess,
     label: 'Chess',
     shortLabel: 'Chess',
     mark: IconData(0x265E, fontFamily: _marksFont),
@@ -23,9 +21,9 @@ enum Game {
     design: roastPawns,
     resultNoun: 'game',
     resultNounPlural: 'games',
-    startingRating: chess_elo.startingRating,
   ),
   backgammon(
+    type: MatchType.backgammon,
     label: 'Backgammon',
     shortLabel: 'Backgammon',
     mark: IconData(0x2685, fontFamily: _marksFont),
@@ -33,9 +31,9 @@ enum Game {
     design: baize,
     resultNoun: 'match',
     resultNounPlural: 'matches',
-    startingRating: backgammonStartingRating,
   ),
   swu(
+    type: MatchType.swu,
     label: 'Star Wars: Unlimited',
     shortLabel: 'SWU',
     mark: IconData(0x2726, fontFamily: _marksFont),
@@ -43,10 +41,10 @@ enum Game {
     design: holotable,
     resultNoun: 'match',
     resultNounPlural: 'matches',
-    startingRating: swuStartingRating,
   );
 
   const Game({
+    required this.type,
     required this.label,
     required this.shortLabel,
     required this.mark,
@@ -54,9 +52,9 @@ enum Game {
     required this.design,
     required this.resultNoun,
     required this.resultNounPlural,
-    required this.startingRating,
   });
 
+  final MatchType type;
   final String label;
 
   /// [label] where space is tight (the phone header), so a long name needn't
@@ -71,7 +69,12 @@ enum Game {
   /// What one result is called: a chess "game", a backgammon "match".
   final String resultNoun;
   final String resultNounPlural;
-  final int startingRating;
+
+  int get startingRating => type.startingRating;
+
+  /// Each mode has its own ladder; the first is the game as it was always
+  /// played here.
+  List<GameMode> get modes => type.modes;
 
   /// The route of [page] (`''` for the ladder, `'record'`, `'players/ID'`,
   /// ...) in this game.
@@ -83,6 +86,8 @@ enum Game {
   String pageOf(String location) =>
       location.substring(routePrefix.length).replaceFirst(RegExp('^/'), '');
 
+  static Game of(MatchType type) => values.firstWhere((g) => g.type == type);
+
   static Game at(String location) => values.firstWhere(
     (g) =>
         g.routePrefix.isNotEmpty &&
@@ -90,80 +95,50 @@ enum Game {
     orElse: () => chess,
   );
 
-  int ratingOf(Player p) => switch (this) {
-    chess => p.rating,
-    backgammon => p.backgammon.rating,
-    swu => p.swu.rating,
-  };
-
-  int playedOf(Player p) => switch (this) {
-    chess => p.gamesPlayed,
-    backgammon => p.backgammon.matchesPlayed,
-    swu => p.swu.matchesPlayed,
-  };
-
-  /// The members of [ladder] who have played this game, in ladder order. Only
-  /// they hold a rank: an unplayed member merely sits at the starting rating.
-  List<Player> rankedIn(List<Player> ladder) => [
-    for (final p in ladder)
-      if (playedOf(p) > 0) p,
-  ];
-
-  /// Every member, best first.
-  Future<List<Player>> ladderOf(LadderRepository repo) => switch (this) {
-    chess => repo.ladder(),
-    backgammon => repo.backgammonLadder(),
-    swu => repo.swuLadder(),
-  };
-
   /// The members [meId] has played or has a pending result with in this game,
   /// most recent first, each once. A shortcut for the record form, so a failed
-  /// load reads as no history rather than blocking it. In chess, [chessGames]
-  /// are the member's own games when the caller already fetches them.
+  /// load reads as no history rather than blocking it. [ownResults] are the
+  /// member's own results when the caller already fetches them.
   Future<List<String>> recentOpponentsOf(
     LadderRepository repo,
     String meId, {
-    Future<List<ChessMatch>>? chessGames,
+    Future<List<GameResult>>? ownResults,
   }) async {
     try {
-      return distinctNewestFirst(switch (this) {
-        chess => [
-          for (final m in await (chessGames ?? repo.matches(playerId: meId)))
-            (id: m.opponentId(meId), at: m.playedAt),
-          for (final r in await repo.matchRequests())
-            if (r.involves(meId) && r.status == RequestStatus.pending)
-              (id: r.opponentId(meId), at: r.createdAt),
-        ],
-        backgammon => [
-          for (final m in await repo.backgammonMatches(playerId: meId))
-            (id: m.opponentId(meId), at: m.playedAt),
-          for (final r in await repo.backgammonMatchRequests())
-            if (r.involves(meId) && r.status == RequestStatus.pending)
-              (id: r.opponentId(meId), at: r.createdAt),
-        ],
-        swu => [
-          for (final m in await repo.swuMatches(playerId: meId))
-            (id: m.opponentId(meId), at: m.playedAt),
-          for (final r in await repo.swuMatchRequests())
-            if (r.involves(meId) && r.status == RequestStatus.pending)
-              (id: r.opponentId(meId), at: r.createdAt),
-        ],
-      });
+      return distinctNewestFirst([
+        for (final r
+            in await (ownResults ?? repo.results(type, playerId: meId)))
+          for (final s in r.seats)
+            if (s.playerId != meId) (id: s.playerId, at: r.playedAt),
+        for (final r in await repo.requests())
+          if (r.mode.type == type &&
+              r.involves(meId) &&
+              r.status == RequestStatus.pending)
+            for (final s in r.seats)
+              if (s.playerId != meId) (id: s.playerId, at: r.createdAt),
+      ]);
     } catch (_) {
       return const [];
     }
   }
 
-  /// Results reported against [meId] that wait for their confirmation.
+  /// Results in this game that wait for [meId] to confirm them.
   Future<int> awaitingCountOf(LadderRepository repo, String meId) async =>
-      switch (this) {
-        chess => (await repo.matchRequests()).where((r) => r.awaits(meId)),
-        backgammon => (await repo.backgammonMatchRequests()).where(
-          (r) => r.awaits(meId),
-        ),
-        swu => (await repo.swuMatchRequests()).where((r) => r.awaits(meId)),
-      }.length;
+      (await repo.requests())
+          .where((r) => r.mode.type == type && r.awaits(meId))
+          .length;
 }
+
+/// [word] starting a sentence: "game" → "Game".
+String capitalized(String word) =>
+    '${word[0].toUpperCase()}${word.substring(1)}';
+
+/// The members of [ladder] who have played [mode], in ladder order. Only they
+/// hold a rank: an unplayed member merely sits at the starting rating.
+List<Player> rankedIn(List<Player> ladder, GameMode mode) => [
+  for (final p in ladder)
+    if (p.standingIn(mode).played > 0) p,
+];
 
 /// The ids of [games] by time, newest first, each once. Ties keep their given
 /// order, so confirmed and pending games merge predictably.

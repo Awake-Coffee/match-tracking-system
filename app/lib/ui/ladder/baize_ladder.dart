@@ -16,8 +16,8 @@ class BaizeLadder extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = context.design;
     final players = data.ranked;
-    final top = players.isEmpty ? 0 : players.first.backgammon.rating;
-    final bottom = players.isEmpty ? 0 : players.last.backgammon.rating;
+    final top = players.isEmpty ? 0 : data.standingOf(players.first).rating;
+    final bottom = players.isEmpty ? 0 : data.standingOf(players.last).rating;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
@@ -43,13 +43,14 @@ class BaizeLadder extends StatelessWidget {
               rank: i + 1,
               child: _PointRow(
                 player: p,
+                standing: data.standingOf(p),
                 rank: i + 1,
                 isMe: p.id == data.meId,
                 // Relative to the spread on the ladder, so the race stays
                 // readable whether it spans 30 points or 300.
                 pointShare: top == bottom
                     ? 1
-                    : (p.backgammon.rating - bottom) / (top - bottom),
+                    : (data.standingOf(p).rating - bottom) / (top - bottom),
               ),
             ),
           UnplayedGroup(data: data),
@@ -62,12 +63,14 @@ class BaizeLadder extends StatelessWidget {
 class _PointRow extends StatelessWidget {
   const _PointRow({
     required this.player,
+    required this.standing,
     required this.rank,
     required this.isMe,
     required this.pointShare,
   });
 
   final Player player;
+  final Standing standing;
   final int rank;
   final bool isMe;
 
@@ -80,11 +83,9 @@ class _PointRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final bg = player.backgammon;
+    final bg = standing;
     final ivory = rank.isOdd;
-    final matches = bg.matchesPlayed == 1
-        ? '1 match'
-        : '${bg.matchesPlayed} matches';
+    final matches = bg.played == 1 ? '1 match' : '${bg.played} matches';
     return Container(
       constraints: const BoxConstraints(minHeight: 52),
       padding: const EdgeInsets.only(right: 8),

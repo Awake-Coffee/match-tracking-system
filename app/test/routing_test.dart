@@ -46,7 +46,7 @@ void _tall(WidgetTester tester) {
 }
 
 Future<String> _idOf(DemoLadderRepository repo, String name) async =>
-    (await repo.ladder()).firstWhere((p) => p.displayName == name).id;
+    (await repo.members()).firstWhere((p) => p.displayName == name).id;
 
 Future<void> _signInAsAna(WidgetTester tester) async {
   await tester.enterText(find.widgetWithText(TextFormField, 'Email'), anaEmail);
@@ -67,6 +67,9 @@ void main() {
     final history = _browserHistory(tester);
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Standard'));
+    await tester.pumpAndSettle();
+    expect(history.last, (uri: '/ladder/standard', replace: false));
 
     await tester.tap(
       find
@@ -78,7 +81,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Rating over time'), findsOneWidget);
-    expect(history.last, (uri: '/players/$bogdan', replace: false));
+    expect(history.last, (
+      uri: '/players/$bogdan?mode=standard',
+      replace: false,
+    ));
 
     await tester.tap(find.text('You').last);
     await tester.pumpAndSettle();
@@ -88,7 +94,8 @@ void main() {
     expect(history.last, (uri: '/settings', replace: false));
     expect(history.map((e) => e.uri), [
       '/',
-      '/players/$bogdan',
+      '/ladder/standard',
+      '/players/$bogdan?mode=standard',
       '/me',
       '/settings',
     ]);
@@ -109,7 +116,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Rating over time'), findsOneWidget);
-    expect(history.last, (uri: '/players/$bogdan', replace: false));
+    expect(history.last, (
+      uri: '/players/$bogdan?mode=standard',
+      replace: false,
+    ));
   });
 
   testWidgets('a shared profile link opens it, and Back goes to the ladder', (
@@ -174,7 +184,7 @@ void main() {
     expect(history.last, (uri: '/sign-in', replace: true));
 
     await _signInAsAna(tester);
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
     expect(history.last, (uri: '/', replace: true));
   });
 
@@ -241,7 +251,7 @@ void main() {
 
     await tester.tap(find.text('Go to the ladder'));
     await tester.pumpAndSettle();
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('Ladders'), findsOneWidget);
   });
 
   testWidgets('an unknown address opened signed out keeps it after sign-in', (

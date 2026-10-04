@@ -9,20 +9,31 @@ import 'ladder_fixture.dart';
 
 void main() {
   test('a new ladder starts empty', () async {
-    expect(await DemoLadderRepository().ladder(), isEmpty);
+    expect(
+      await DemoLadderRepository().ladderIn(GameMode.standardChess),
+      isEmpty,
+    );
   });
 
   test('ladder replays from history', () async {
     final repo = await anaAndBogdan();
-    final players = await repo.ladder();
+    final players = await repo.ladderIn(GameMode.standardChess);
 
     for (final p in players) {
-      final games = await repo.matches(playerId: p.id, limit: 1000);
-      expect(games.length, p.gamesPlayed);
-      expect(p.wins + p.losses + p.draws, p.gamesPlayed);
-      final history = ratingHistory(p.id, games.reversed.toList());
+      final games = await repo.results(
+        MatchType.chess,
+        playerId: p.id,
+        limit: 1000,
+      );
+      expect(games.length, p.chess.played);
+      expect(p.chess.wins + p.chess.losses + p.chess.draws, p.chess.played);
+      final history = ratingHistory(
+        p.id,
+        games.reversed.toList(),
+        start: startingRating,
+      );
       expect(history.first, startingRating);
-      expect(history.last, p.rating);
+      expect(history.last, p.chess.rating);
     }
   });
 
@@ -34,16 +45,19 @@ void main() {
 
     // Ana is off the ladder and her login is gone, but Bogdan keeps the
     // rating her game gave him and still sees the game against "Ana".
-    expect((await repo.ladder()).map((p) => p.displayName), ['Bogdan']);
+    expect(
+      (await repo.ladderIn(GameMode.standardChess)).map((p) => p.displayName),
+      ['Bogdan'],
+    );
     await repo.signIn(email: bogdanEmail, password: 'x');
     final bogdan = repo.me!;
-    final games = await repo.matches(playerId: bogdan.id);
+    final games = await repo.results(MatchType.chess, playerId: bogdan.id);
     expect(games, hasLength(1));
-    expect(games.single.opponentName(bogdan.id), 'Ana');
-    expect(games.single.opponentId(bogdan.id), ana.id);
-    expect(bogdan.rating, lessThan(startingRating));
+    expect(games.single.opponentsOf(bogdan.id).single.name, 'Ana');
+    expect(games.single.opponentsOf(bogdan.id).single.playerId, ana.id);
+    expect(bogdan.chess.rating, lessThan(startingRating));
     // What was waiting on her answer went with her.
-    expect(await repo.matchRequests(), isEmpty);
+    expect(await repo.requestsIn(MatchType.chess), isEmpty);
     await expectLater(repo.player(ana.id), throwsA(isA<LadderException>()));
   });
 
@@ -53,8 +67,8 @@ void main() {
     await repo.deleteAccount();
 
     await repo.signIn(email: bogdanEmail, password: 'x');
-    final games = await repo.matches();
-    expect(games.single.opponentName(repo.me!.id), 'Ana Maria');
+    final games = await repo.results(MatchType.chess);
+    expect(games.single.opponentsOf(repo.me!.id).single.name, 'Ana Maria');
   });
 
   test('a sign-up after a deletion leaves the other members alone', () async {
@@ -70,15 +84,15 @@ void main() {
       displayName: 'Cleo',
     );
     expect(repo.me!.id, isNot(bogdan.id));
-    final ladder = await repo.ladder();
+    final ladder = await repo.ladderIn(GameMode.standardChess);
     expect(
       ladder.map((p) => p.displayName),
       unorderedEquals(['Bogdan', 'Cleo']),
     );
     final kept = ladder.firstWhere((p) => p.id == bogdan.id);
     expect(kept.displayName, 'Bogdan');
-    expect(kept.rating, bogdan.rating);
-    expect(kept.gamesPlayed, bogdan.gamesPlayed);
+    expect(kept.chess.rating, bogdan.chess.rating);
+    expect(kept.chess.played, bogdan.chess.played);
   });
 
   test('deleting an account needs a signed-in member', () async {
@@ -89,9 +103,17 @@ void main() {
   });
 
   test('ladder is sorted by rating, then games, then name', () async {
-    final players = await (await anaAndBogdan()).ladder();
+    final players = await (await anaAndBogdan()).ladderIn(
+      GameMode.standardChess,
+    );
     for (var i = 1; i < players.length; i++) {
-      expect(compareLadder(players[i - 1], players[i]), lessThanOrEqualTo(0));
+      final above = players[i - 1].chess;
+      final below = players[i].chess;
+      expect(
+        above.rating > below.rating ||
+            above.rating == below.rating && above.played >= below.played,
+        isTrue,
+      );
     }
   });
 
@@ -137,58 +159,56 @@ void main() {
       displayName: 'Ana',
     );
     final ana = repo.me!;
-    expect(ana.rating, 1000);
+    expect(ana.chess.rating, 1000);
 
-    final request = await repo.requestMatch(
+    final request = await repo.reportChess(
       opponentId: bo.id,
       myColor: PieceColor.black,
       myOutcome: Outcome.win,
       clock: const ClockSetting(TimeControl.fischer5plus3),
     );
-    expect(request.result, MatchResult.black);
+    expect(request.colorOf(ana.id), PieceColor.black);
+    expect(request.outcomeFor(ana.id), Outcome.win);
     expect(request.awaits(ana.id), isFalse);
-    expect(repo.me!.rating, 1000);
-    expect(await repo.matches(), isEmpty);
+    expect(repo.me!.chess.rating, 1000);
+    expect(await repo.results(MatchType.chess), isEmpty);
     await expectLater(
-      repo.respondToMatchRequest(request.id, accept: true),
+      repo.respondToRequest(request.id, accept: true),
       throwsA(isA<LadderException>()),
     );
 
     await repo.signIn(email: 'bo@example.com', password: 'password');
-    final pending = await repo.matchRequests();
+    final pending = await repo.requestsIn(MatchType.chess);
     expect(pending.single.awaits(bo.id), isTrue);
     final revision = repo.revision;
-    final match = await repo.respondToMatchRequest(request.id, accept: true);
+    final match = await repo.respondToRequest(request.id, accept: true);
 
     expect(match!.deltaFor(ana.id), 20);
     expect(match.clock!.preset, TimeControl.fischer5plus3);
-    expect(repo.me!.rating, 980);
-    expect((await repo.player(ana.id)).rating, 1020);
-    expect(await repo.matchRequests(), isEmpty);
+    expect(repo.me!.chess.rating, 980);
+    expect((await repo.player(ana.id)).chess.rating, 1020);
+    expect(await repo.requestsIn(MatchType.chess), isEmpty);
     expect(repo.revision, greaterThan(revision));
   });
 
   test('declined and withdrawn games are never rated', () async {
     final repo = await anaAndBogdan();
     final ana = repo.me!;
-    final incoming = (await repo.matchRequests()).single;
+    final incoming = (await repo.requestsIn(MatchType.chess)).single;
     expect(incoming.awaits(ana.id), isTrue);
-    expect(
-      await repo.respondToMatchRequest(incoming.id, accept: false),
-      isNull,
-    );
+    expect(await repo.respondToRequest(incoming.id, accept: false), isNull);
 
-    final mine = await repo.requestMatch(
-      opponentId: incoming.opponentId(ana.id),
+    final mine = await repo.reportChess(
+      opponentId: incoming.opponentsOf(ana.id).single.playerId,
       myColor: PieceColor.white,
       myOutcome: Outcome.draw,
       clock: const ClockSetting(TimeControl.sudden5),
     );
-    expect(await repo.respondToMatchRequest(mine.id, accept: false), isNull);
+    expect(await repo.respondToRequest(mine.id, accept: false), isNull);
 
-    expect(await repo.matchRequests(), isEmpty);
-    expect(repo.me!.rating, ana.rating);
-    expect(repo.me!.gamesPlayed, ana.gamesPlayed);
+    expect(await repo.requestsIn(MatchType.chess), isEmpty);
+    expect(repo.me!.chess.rating, ana.chess.rating);
+    expect(repo.me!.chess.played, ana.chess.played);
   });
 
   test(
@@ -196,37 +216,37 @@ void main() {
     () async {
       final repo = await anaAndBogdan();
       final ana = repo.me!;
-      final request = (await repo.matchRequests()).single;
+      final request = (await repo.requestsIn(MatchType.chess)).single;
       final bogdanId = request.requestedBy;
-      await repo.respondToMatchRequest(request.id, accept: false);
+      await repo.respondToRequest(request.id, accept: false);
 
       // The decliner has nothing left to answer and can't answer it again.
-      expect(await repo.matchRequests(), isEmpty);
+      expect(await repo.requestsIn(MatchType.chess), isEmpty);
       await expectLater(
-        repo.respondToMatchRequest(request.id, accept: false),
+        repo.respondToRequest(request.id, accept: false),
         throwsA(isA<LadderException>()),
       );
       await expectLater(
-        repo.dismissMatchRequest(request.id),
+        repo.dismissRequest(request.id),
         throwsA(isA<LadderException>()),
       );
 
       await repo.signIn(email: bogdanEmail, password: 'x');
-      final declined = (await repo.matchRequests()).single;
+      final declined = (await repo.requestsIn(MatchType.chess)).single;
       expect(declined.status, RequestStatus.declined);
       expect(declined.respondedAt, isNotNull);
       expect(declined.declinedFor(bogdanId), isTrue);
       expect(declined.awaits(bogdanId), isFalse);
       expect(declined.awaits(ana.id), isFalse);
       await expectLater(
-        repo.respondToMatchRequest(request.id, accept: true),
+        repo.respondToRequest(request.id, accept: true),
         throwsA(isA<LadderException>()),
         reason: 'a declined game can no longer be confirmed',
       );
 
-      await repo.dismissMatchRequest(request.id);
-      expect(await repo.matchRequests(), isEmpty);
-      expect((await repo.player(ana.id)).rating, ana.rating);
+      await repo.dismissRequest(request.id);
+      expect(await repo.requestsIn(MatchType.chess), isEmpty);
+      expect((await repo.player(ana.id)).chess.rating, ana.chess.rating);
     },
   );
 
@@ -234,26 +254,26 @@ void main() {
     'a declined backgammon or SWU match is dismissed the same way',
     () async {
       final repo = await anaAndBogdanWithSwu();
-      final bgRequest = (await repo.backgammonMatchRequests()).single;
-      final swuRequest = (await repo.swuMatchRequests()).single;
-      await repo.respondToBackgammonMatchRequest(bgRequest.id, accept: false);
-      await repo.respondToSwuMatchRequest(swuRequest.id, accept: false);
-      expect(await repo.backgammonMatchRequests(), isEmpty);
-      expect(await repo.swuMatchRequests(), isEmpty);
+      final bgRequest = (await repo.requestsIn(MatchType.backgammon)).single;
+      final swuRequest = (await repo.requestsIn(MatchType.swu)).single;
+      await repo.respondToRequest(bgRequest.id, accept: false);
+      await repo.respondToRequest(swuRequest.id, accept: false);
+      expect(await repo.requestsIn(MatchType.backgammon), isEmpty);
+      expect(await repo.requestsIn(MatchType.swu), isEmpty);
 
       await repo.signIn(email: bogdanEmail, password: 'x');
       final bogdanId = repo.me!.id;
-      final bg = (await repo.backgammonMatchRequests()).single;
-      final swu = (await repo.swuMatchRequests()).single;
+      final bg = (await repo.requestsIn(MatchType.backgammon)).single;
+      final swu = (await repo.requestsIn(MatchType.swu)).single;
       expect(bg.declinedFor(bogdanId) && !bg.awaits(bogdanId), isTrue);
       expect(swu.declinedFor(bogdanId) && !swu.awaits(bogdanId), isTrue);
 
-      await repo.dismissBackgammonMatchRequest(bg.id);
-      await repo.dismissSwuMatchRequest(swu.id);
-      expect(await repo.backgammonMatchRequests(), isEmpty);
-      expect(await repo.swuMatchRequests(), isEmpty);
+      await repo.dismissRequest(bg.id);
+      await repo.dismissRequest(swu.id);
+      expect(await repo.requestsIn(MatchType.backgammon), isEmpty);
+      expect(await repo.requestsIn(MatchType.swu), isEmpty);
       await expectLater(
-        repo.dismissSwuMatchRequest(swu.id),
+        repo.dismissRequest(swu.id),
         throwsA(isA<LadderException>()),
       );
     },
@@ -262,19 +282,20 @@ void main() {
   test('a pending game can only be withdrawn, not dismissed', () async {
     final repo = await anaAndBogdan();
     final ana = repo.me!;
-    final mine = await repo.requestMatch(
-      opponentId: (await repo.matchRequests()).single.requestedBy,
+    final mine = await repo.reportChess(
+      opponentId: (await repo.requestsIn(MatchType.chess)).single.requestedBy,
       myColor: PieceColor.white,
       myOutcome: Outcome.win,
       clock: const ClockSetting(TimeControl.sudden5),
     );
     await expectLater(
-      repo.dismissMatchRequest(mine.id),
+      repo.dismissRequest(mine.id),
       throwsA(isA<LadderException>()),
     );
-    await repo.respondToMatchRequest(mine.id, accept: false);
+    await repo.respondToRequest(mine.id, accept: false);
     expect(
-      (await repo.matchRequests()).where((r) => r.requestedBy == ana.id),
+      (await repo.requestsIn(MatchType.chess))
+          .where((r) => r.requestedBy == ana.id),
       isEmpty,
       reason: 'withdrawing deletes outright',
     );
@@ -282,10 +303,10 @@ void main() {
 
   test('custom presets need the time the players set', () async {
     final repo = await anaAndBogdan();
-    final opponentId = (await repo.ladder())
+    final opponentId = (await repo.ladderIn(GameMode.standardChess))
         .firstWhere((p) => p.id != repo.me!.id)
         .id;
-    Future<MatchRequest> request(ClockSetting clock) => repo.requestMatch(
+    Future<ResultRequest> request(ClockSetting clock) => repo.reportChess(
       opponentId: opponentId,
       myColor: PieceColor.white,
       myOutcome: Outcome.win,
@@ -307,7 +328,7 @@ void main() {
         customExtraSeconds: 4,
       ),
     );
-    expect(sent.clock.label, 'Fischer 7 min + 4 s');
+    expect(sent.clock!.label, 'Fischer 7 min + 4 s');
     expect(
       const ClockSetting(
         TimeControl.hourglassCustom,
@@ -326,7 +347,7 @@ void main() {
     );
     final me = repo.me!;
     await expectLater(
-      repo.requestMatch(
+      repo.reportChess(
         opponentId: me.id,
         myColor: PieceColor.white,
         myOutcome: Outcome.win,
@@ -352,47 +373,54 @@ void main() {
     () async {
       final repo = await anaAndBogdan();
       final ana = repo.me!;
-      final bogdan = (await repo.ladder()).firstWhere((p) => p.id != ana.id);
+      final bogdan = (await repo.ladderIn(GameMode.standardChess))
+          .firstWhere((p) => p.id != ana.id);
       expect(ana.backgammon.rating, backgammonStartingRating);
 
-      final request = await repo.requestBackgammonMatch(
+      final request = await repo.reportBackgammon(
         opponentId: bogdan.id,
-        matchLength: 5,
         myScore: 3,
         opponentScore: 5,
       );
-      expect(request.winnerId, bogdan.id);
-      expect(request.loserScore, 3);
-      expect(await repo.backgammonMatches(), isEmpty);
+      expect(request.outcomeFor(bogdan.id), Outcome.win);
+      expect(request.scoreFor(), '5-3');
+      expect(await repo.results(MatchType.backgammon), isEmpty);
       await expectLater(
-        repo.respondToBackgammonMatchRequest(request.id, accept: true),
+        repo.respondToRequest(request.id, accept: true),
         throwsA(isA<LadderException>()),
       );
 
       await repo.signIn(email: bogdanEmail, password: 'x');
-      final match = await repo.respondToBackgammonMatchRequest(
-        request.id,
-        accept: true,
-      );
+      final match = await repo.respondToRequest(request.id, accept: true);
       expect(match!.deltaFor(bogdan.id), 22);
       expect(match.deltaFor(ana.id), -22);
 
-      final players = {for (final p in await repo.backgammonLadder()) p.id: p};
+      final players = {
+        for (final p in await repo.ladderIn(GameMode.standardBackgammon))
+          p.id: p,
+      };
       expect(players[bogdan.id]!.backgammon.rating, 1522);
       expect(players[bogdan.id]!.backgammon.experience, 5);
       expect(players[ana.id]!.backgammon.rating, 1478);
       expect(players[ana.id]!.backgammon.losses, 1);
-      expect(players[ana.id]!.rating, ana.rating, reason: 'chess untouched');
-      expect((await repo.backgammonLadder()).first.id, bogdan.id);
-      expect(await repo.backgammonMatchRequests(), isEmpty);
+      expect(
+        players[ana.id]!.chess.rating,
+        ana.chess.rating,
+        reason: 'chess untouched',
+      );
+      expect(
+        (await repo.ladderIn(GameMode.standardBackgammon)).first.id,
+        bogdan.id,
+      );
+      expect(await repo.requestsIn(MatchType.backgammon), isEmpty);
     },
   );
 
   test('backgammon ladder replays from history', () async {
     final repo = await anaAndBogdanWithBackgammon();
-    for (final p in await repo.backgammonLadder()) {
-      final matches = await repo.backgammonMatches(playerId: p.id);
-      expect(matches.length, p.backgammon.matchesPlayed);
+    for (final p in await repo.ladderIn(GameMode.standardBackgammon)) {
+      final matches = await repo.results(MatchType.backgammon, playerId: p.id);
+      expect(matches.length, p.backgammon.played);
       expect(
         ratingHistory(
           p.id,
@@ -407,23 +435,24 @@ void main() {
   test('backgammon rejects impossible scores and playing yourself', () async {
     final repo = await anaAndBogdan();
     final me = repo.me!;
-    final bogdanId = (await repo.ladder()).firstWhere((p) => p.id != me.id).id;
-    for (final (opponent, length, mine, theirs) in [
-      (me.id, 5, 5, 3),
-      (bogdanId, 5, 5, 5),
-      (bogdanId, 5, 4, 3),
-      (bogdanId, 0, 0, 0),
+    final bogdanId = (await repo.ladderIn(GameMode.standardChess))
+        .firstWhere((p) => p.id != me.id)
+        .id;
+    for (final (opponent, mine, theirs) in [
+      (me.id, 5, 3),
+      (bogdanId, 5, 5),
+      (bogdanId, 26, 3),
+      (bogdanId, 0, 0),
     ]) {
       await expectLater(
-        repo.requestBackgammonMatch(
+        repo.reportBackgammon(
           opponentId: opponent,
-          matchLength: length,
           myScore: mine,
           opponentScore: theirs,
         ),
         throwsA(isA<LadderException>()),
       );
     }
-    expect(await repo.backgammonMatchRequests(), isEmpty);
+    expect(await repo.requestsIn(MatchType.backgammon), isEmpty);
   });
 }

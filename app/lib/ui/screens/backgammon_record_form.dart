@@ -10,12 +10,14 @@ import '../widgets/record_form.dart';
 class BackgammonRecordForm extends StatefulWidget {
   const BackgammonRecordForm({
     super.key,
+    required this.mode,
     required this.me,
     required this.players,
     this.initialOpponentId,
     this.recentOpponentIds = const [],
   });
 
+  final GameMode mode;
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
@@ -61,14 +63,13 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
     final scored = outcome != null && loserPoints != null;
     final myScore = scored ? (won ? _matchLength : loserPoints) : null;
     final opponentScore = scored ? (won ? loserPoints : _matchLength) : null;
-    // The loser's points do not move ratings: the preview needs the result.
+    // The loser's points do not move ratings: the preview needs the result,
+    // with any loser's score to stand in until it's picked.
     final preview = opponent != null && outcome != null
-        ? BackgammonPreview(
-            me: widget.me,
-            opponent: opponent,
-            won: won,
-            matchLength: _matchLength,
-          )
+        ? previewRows(widget.mode, widget.me.id, widget.players, [
+            (playerId: widget.me.id, side: 1, score: won ? _matchLength : 0),
+            (playerId: opponent.id, side: 2, score: won ? 0 : _matchLength),
+          ])
         : null;
     final label = d.body(15, weight: FontWeight.w700);
 
@@ -80,7 +81,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
           Text('Opponent', style: label),
           const SizedBox(height: 8),
           OpponentPicker(
-            game: Game.backgammon,
+            mode: widget.mode,
             players: widget.players,
             meId: widget.me.id,
             selectedId: _opponentId,
@@ -90,17 +91,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
           const SizedBox(height: 24),
           Text('Match to', style: label),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (final length in backgammonMatchLengths)
-                _LengthChoice(
-                  length: length,
-                  selected: length == _matchLength,
-                  onTap: () => _setLength(length),
-                ),
-            ],
-          ),
+          MatchLengthPicker(length: _matchLength, onChanged: _setLength),
           const SizedBox(height: 24),
           Text('Result', style: label),
           const SizedBox(height: 8),
@@ -124,17 +115,10 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
               style: label,
             ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var points = 0; points < _matchLength; points++)
-                  ChoiceChip(
-                    label: Text('$points'),
-                    selected: points == loserPoints,
-                    onSelected: (_) => setState(() => _loserScore = points),
-                  ),
-              ],
+            LoserPointsPicker(
+              matchLength: _matchLength,
+              points: loserPoints,
+              onChanged: (points) => setState(() => _loserScore = points),
             ),
           ],
           const SizedBox(height: 24),
@@ -147,20 +131,7 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             rated: _rated,
             emptyHint:
                 'Pick an opponent and a result to see how ratings change.',
-            rows: preview == null
-                ? null
-                : [
-                    (
-                      name: 'You',
-                      before: preview.me.backgammon.rating,
-                      delta: preview.myDelta,
-                    ),
-                    (
-                      name: preview.opponent.displayName,
-                      before: preview.opponent.backgammon.rating,
-                      delta: preview.opponentDelta,
-                    ),
-                  ],
+            rows: preview,
           ),
           SendForConfirmationButton(
             error: error,
@@ -176,14 +147,21 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
                 ? null
                 : () => sendForConfirmation(
                     game: Game.backgammon,
-                    opponentName: opponent.displayName,
+                    sentTo: opponent.displayName,
                     rated: _rated,
-                    request: (repo) => repo.requestBackgammonMatch(
-                      opponentId: opponent.id,
-                      matchLength: _matchLength,
-                      myScore: myScore,
-                      opponentScore: opponentScore,
-                      rated: _rated,
+                    request: (repo) => repo.reportResult(
+                      ResultReport(
+                        mode: widget.mode,
+                        seats: [
+                          (playerId: widget.me.id, side: 1, score: myScore),
+                          (
+                            playerId: opponent.id,
+                            side: 2,
+                            score: opponentScore,
+                          ),
+                        ],
+                        rated: _rated,
+                      ),
                     ),
                   ),
           ),
@@ -191,6 +169,59 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
       ),
     );
   }
+}
+
+/// The match lengths offered, as a row of round counters.
+class MatchLengthPicker extends StatelessWidget {
+  const MatchLengthPicker({
+    super.key,
+    required this.length,
+    required this.onChanged,
+  });
+
+  final int length;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      for (final l in backgammonMatchLengths)
+        _LengthChoice(
+          length: l,
+          selected: l == length,
+          onTap: () => onChanged(l),
+        ),
+    ],
+  );
+}
+
+/// The losing side's points, below the match length.
+class LoserPointsPicker extends StatelessWidget {
+  const LoserPointsPicker({
+    super.key,
+    required this.matchLength,
+    required this.points,
+    required this.onChanged,
+  });
+
+  final int matchLength;
+  final int? points;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (var p = 0; p < matchLength; p++)
+        ChoiceChip(
+          label: Text('$p'),
+          selected: p == points,
+          onSelected: (_) => onChanged(p),
+        ),
+    ],
+  );
 }
 
 /// One match length as a round counter.

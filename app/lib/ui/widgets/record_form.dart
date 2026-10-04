@@ -8,14 +8,16 @@ import '../app_scope.dart';
 import '../game.dart';
 import 'surface.dart';
 
-/// Sending a reported result to the opponent, shared by the record forms.
+/// Sending a reported result to the other players, shared by the record
+/// forms.
 mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
   bool saving = false;
   String? error;
 
+  /// [sentTo] names who has to confirm: "Bogdan", "Irina, Matei & Ana".
   Future<void> sendForConfirmation({
     required Game game,
-    required String opponentName,
+    required String sentTo,
     required bool rated,
     required Future<void> Function(LadderRepository repo) request,
   }) async {
@@ -32,8 +34,8 @@ mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
         SnackBar(
           content: Text(
             rated
-                ? 'Sent to $opponentName. Ratings update once they confirm.'
-                : 'Sent to $opponentName. It goes in the history once they '
+                ? 'Sent to $sentTo. Ratings update once they confirm.'
+                : 'Sent to $sentTo. It goes in the history once they '
                       'confirm.',
           ),
         ),
@@ -56,25 +58,31 @@ mixin SendsForConfirmation<T extends StatefulWidget> on State<T> {
 
 /// The member's few most recent opponents as one-tap chips, above a
 /// searchable list of everyone but the signed-in member with their rating in
-/// the game being recorded. The café is a group of regulars, so most reports
+/// the mode being recorded. The café is a group of regulars, so most reports
 /// need no typing.
 class OpponentPicker extends StatefulWidget {
   const OpponentPicker({
     super.key,
-    required this.game,
+    required this.mode,
     required this.players,
     required this.meId,
     required this.selectedId,
     required this.onSelected,
     this.recentIds = const [],
+    this.takenIds = const {},
+    this.hintText = 'Search players',
   });
 
   /// How many recent opponents get a chip.
   static const maxRecent = 4;
 
-  final Game game;
+  final GameMode mode;
   final List<Player> players;
   final String meId;
+
+  /// Players already picked elsewhere in the form, who aren't offered.
+  final Set<String> takenIds;
+  final String hintText;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
 
@@ -99,11 +107,20 @@ class _OpponentPickerState extends State<OpponentPicker> {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
-    final opponents = widget.players.where((p) => p.id != widget.meId).toList()
-      ..sort(
-        (a, b) =>
-            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
-      );
+    final opponents =
+        widget.players
+            .where(
+              (p) =>
+                  p.id != widget.meId &&
+                  (p.id == widget.selectedId ||
+                      !widget.takenIds.contains(p.id)),
+            )
+            .toList()
+          ..sort(
+            (a, b) => a.displayName.toLowerCase().compareTo(
+              b.displayName.toLowerCase(),
+            ),
+          );
     final recent = [
       for (final id in widget.recentIds)
         ?opponents.where((p) => p.id == id).firstOrNull,
@@ -134,14 +151,14 @@ class _OpponentPickerState extends State<OpponentPicker> {
           expandedInsets: EdgeInsets.zero,
           enableFilter: true,
           requestFocusOnTap: true,
-          hintText: 'Search players',
+          hintText: widget.hintText,
           onSelected: widget.onSelected,
           dropdownMenuEntries: [
             for (final p in opponents)
               DropdownMenuEntry(
                 value: p.id,
                 label: p.displayName,
-                trailingIcon: Text('${widget.game.ratingOf(p)}'),
+                trailingIcon: Text('${p.standingIn(widget.mode).rating}'),
               ),
           ],
         ),
@@ -171,7 +188,7 @@ class RatedSwitch extends StatelessWidget {
                 Text('Rated', style: d.body(15, weight: FontWeight.w700)),
                 Text(
                   rated
-                      ? 'Counts toward both ratings.'
+                      ? 'Counts toward everyone\'s rating.'
                       : 'A friendly: kept in history, ratings stay put.',
                   style: d.body(13, color: d.muted),
                 ),
@@ -184,6 +201,41 @@ class RatedSwitch extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The [RatingPreview] rows for a result between [seats] in [mode]: how each
+/// player of [players] would move, the member ([meId]) first as "You".
+List<({String name, int before, int delta})> previewRows(
+  GameMode mode,
+  String meId,
+  List<Player> players,
+  List<SeatReport> seats,
+) {
+  final byId = {for (final p in players) p.id: p};
+  final standings = {
+    for (final s in seats) s.playerId: byId[s.playerId]!.standingIn(mode),
+  };
+  final deltas = ratingChanges(mode.type, [
+    for (final s in seats)
+      (
+        playerId: s.playerId,
+        side: s.side,
+        score: s.score,
+        standing: standings[s.playerId]!,
+      ),
+  ]);
+  final ordered = [
+    ...seats.where((s) => s.playerId == meId),
+    ...seats.where((s) => s.playerId != meId),
+  ];
+  return [
+    for (final s in ordered)
+      (
+        name: s.playerId == meId ? 'You' : byId[s.playerId]!.displayName,
+        before: standings[s.playerId]!.rating,
+        delta: deltas[s.playerId]!,
+      ),
+  ];
 }
 
 /// How each player's rating moves, or [emptyHint] until the form says enough.
@@ -207,7 +259,7 @@ class RatingPreview extends StatelessWidget {
     return SpecSurface(
       child: !rated
           ? Text(
-              'Unrated: neither rating changes.',
+              'Unrated: no rating changes.',
               style: d.body(15, color: d.muted),
             )
           : rows == null

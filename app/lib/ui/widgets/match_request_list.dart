@@ -2,23 +2,65 @@ import 'package:flutter/material.dart';
 
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
-import '../../domain/backgammon.dart';
 import '../../domain/models.dart';
-import '../../domain/swu.dart';
+import '../game.dart';
+import '../ladder/ladder_view.dart' show ordinal;
 import 'match_tile.dart';
 import 'surface.dart';
 
-/// What to tell a member who just confirmed [match].
-String _confirmedMessage(String noun, RatedGame match, String meId) {
-  if (!match.rated) return '$noun confirmed as unrated. Ratings stay put.';
-  final after = match.ratingAfterFor(meId);
-  final delta = after - match.ratingBeforeFor(meId);
-  return '$noun confirmed. You\'re now $after (${formatDelta(delta)}).';
+/// What to tell a member who just confirmed [result].
+String _confirmedMessage(String noun, GameResult result, String meId) {
+  if (!result.rated) return '$noun confirmed as unrated. Ratings stay put.';
+  final after = result.ratingAfterFor(meId);
+  return '$noun confirmed. You\'re now $after '
+      '(${formatDelta(result.deltaFor(meId))}).';
 }
 
 /// What confirming does to the signed-in member: where they end up and by
 /// how much.
 typedef RatingImpact = ({int after, int delta});
+
+/// One player of a multiplayer result and where they are with it: "1st",
+/// "Irina", "reported".
+typedef RosterLine = ({String label, String name, String status, bool isMe});
+
+/// How the result went for [meId], in their words: "you won 5-3", "you came
+/// 2nd of 4".
+String _myResult(ResultRequest r, String meId) {
+  if (r.mode.format == ResultFormat.freeForAll) {
+    return 'you came ${ordinal(r.placeOf(meId))} of ${r.seats.length}';
+  }
+  final outcome = switch (r.outcomeFor(meId)) {
+    Outcome.win => 'you won',
+    Outcome.loss => 'you lost',
+    Outcome.draw when r.mode.type == MatchType.chess => 'it was a draw',
+    Outcome.draw => 'you drew',
+  };
+  return r.mode.type == MatchType.chess
+      ? outcome
+      : '$outcome ${r.scoreFor(meId)}';
+}
+
+/// Who [meId] played with and against, or the format: "You had white",
+/// "Match to 5", "With Irina against Matei & Ana", "4 players".
+String _setting(ResultRequest r, String meId) => switch (r.mode) {
+  GameMode(format: ResultFormat.duel, type: MatchType.chess) =>
+    'You had ${r.colorOf(meId).name}',
+  GameMode(format: ResultFormat.duel, type: MatchType.backgammon) =>
+    'Match to ${r.matchLength}',
+  GameMode(format: ResultFormat.duel) => 'Best of three',
+  GameMode(format: ResultFormat.freeForAll) => '${r.seats.length} players',
+  GameMode(format: ResultFormat.boxVsTeam) => joinParts([
+    r.seatOf(meId)!.side == 1
+        ? 'You in the box'
+        : 'With ${joinNames([for (final s in r.teammatesOf(meId)) s.name])} '
+              'against ${r.sides.first.single.name} in the box',
+    'match to ${r.matchLength}',
+  ], ', '),
+  GameMode(format: ResultFormat.teams) =>
+    'With ${joinNames([for (final s in r.teammatesOf(meId)) s.name])} '
+        'against ${joinNames([for (final s in r.opponentsOf(meId)) s.name])}',
+};
 
 /// [id]'s row in [players], if the ladder has loaded them.
 Player? _playerById(List<Player> players, String id) {
@@ -29,188 +71,149 @@ Player? _playerById(List<Player> players, String id) {
 }
 
 /// A reported result involving the signed-in member that still waits for
-/// the opponent, or that the opponent declined, in any game.
+/// confirmation, or that someone declined, in any game and mode.
 class PendingResult {
   const PendingResult({
     required this.headline,
     required this.detail,
-    required this.opponentName,
+    required this.reporterName,
     required this.rated,
     required this.incoming,
+    this.reported = false,
     this.declined = false,
     required this.reportedAt,
     this.respondedAt,
     this.impact,
+    this.roster = const [],
     required this.respond,
     required this.dismiss,
   });
 
-  factory PendingResult.chess(
+  /// [r] as the signed-in member [meId] sees it, previewed against
+  /// [players] as loaded.
+  factory PendingResult.of(
     LadderRepository repo,
     String meId,
-    MatchRequest r,
+    ResultRequest r,
     List<Player> players,
   ) {
+    final noun = Game.of(r.mode.type).resultNoun;
     final incoming = r.awaits(meId);
     final declined = r.declinedFor(meId);
-    final myResult = switch (r.outcomeFor(meId)) {
-      Outcome.win => 'you won',
-      Outcome.loss => 'you lost',
-      Outcome.draw => 'it was a draw',
-    };
-    final me = _playerById(players, meId);
-    final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && !declined && me != null && opponent != null
-        ? MatchPreview(me: me, opponent: opponent, outcome: r.outcomeFor(meId))
+    final mine = _myResult(r, meId);
+    String nameOf(Seat s) => s.playerId == meId ? 'You' : s.name;
+    final othersWaiting = [
+      for (final s in r.waitingOn)
+        if (s.playerId != meId) s.name,
+    ];
+    // Results declined before more than two could play don't say who did.
+    final decliner =
+        r.seatOf(r.declinedBy ?? '')?.name ??
+        joinNames([for (final s in r.opponentsOf(meId)) s.name]);
+    final standings = [
+      for (final s in r.seats)
+        if (_playerById(players, s.playerId) case final p?)
+          (
+            playerId: s.playerId,
+            side: s.side,
+            score: s.score,
+            standing: p.standingIn(r.mode),
+          ),
+    ];
+    final delta = r.rated && !declined && standings.length == r.seats.length
+        ? ratingChanges(r.mode.type, standings)[meId]
         : null;
     return PendingResult(
       headline: incoming
-          ? '${r.opponentName(meId)} says $myResult'
+          ? '${r.reporterName} says $mine'
           : declined
-          ? '${r.opponentName(meId)} declined your game'
-          : 'Waiting for ${r.opponentName(meId)} to confirm',
-      detail:
-          'You had ${r.colorOf(meId).name}${incoming ? '' : ', $myResult'} · ${r.clock.label}',
-      opponentName: r.opponentName(meId),
+          ? '$decliner declined your $noun'
+          : 'Waiting for ${joinNames(othersWaiting)} to confirm',
+      detail: joinParts([
+        r.mode.label,
+        joinParts([_setting(r, meId), if (!incoming) mine], ', '),
+        r.clock?.label ?? '',
+      ], ' · '),
+      reporterName: r.reporterName,
       rated: r.rated,
       incoming: incoming,
+      reported: r.requestedBy == meId,
       declined: declined,
       reportedAt: r.createdAt,
       respondedAt: r.respondedAt,
-      impact: preview == null
-          ? null
-          : (after: preview.myRatingAfter, delta: preview.myDelta),
-      respond: ({required accept}) async {
-        final match = await repo.respondToMatchRequest(r.id, accept: accept);
-        return match == null ? null : _confirmedMessage('Game', match, meId);
-      },
-      dismiss: () => repo.dismissMatchRequest(r.id),
-    );
-  }
-
-  factory PendingResult.backgammon(
-    LadderRepository repo,
-    String meId,
-    BackgammonMatchRequest r,
-    List<Player> players,
-  ) {
-    final incoming = r.awaits(meId);
-    final declined = r.declinedFor(meId);
-    final myResult =
-        '${r.wonBy(meId) ? 'you won' : 'you lost'} ${r.scoreFor(meId)}';
-    final me = _playerById(players, meId);
-    final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && !declined && me != null && opponent != null
-        ? BackgammonPreview(
-            me: me,
-            opponent: opponent,
-            won: r.wonBy(meId),
-            matchLength: r.matchLength,
-          )
-        : null;
-    return PendingResult(
-      headline: incoming
-          ? '${r.opponentName(meId)} says $myResult'
-          : declined
-          ? '${r.opponentName(meId)} declined your match'
-          : 'Waiting for ${r.opponentName(meId)} to confirm',
-      detail: 'Match to ${r.matchLength}${incoming ? '' : ', $myResult'}',
-      opponentName: r.opponentName(meId),
-      rated: r.rated,
-      incoming: incoming,
-      declined: declined,
-      reportedAt: r.createdAt,
-      respondedAt: r.respondedAt,
-      impact: preview == null
+      impact: delta == null
           ? null
           : (
-              after: preview.me.backgammon.rating + preview.myDelta,
-              delta: preview.myDelta,
+              after:
+                  _playerById(players, meId)!.standingIn(r.mode).rating + delta,
+              delta: delta,
             ),
+      roster: r.mode.format == ResultFormat.duel || declined
+          ? const []
+          : [
+              for (final s in r.seats)
+                (
+                  label: switch (r.mode.format) {
+                    ResultFormat.freeForAll => ordinal(r.placeOf(s.playerId)),
+                    ResultFormat.boxVsTeam => s.side == 1 ? 'Box' : 'Team',
+                    _ => 'Team ${s.side}',
+                  },
+                  name: nameOf(s),
+                  status: s.playerId == r.requestedBy
+                      ? 'reported'
+                      : s.confirmed
+                      ? 'confirmed'
+                      : s.playerId == meId
+                      ? 'waiting on you'
+                      : 'waiting',
+                  isMe: s.playerId == meId,
+                ),
+            ],
       respond: ({required accept}) async {
-        final match = await repo.respondToBackgammonMatchRequest(
-          r.id,
-          accept: accept,
-        );
-        return match == null ? null : _confirmedMessage('Match', match, meId);
+        final result = await repo.respondToRequest(r.id, accept: accept);
+        if (result != null) {
+          return _confirmedMessage(capitalized(noun), result, meId);
+        }
+        return accept
+            ? 'Confirmed. Waiting for ${joinNames(othersWaiting)}.'
+            : null;
       },
-      dismiss: () => repo.dismissBackgammonMatchRequest(r.id),
-    );
-  }
-
-  factory PendingResult.swu(
-    LadderRepository repo,
-    String meId,
-    SwuMatchRequest r,
-    List<Player> players,
-  ) {
-    final incoming = r.awaits(meId);
-    final declined = r.declinedFor(meId);
-    final myResult = switch (r.outcomeFor(meId)) {
-      Outcome.win => 'you won',
-      Outcome.loss => 'you lost',
-      Outcome.draw => 'you drew',
-    };
-    final me = _playerById(players, meId);
-    final opponent = _playerById(players, r.opponentId(meId));
-    final preview = r.rated && !declined && me != null && opponent != null
-        ? SwuPreview(me: me, opponent: opponent, outcome: r.outcomeFor(meId))
-        : null;
-    return PendingResult(
-      headline: incoming
-          ? '${r.opponentName(meId)} says $myResult ${r.scoreFor(meId)}'
-          : declined
-          ? '${r.opponentName(meId)} declined your match'
-          : 'Waiting for ${r.opponentName(meId)} to confirm',
-      detail: incoming
-          ? 'Best of three'
-          : 'Best of three, $myResult ${r.scoreFor(meId)}',
-      opponentName: r.opponentName(meId),
-      rated: r.rated,
-      incoming: incoming,
-      declined: declined,
-      reportedAt: r.createdAt,
-      respondedAt: r.respondedAt,
-      impact: preview == null
-          ? null
-          : (
-              after: preview.me.swu.rating + preview.myDelta,
-              delta: preview.myDelta,
-            ),
-      respond: ({required accept}) async {
-        final match = await repo.respondToSwuMatchRequest(r.id, accept: accept);
-        return match == null ? null : _confirmedMessage('Match', match, meId);
-      },
-      dismiss: () => repo.dismissSwuMatchRequest(r.id),
+      dismiss: () => repo.dismissRequest(r.id),
     );
   }
 
   final String headline;
   final String detail;
 
-  /// Who the member played, for the decline confirmation.
-  final String opponentName;
+  /// Who reported it, for the decline confirmation.
+  final String reporterName;
 
   /// False for a result that won't move ratings once confirmed.
   final bool rated;
 
-  /// Reported against the member, who confirms or declines it; otherwise the
-  /// member reported it and can only withdraw it.
+  /// Waiting for the member, who confirms or declines it.
   final bool incoming;
 
-  /// The opponent declined a result the member reported; it stays until the
+  /// The member reported it, and can withdraw it while it waits.
+  final bool reported;
+
+  /// Someone declined a result the member reported; it stays until the
   /// member [dismiss]es it.
   final bool declined;
 
   /// When the result was reported.
   final DateTime reportedAt;
 
-  /// When the opponent declined it; null while it's still pending.
+  /// When it was declined; null while it's still pending.
   final DateTime? respondedAt;
 
   /// The member's rating after this result and the change, from the ladder
   /// as loaded; null when unrated or the players aren't on the ladder.
   final RatingImpact? impact;
+
+  /// Every player and whether they've confirmed, for results with more than
+  /// two; empty for a duel.
+  final List<RosterLine> roster;
 
   /// Accepts or drops the result; returns the message to show, if any.
   final Future<String?> Function({required bool accept}) respond;
@@ -242,8 +245,8 @@ Future<bool> confirmDecline(BuildContext context, String name) async {
   return go ?? false;
 }
 
-/// Confirm or decline results reported against you, withdraw your own, and
-/// dismiss the ones your opponent declined.
+/// Confirm or decline results others reported with you, withdraw your own,
+/// and dismiss the ones someone declined.
 class PendingResultList extends StatelessWidget {
   const PendingResultList({super.key, required this.results});
 
@@ -283,7 +286,7 @@ class _PendingResultCardState extends State<_PendingResultCard> {
   Future<void> _respond({required bool accept}) async {
     final r = widget.result;
     if (!accept && r.incoming) {
-      if (!await confirmDecline(context, r.opponentName) || !mounted) return;
+      if (!await confirmDecline(context, r.reporterName) || !mounted) return;
     }
     await _run(() => r.respond(accept: accept));
   }
@@ -358,6 +361,10 @@ class _PendingResultCardState extends State<_PendingResultCard> {
             final at? when r.declined => 'Declined ${relativeAge(at)}',
             _ => 'Reported ${relativeAge(r.reportedAt)}',
           }, style: d.body(13, color: d.muted)),
+          if (r.roster.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final line in r.roster) _RosterRow(line: line),
+          ],
           if (_impactLine(context, r) case final line?) ...[
             const SizedBox(height: 8),
             line,
@@ -391,12 +398,52 @@ class _PendingResultCardState extends State<_PendingResultCard> {
                     ),
                   ]
                 : [
-                    TextButton(
-                      onPressed: _busy ? null : () => _respond(accept: false),
-                      child: const Text('Withdraw'),
-                    ),
+                    if (r.reported)
+                      TextButton(
+                        onPressed: _busy ? null : () => _respond(accept: false),
+                        child: const Text('Withdraw'),
+                      ),
                   ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One player of a multiplayer result on its pending card: their place or
+/// side, name and whether they've confirmed.
+class _RosterRow extends StatelessWidget {
+  const _RosterRow({required this.line});
+
+  final RosterLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    final done = line.status == 'reported' || line.status == 'confirmed';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              line.label,
+              style: d.body(14, color: d.accent, weight: FontWeight.w700),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              line.name,
+              overflow: TextOverflow.ellipsis,
+              style: d.body(
+                14,
+                weight: line.isMe ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+          ),
+          Text(line.status, style: d.body(13, color: done ? d.win : d.muted)),
         ],
       ),
     );

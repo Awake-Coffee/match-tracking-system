@@ -19,12 +19,12 @@ void main() {
   test('a confirmed match moves SWU ratings only', () async {
     final repo = await anaAndBogdan();
     final ana = repo.me!;
-    final bogdanId = (await repo.swuLadder())
+    final bogdanId = (await repo.ladderIn(GameMode.premier))
         .firstWhere((p) => p.id != ana.id)
         .id;
-    final chessBefore = ana.rating;
+    final chessBefore = ana.chess.rating;
 
-    final win = await repo.requestSwuMatch(
+    final win = await repo.reportSwu(
       opponentId: bogdanId,
       myGames: 2,
       opponentGames: 1,
@@ -32,37 +32,41 @@ void main() {
     expect(win.awaits(ana.id), isFalse);
     expect(win.scoreFor(bogdanId), '1-2');
     await expectLater(
-      repo.respondToSwuMatchRequest(win.id, accept: true),
+      repo.respondToRequest(win.id, accept: true),
       throwsA(isA<LadderException>()),
     );
 
     await repo.signIn(email: bogdanEmail, password: 'x');
-    final preview = SwuPreview(
-      me: repo.me!,
-      opponent: await repo.player(ana.id),
-      outcome: Outcome.loss,
-    );
-    final rated = await repo.respondToSwuMatchRequest(win.id, accept: true);
+    final preview = ratingChanges(MatchType.swu, [
+      for (final s in win.seats)
+        (
+          playerId: s.playerId,
+          side: s.side,
+          score: s.score,
+          standing: (await repo.player(s.playerId)).swu,
+        ),
+    ]);
+    final rated = await repo.respondToRequest(win.id, accept: true);
     expect(rated!.deltaFor(ana.id), 20);
-    expect(rated.deltaFor(bogdanId), preview.myDelta);
-    expect(preview.myDelta, -20);
+    expect(rated.deltaFor(bogdanId), preview[bogdanId]);
+    expect(preview[bogdanId], -20);
 
-    final draw = await repo.requestSwuMatch(
+    final draw = await repo.reportSwu(
       opponentId: ana.id,
       myGames: 1,
       opponentGames: 1,
     );
     await repo.signIn(email: anaEmail, password: 'x');
-    await repo.respondToSwuMatchRequest(draw.id, accept: true);
+    await repo.respondToRequest(draw.id, accept: true);
 
-    final ladder = await repo.swuLadder();
+    final ladder = await repo.ladderIn(GameMode.premier);
     expect([for (final p in ladder) p.swu.rating], [1018, 982]);
     expect(ladder.first.id, ana.id);
     expect(ladder.first.swu.draws, 1);
     expect(ladder.first.swu.peakRating, 1020);
-    expect(ladder.first.rating, chessBefore);
+    expect(ladder.first.chess.rating, chessBefore);
 
-    final history = await repo.swuMatches(playerId: ana.id);
+    final history = await repo.results(MatchType.swu, playerId: ana.id);
     expect(history.map((m) => m.scoreFor()), ['1-1', '2-1']);
     expect(
       ratingHistory(
@@ -72,42 +76,39 @@ void main() {
       ),
       [1000, 1020, 1018],
     );
-    expect(await repo.swuMatchRequests(), isEmpty);
+    expect(await repo.requestsIn(MatchType.swu), isEmpty);
   });
 
   test('declined and withdrawn matches are never rated', () async {
     final repo = await anaAndBogdan();
     final anaId = repo.me!.id;
-    final bogdanId = (await repo.swuLadder())
+    final bogdanId = (await repo.ladderIn(GameMode.premier))
         .firstWhere((p) => p.id != anaId)
         .id;
 
-    final withdrawn = await repo.requestSwuMatch(
+    final withdrawn = await repo.reportSwu(
       opponentId: bogdanId,
       myGames: 2,
       opponentGames: 0,
     );
-    expect(
-      await repo.respondToSwuMatchRequest(withdrawn.id, accept: false),
-      isNull,
-    );
-    final declined = await repo.requestSwuMatch(
+    expect(await repo.respondToRequest(withdrawn.id, accept: false), isNull);
+    final declined = await repo.reportSwu(
       opponentId: bogdanId,
       myGames: 0,
       opponentGames: 2,
     );
     await repo.signIn(email: bogdanEmail, password: 'x');
-    await repo.respondToSwuMatchRequest(declined.id, accept: false);
+    await repo.respondToRequest(declined.id, accept: false);
 
-    expect(await repo.swuMatches(), isEmpty);
-    expect(await repo.swuMatchRequests(), isEmpty);
-    expect((await repo.player(anaId)).swu.matchesPlayed, 0);
+    expect(await repo.results(MatchType.swu), isEmpty);
+    expect(await repo.requestsIn(MatchType.swu), isEmpty);
+    expect((await repo.player(anaId)).swu.played, 0);
   });
 
   test('rejects impossible scores and playing yourself', () async {
     final repo = await anaAndBogdan();
     final anaId = repo.me!.id;
-    final bogdanId = (await repo.swuLadder())
+    final bogdanId = (await repo.ladderIn(GameMode.premier))
         .firstWhere((p) => p.id != anaId)
         .id;
     for (final (opponent, mine, theirs) in [
@@ -117,7 +118,7 @@ void main() {
       (bogdanId, 3, 0),
     ]) {
       await expectLater(
-        repo.requestSwuMatch(
+        repo.reportSwu(
           opponentId: opponent,
           myGames: mine,
           opponentGames: theirs,
