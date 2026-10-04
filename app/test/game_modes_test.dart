@@ -349,8 +349,8 @@ void main() {
       await tapVisible(tester, find.widgetWithText(FilledButton, 'Confirm'));
       // Bea has played Chess960 now, so it leads her ladders.
       expect(
-        tester.getTopLeft(find.text('Chess960')).dy,
-        lessThan(tester.getTopLeft(find.text('Standard')).dy),
+        tester.getTopLeft(modeLine('Chess960')).dy,
+        lessThan(tester.getTopLeft(modeLine('Standard')).dy),
       );
       expect(find.text('2nd'), findsOneWidget);
     });

@@ -249,7 +249,7 @@ class _ResultRow extends StatelessWidget {
   /// widget rather than a tappable span so it can take keyboard focus.
   InlineSpan _span(BuildContext context, _Part part) {
     if (!part.name) return TextSpan(text: part.text);
-    final bold = context.design.body(16, weight: FontWeight.w700);
+    final bold = context.design.strong(16);
     final path = part.path;
     if (path == null) return TextSpan(text: part.text, style: bold);
     return WidgetSpan(

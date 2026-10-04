@@ -8,8 +8,9 @@ game has its own look; a switch at the top of every screen moves between
 them. Each game is played in several modes (Chess960, Bughouse, Nackgammon,
 Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
 
-- **App**: Flutter web (`app/`). Chess uses the "Roast pawns" design,
-  backgammon "Baize", Star Wars: Unlimited "Holotable".
+- **App**: Flutter web (`app/`). Chess uses the "Counter" design (the café's
+  letterboard, light or dark with the system setting), backgammon "Baize",
+  Star Wars: Unlimited "Holotable".
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
   computed in database functions, so clients can't tamper with them. All
   games share one schema keyed by a `match_type` enum and a `mode`:

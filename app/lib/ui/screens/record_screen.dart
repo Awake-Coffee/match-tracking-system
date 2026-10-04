@@ -189,7 +189,7 @@ class _ModePicker extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Mode', style: d.body(15, weight: FontWeight.w700)),
+          Text('Mode', style: d.strong(15)),
           const SizedBox(height: 8),
           DropdownMenu<GameMode>(
             initialSelection: mode,
@@ -268,7 +268,7 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
     final outcome = _outcome;
     final color = _color;
     final clock = _clock;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
     // White is side 1.
     final mySide = color == PieceColor.black ? 2 : 1;
     final seats = opponent == null || outcome == null

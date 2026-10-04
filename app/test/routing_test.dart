@@ -1,6 +1,6 @@
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
-import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
+import 'package:awake_ladder/ui/ladder/counter_ladder.dart';
 import 'package:awake_ladder/ui/navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -67,20 +67,20 @@ void main() {
     final history = _browserHistory(tester);
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Standard'));
+    await tester.tap(modeLine('Standard'));
     await tester.pumpAndSettle();
     expect(history.last, (uri: '/ladder/standard', replace: false));
 
     await tester.tap(
       find
           .descendant(
-            of: find.byType(PawnsLadder),
-            matching: find.textContaining('Bogdan'),
+            of: find.byType(CounterLadder),
+            matching: find.textContaining('BOGDAN'),
           )
           .first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
     expect(history.last, (
       uri: '/players/$bogdan?mode=standard',
       replace: false,
@@ -115,7 +115,7 @@ void main() {
     await tester.tapOnText(find.textRange.ofSubstring('Bogdan'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
     expect(history.last, (
       uri: '/players/$bogdan?mode=standard',
       replace: false,
@@ -184,7 +184,7 @@ void main() {
     expect(history.last, (uri: '/sign-in', replace: true));
 
     await _signInAsAna(tester);
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
     expect(history.last, (uri: '/', replace: true));
   });
 
@@ -251,7 +251,7 @@ void main() {
 
     await tester.tap(find.text('Go to the ladder'));
     await tester.pumpAndSettle();
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
   });
 
   testWidgets('an unknown address opened signed out keeps it after sign-in', (

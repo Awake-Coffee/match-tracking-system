@@ -25,17 +25,18 @@ flutter:
   # Bundled so text renders in the right face on the first frame instead of
   # swapping in after a runtime Google Fonts fetch.
   fonts:
-    - family: Gloock
+    - family: Archivo Narrow
       fonts:
-        - asset: assets/fonts/Gloock-Regular.ttf
-    - family: Karla
-      fonts:
-        - asset: assets/fonts/Karla-Regular.ttf
-        - asset: assets/fonts/Karla-Medium.ttf
+        - asset: assets/fonts/ArchivoNarrow-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Karla-SemiBold.ttf
+        - asset: assets/fonts/ArchivoNarrow-Bold.ttf
+          weight: 700
+    - family: Archivo
+      fonts:
+        - asset: assets/fonts/Archivo-Regular.ttf
+        - asset: assets/fonts/Archivo-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Karla-Bold.ttf
+        - asset: assets/fonts/Archivo-Bold.ttf
           weight: 700
     - family: Big Shoulders Display
       fonts:

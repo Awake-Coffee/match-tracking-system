@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 
 import '../data/ladder_repository.dart';
 import '../design/design_scope.dart';
+import '../design/design_spec.dart';
 import '../domain/models.dart';
 import 'app_scope.dart';
 import 'game.dart';
 import 'ladder/ladder_view.dart' show ordinal;
+import 'widgets/surface.dart' show SpecBackdrop;
 
 enum _Tab {
   ladder('', 'Ladder', Icons.format_list_numbered),
@@ -120,11 +122,13 @@ class _AppShellState extends State<AppShell> {
     final game = widget.game;
     final current = _Tab.at(game.pageOf(widget.location));
     final wide = MediaQuery.sizeOf(context).width >= _headerMinWidth;
-    final content = Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: widget.child,
+    final content = SpecBackdrop(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: widget.child,
+        ),
       ),
     );
     return FutureBuilder<Map<Game, _Standing>>(
@@ -327,7 +331,7 @@ class _GameTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = game.design;
+    final d = game.designFor(MediaQuery.platformBrightnessOf(context));
     return Container(
       width: 32,
       height: 32,
@@ -399,7 +403,7 @@ class _GameCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = game.design;
+    final d = game.designFor(MediaQuery.platformBrightnessOf(context));
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(10),
       side: BorderSide(
@@ -568,36 +572,63 @@ class _BottomTab extends StatelessWidget {
       button: true,
       child: InkWell(
         onTap: () => context.go(game.path(tab.page)),
-        child: Column(
-          children: [
-            Container(
-              width: 40,
-              height: 2,
-              color: selected ? d.accent : Colors.transparent,
-            ),
-            const Spacer(),
-            _CountBadge(
-              count: badgeCount,
-              child: Icon(
-                selected ? tab.selectedIcon : tab.icon,
-                color: selected ? d.accent : d.muted,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              tab.label,
-              style: d.body(
-                12,
-                weight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? d.ink : d.muted,
-              ),
-            ),
-            const Spacer(),
-          ],
-        ),
+        child: d.textTabs ? _textTab(d) : _iconTab(d),
       ),
     );
   }
+
+  /// The word alone, underlined while selected, like a menu board's sections.
+  Widget _textTab(DesignSpec d) => Center(
+    child: Badge.count(
+      count: badgeCount,
+      isLabelVisible: badgeCount > 0,
+      // Clear of the word's last letter.
+      offset: const Offset(14, -6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? d.ink : Colors.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Text(
+          tab.label,
+          style: d.display(15, color: selected ? d.ink : d.muted),
+        ),
+      ),
+    ),
+  );
+
+  Widget _iconTab(DesignSpec d) => Column(
+    children: [
+      Container(
+        width: 40,
+        height: 2,
+        color: selected ? d.accent : Colors.transparent,
+      ),
+      const Spacer(),
+      _CountBadge(
+        count: badgeCount,
+        child: Icon(
+          selected ? tab.selectedIcon : tab.icon,
+          color: selected ? d.accent : d.muted,
+        ),
+      ),
+      const SizedBox(height: 3),
+      Text(
+        tab.label,
+        style: d.body(
+          12,
+          weight: selected ? FontWeight.w700 : FontWeight.w500,
+          color: selected ? d.ink : d.muted,
+        ),
+      ),
+      const Spacer(),
+    ],
+  );
 }
 
 class _WideHeader extends StatelessWidget {
@@ -630,7 +661,7 @@ class _WideHeader extends StatelessWidget {
             height: 64,
             child: Row(
               children: [
-                Text('Awake Ladder', style: d.display(22)),
+                Text(d.caps('Awake Ladder'), style: d.display(22)),
                 const SizedBox(width: 24),
                 Expanded(
                   child: Align(
@@ -655,9 +686,9 @@ class _WideHeader extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 40),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    textStyle: d.body(14, weight: FontWeight.w700),
+                    textStyle: d.button(14),
                   ),
-                  child: Text('Record ${game.resultNoun}'),
+                  child: Text(d.caps('Record ${game.resultNoun}')),
                 ),
                 const SizedBox(width: 16),
                 _YouButton(game: game, selected: current == _Tab.you),

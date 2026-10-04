@@ -185,7 +185,7 @@ class RatedSwitch extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Rated', style: d.body(15, weight: FontWeight.w700)),
+                Text('Rated', style: d.strong(15)),
                 Text(
                   rated
                       ? 'Counts toward everyone\'s rating.'
@@ -290,14 +290,20 @@ class _PreviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = context.design;
+    final nameText = Text(
+      name,
+      overflow: TextOverflow.ellipsis,
+      style: d.strong(17),
+    );
     return Row(
+      crossAxisAlignment: d.leaders
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Text(
-            name,
-            overflow: TextOverflow.ellipsis,
-            style: d.body(17, weight: FontWeight.w600),
-          ),
+          child: d.leaders
+              ? LeaderRow(lead: nameText, color: d.muted)
+              : nameText,
         ),
         Text('$before to ', style: d.number(16, color: d.muted)),
         Text('${before + delta}', style: d.number(18, weight: FontWeight.w700)),

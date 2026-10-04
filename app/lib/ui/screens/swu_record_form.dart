@@ -66,7 +66,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
             (playerId: opponent.id, side: 2, score: score.$2),
           ]
         : null;
-    final label = d.body(15, weight: FontWeight.w700);
+    final label = d.strong(15);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

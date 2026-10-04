@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../design/design_scope.dart';
 import '../app_scope.dart';
 import '../widgets/password_field.dart';
+import '../widgets/surface.dart';
 import 'sign_in_screen.dart';
 
 /// Where the emailed reset link lands. The link has signed the member in; the
@@ -18,45 +19,47 @@ class ResetPasswordScreen extends StatelessWidget {
     final d = context.design;
     final repo = context.repo;
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Awake Coffee',
-                    style: d.body(16, color: d.muted, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose a new password',
-                    style: d.display(authHeadlineSize),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Pick something you haven\'t used before. '
-                    'You\'ll be signed in right after.',
-                    style: d.body(16, color: d.muted),
-                  ),
-                  const SizedBox(height: 28),
-                  NewPasswordForm(
-                    submitLabel: 'Save password',
-                    onSubmit: (password) async {
-                      await repo.updatePassword(password);
-                      if (context.mounted) context.go('/');
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  // A way out for someone who opened the link by mistake.
-                  TextButton(
-                    onPressed: repo.signOut,
-                    child: const Text('Cancel and sign out'),
-                  ),
-                ],
+      body: SpecBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      d.caps('Awake Coffee'),
+                      style: d.display(14, color: d.muted),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Choose a new password',
+                      style: d.display(authHeadlineSize),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Pick something you haven\'t used before. '
+                      'You\'ll be signed in right after.',
+                      style: d.body(16, color: d.muted),
+                    ),
+                    const SizedBox(height: 28),
+                    NewPasswordForm(
+                      submitLabel: 'Save password',
+                      onSubmit: (password) async {
+                        await repo.updatePassword(password);
+                        if (context.mounted) context.go('/');
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    // A way out for someone who opened the link by mistake.
+                    TextButton(
+                      onPressed: repo.signOut,
+                      child: const Text('Cancel and sign out'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

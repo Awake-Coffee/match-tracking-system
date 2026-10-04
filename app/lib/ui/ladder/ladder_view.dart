@@ -28,7 +28,7 @@ class LadderData {
   Standing standingOf(Player p) => p.standingIn(mode);
 
   /// Members who have played [mode], best first. Only they get a rank, a
-  /// pawn, a point or a stop on the route.
+  /// line on the board, a point or a stop on the route.
   List<Player> get ranked => rankedIn(players, mode);
 
   /// Members with no results in [mode] yet, listed apart and unranked.

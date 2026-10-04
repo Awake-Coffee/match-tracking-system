@@ -184,7 +184,7 @@ void main() {
     await tester.tapOnText(find.textRange.ofSubstring('Bogdan'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
     expect(
       find.text('Every game played at Awake, newest first.'),
       findsNothing,
@@ -263,7 +263,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
     expect(find.text('Bogdan'), findsWidgets);
     semantics.dispose();
   });

@@ -7,8 +7,8 @@ import '../../domain/models.dart';
 import '../app_scope.dart';
 import '../game.dart';
 import '../ladder/baize_ladder.dart';
+import '../ladder/counter_ladder.dart';
 import '../ladder/ladder_view.dart';
-import '../ladder/pawns_ladder.dart';
 import '../ladder/route_ladder.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_request_list.dart';
@@ -61,6 +61,8 @@ class LadderScreen extends StatelessWidget {
           ...game.modes.where(played),
           ...game.modes.where((m) => !played(m)),
         ];
+        final d = context.design;
+        void open(GameMode mode) => context.go(game.path('ladder/${mode.key}'));
         return ListView(
           children: [
             PendingResultList(results: pending),
@@ -68,16 +70,28 @@ class LadderScreen extends StatelessWidget {
               'Ladders',
               subtitle: 'One per mode. Tap one to see everyone.',
             ),
-            for (final mode in modes)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                child: _ModeCard(
+            // A design with leaders lists the modes as lines on its board;
+            // the others as cards.
+            if (d.leaders) ...[
+              const _ModeBoardHead(),
+              for (final mode in modes)
+                _ModeLine(
                   mode: mode,
                   ladder: ladderOf(members, mode),
                   meId: meId,
-                  onOpen: () => context.go(game.path('ladder/${mode.key}')),
+                  onOpen: () => open(mode),
                 ),
-              ),
+            ] else
+              for (final mode in modes)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                  child: _ModeCard(
+                    mode: mode,
+                    ladder: ladderOf(members, mode),
+                    meId: meId,
+                    onOpen: () => open(mode),
+                  ),
+                ),
             const SizedBox(height: 14),
           ],
         );
@@ -160,6 +174,111 @@ class _ModeCard extends StatelessWidget {
   }
 }
 
+/// The column heads over the mode lines. The lines' labels already say
+/// what they hold.
+class _ModeBoardHead extends StatelessWidget {
+  const _ModeBoardHead();
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    final head = d.display(12, color: d.muted);
+    return ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
+        child: Row(
+          children: [
+            Expanded(child: Text(d.caps('Mode'), style: head)),
+            Text(d.caps('You'), style: head),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One mode as a line on the board: its name, a dotted leader and the
+/// member's place and rating in it, its rules and size underneath.
+class _ModeLine extends StatelessWidget {
+  const _ModeLine({
+    required this.mode,
+    required this.ladder,
+    required this.meId,
+    required this.onOpen,
+  });
+
+  final GameMode mode;
+
+  /// Every member in [mode]'s ladder order.
+  final List<Player> ladder;
+  final String? meId;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = context.design;
+    final ranked = rankedIn(ladder, mode);
+    final rank = ranked.indexWhere((p) => p.id == meId) + 1;
+    final me = ladder.where((p) => p.id == meId).firstOrNull;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onOpen,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: d.line, width: d.lineWidth),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: LeaderRow(
+                      color: d.ink.withValues(alpha: 0.4),
+                      baselineGap: 7,
+                      lead: Text(
+                        d.caps(mode.label),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: d.display(21),
+                      ),
+                    ),
+                  ),
+                  if (rank > 0 && me != null) ...[
+                    Text(ordinal(rank), style: d.display(21)),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${me.standingIn(mode).rating}',
+                      style: d.number(21, color: d.muted, displayFace: true),
+                    ),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        'Not played',
+                        style: d.body(13, color: d.muted),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${mode.rules} · ${ranked.length} ranked',
+                style: d.body(13, color: d.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One mode's ladder in its game's style, under the results waiting for the
 /// member.
 class ModeLadderScreen extends StatelessWidget {
@@ -197,12 +316,21 @@ class ModeLadderScreen extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back),
                     onPressed: () => context.go(game.path()),
                   ),
-                  Expanded(child: Text(mode.label, style: d.display(22))),
+                  // A board titles itself with the mode, so a design with
+                  // leaders only says where the arrow goes.
+                  Expanded(
+                    child: d.leaders
+                        ? Text(
+                            d.caps('All ladders'),
+                            style: d.display(15, color: d.muted),
+                          )
+                        : Text(mode.label, style: d.display(22)),
+                  ),
                 ],
               ),
             ),
             switch (game) {
-              Game.chess => PawnsLadder(data: ladder),
+              Game.chess => CounterLadder(data: ladder),
               Game.backgammon => BaizeLadder(data: ladder),
               Game.swu => RouteLadder(data: ladder),
             },

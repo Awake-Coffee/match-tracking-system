@@ -11,7 +11,7 @@ import 'package:awake_ladder/design/designs.dart';
 import 'package:awake_ladder/ui/game.dart';
 import 'package:awake_ladder/ui/ladder/baize_ladder.dart';
 import 'package:awake_ladder/ui/ladder/ladder_view.dart';
-import 'package:awake_ladder/ui/ladder/pawns_ladder.dart';
+import 'package:awake_ladder/ui/ladder/counter_ladder.dart';
 import 'package:awake_ladder/ui/ladder/route_ladder.dart';
 import 'package:awake_ladder/ui/widgets/rating_chart.dart';
 import 'package:awake_ladder/ui/widgets/match_request_list.dart';
@@ -36,7 +36,7 @@ final _list = find
 
 /// Opens [mode]'s ladder from its game's ladders overview.
 Future<void> _openLadder(WidgetTester tester, String mode) async {
-  final card = find.text(mode);
+  final card = modeLine(mode);
   await tester.scrollUntilVisible(card, 200, scrollable: _list);
   await tester.tap(card);
   await tester.pumpAndSettle();
@@ -72,7 +72,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
     // Ana won her one game: first on the standard ladder.
     expect(find.text('1st'), findsOneWidget);
   });
@@ -239,7 +239,7 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
   });
 
   testWidgets('a failed sign-up stays an error in the loss colour', (
@@ -380,7 +380,7 @@ void main() {
 
     expect(repo.passwordRecoveryPending, isTrue);
     expect(find.text('Choose a new password'), findsOneWidget);
-    expect(find.text('The ladder'), findsNothing);
+    expect(find.text('LADDERS'), findsNothing);
 
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'short');
@@ -401,7 +401,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.passwordChanges, [anaEmail]);
     expect(repo.passwordRecoveryPending, isFalse);
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
     // Ana won her one game: first on the standard ladder.
     expect(find.text('1st'), findsOneWidget);
   });
@@ -517,7 +517,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
     await tester.pumpAndSettle();
     expect(repo.passwordChanges, [anaEmail]);
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
   });
 
   testWidgets('cancelling a recovery signs out', (tester) async {
@@ -587,7 +587,7 @@ void main() {
 
     expect(repo.me!.chess.rating, before);
     expect(find.textContaining('Sent to Bogdan'), findsOneWidget);
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
     expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     expect(find.textContaining('Fischer 7 min + 4 s'), findsOneWidget);
   });
@@ -1092,12 +1092,12 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Awake Ladder'), findsOneWidget);
+    expect(find.text('AWAKE LADDER'), findsOneWidget);
     expect(_awaitingBadge('1'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Record game'));
+    await tester.tap(find.widgetWithText(FilledButton, 'RECORD GAME'));
     await tester.pumpAndSettle();
-    expect(find.text('Record a game'), findsOneWidget);
+    expect(find.text('RECORD A GAME'), findsOneWidget);
 
     await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
@@ -1108,7 +1108,7 @@ void main() {
 
     await tester.tap(find.byTooltip('You'));
     await tester.pumpAndSettle();
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
 
     await tester.tap(switchGame);
     await tester.pumpAndSettle();
@@ -1290,15 +1290,15 @@ void main() {
     await _openLadder(tester, 'Standard');
     final bogdan = find
         .descendant(
-          of: find.byType(PawnsLadder),
-          matching: find.textContaining('Bogdan'),
+          of: find.byType(CounterLadder),
+          matching: find.textContaining('BOGDAN'),
         )
         .first;
     await tester.ensureVisible(bogdan);
     await tester.pumpAndSettle();
     await tester.tap(bogdan);
     await tester.pumpAndSettle();
-    expect(find.text('Rating over time'), findsOneWidget);
+    expect(find.text('RATING OVER TIME'), findsOneWidget);
     expect(find.textContaining('Record a game with'), findsOneWidget);
   });
 
@@ -1378,7 +1378,7 @@ void main() {
     expect(repo.passwordChanges, [anaEmail]);
     expect(find.text('Password updated.'), findsOneWidget);
     // Stays in Settings, signed in, with the fields emptied.
-    expect(find.text('Settings', skipOffstage: false), findsWidgets);
+    expect(find.text('SETTINGS', skipOffstage: false), findsWidgets);
     expect(repo.isSignedIn, isTrue);
     expect(tester.widget<TextFormField>(newPassword).controller!.text, '');
     expect(tester.widget<TextFormField>(confirm).controller!.text, '');
@@ -1545,9 +1545,9 @@ void main() {
     await tester.pumpWidget(AwakeApp(repository: repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ladders'), findsOneWidget);
+    expect(find.text('LADDERS'), findsOneWidget);
     await _openLadder(tester, 'Standard');
-    expect(find.text('The ladder'), findsOneWidget);
+    expect(find.text('STANDARD'), findsOneWidget);
     // Pending chess game on the Ladder tab, pending match on the picker.
     expect(_awaitingBadge('1'), findsNWidgets(2));
 
@@ -1567,7 +1567,7 @@ void main() {
     expect(find.text('YOUR LADDERS'), findsNothing);
     await _openLadder(tester, 'Standard');
     expect(find.text('The race'), findsOneWidget);
-    expect(find.byType(PawnsLadder), findsNothing);
+    expect(find.byType(CounterLadder), findsNothing);
     final race = find.byType(BaizeLadder);
     expect(
       find.descendant(
@@ -1617,7 +1617,7 @@ void main() {
         matching: find.text('Cleo'),
       );
       await tester.scrollUntilVisible(cleo, 200, scrollable: _list);
-      // Listed once, in the muted group, not among the pawns: her row carries
+      // Listed once, in the muted group, not on the board: her row carries
       // no rank number, and the two ranked members are 1st and 2nd.
       expect(cleo, findsOneWidget);
       expect(find.text('Not yet played'), findsOneWidget);
@@ -1640,7 +1640,7 @@ void main() {
     }
 
     await _openLadder(tester, 'Standard');
-    await expectUnranked(PawnsLadder);
+    await expectUnranked(CounterLadder);
 
     await tester.tap(switchGame);
     await tester.pumpAndSettle();
@@ -1695,11 +1695,11 @@ void main() {
       );
     }
 
-    // No empty top-eight board: the summary leads straight to the group.
+    // No empty board: the summary leads straight to the group.
     await _openLadder(tester, 'Standard');
     expect(find.text('No games yet.'), findsOneWidget);
     expect(find.textContaining('top eight'), findsNothing);
-    await expectAllWaiting(PawnsLadder);
+    await expectAllWaiting(CounterLadder);
 
     await tester.tap(switchGame);
     await tester.pumpAndSettle();
@@ -1769,7 +1769,7 @@ void main() {
 
       await _openLadder(tester, 'Standard');
 
-      await expectChase(PawnsLadder, Game.chess);
+      await expectChase(CounterLadder, Game.chess);
       await tester.tap(switchGame);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Backgammon'));
@@ -2251,10 +2251,9 @@ void main() {
 
       // Ana (1020) lost to Bogdan (980) on the board.
       expect(find.text('Bogdan says you lost'), findsOneWidget);
-      expect(
-        find.textContaining('Confirm and you go to 998 ('),
-        findsOneWidget,
-      );
+      // Chess reads it like a menu line: the words, a leader, the rating.
+      expect(find.text('Confirm and you go to'), findsOneWidget);
+      expect(find.text('998'), findsOneWidget);
       expect(find.text('−22'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
 
@@ -2277,10 +2276,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Waiting for Ana to confirm'), findsOneWidget);
-      expect(
-        find.textContaining('Once confirmed you go to 1002 ('),
-        findsOneWidget,
-      );
+      expect(find.text('Once confirmed you go to'), findsOneWidget);
+      expect(find.text('1002'), findsOneWidget);
       expect(find.text('+22'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
     });
@@ -2302,7 +2299,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Ratings stay put'), findsOneWidget);
-      expect(find.textContaining(' you go to '), findsOneWidget);
+      expect(find.textContaining('you go to'), findsOneWidget);
       expect(find.text('Waiting for Bogdan to confirm'), findsOneWidget);
     });
 
@@ -2477,7 +2474,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: DesignScope(
-            spec: roastPawns,
+            spec: counterDark,
             child: Scaffold(
               body: PendingResultList(
                 results: [
@@ -2492,10 +2489,8 @@ void main() {
 
       expect(find.text('Reported 2 h ago'), findsOneWidget);
       expect(find.text('Reported 45 min ago'), findsOneWidget);
-      expect(
-        find.textContaining('Confirm and you go to 984 ('),
-        findsNWidgets(2),
-      );
+      expect(find.text('Confirm and you go to'), findsNWidgets(2));
+      expect(find.text('984'), findsNWidgets(2));
       expect(find.text('−16'), findsNWidgets(2));
     });
 
@@ -2507,7 +2502,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: DesignScope(
-            spec: roastPawns,
+            spec: counterDark,
             child: Scaffold(
               body: PendingResultList(
                 results: [
@@ -2552,12 +2547,12 @@ void main() {
   group('keyboard access', () {
     Widget inDesign(Widget child) => MaterialApp(
       home: DesignScope(
-        spec: roastPawns,
+        spec: counterDark,
         child: Scaffold(body: SingleChildScrollView(child: child)),
       ),
     );
 
-    testWidgets('Tab reaches a pawn and Enter or Space opens its profile', (
+    testWidgets('Tab reaches a line and Enter or Space opens its profile', (
       tester,
     ) async {
       _phone(tester, width: 400);
@@ -2570,105 +2565,73 @@ void main() {
         onOpen: (p) => opened.add(p.displayName),
         now: DateTime(2026, 10, 5),
       );
-      await tester.pumpWidget(inDesign(PawnsLadder(data: data)));
-      final ana = 'Ana, rating ${data.ranked[0].chess.rating}';
-      final bogdan = 'Bogdan, rating ${data.ranked[1].chess.rating}';
+      await tester.pumpWidget(inDesign(CounterLadder(data: data)));
 
-      // Pawns come before the list in tab order, so the first Tab lands on
-      // the top-ranked pawn (Ana, who won) and the second on Bogdan's.
+      // The board is the first thing in tab order: Ana's line (she won),
+      // then Bogdan's.
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
-      // Keyboard focus opens the tooltip, so the rating is on screen.
-      expect(find.text(ana), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
       expect(opened, ['Ana']);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
-      expect(find.text(ana), findsNothing);
-      expect(find.text(bogdan), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
       expect(opened, ['Ana', 'Bogdan']);
     });
 
-    testWidgets('Enter opens a pawn with the web shortcut map', (tester) async {
+    testWidgets('your own line is the board inverted', (tester) async {
       _phone(tester, width: 400);
       final repo = await anaAndBogdan();
-      final opened = <String>[];
       final data = LadderData(
         mode: GameMode.standardChess,
         players: await repo.ladderIn(GameMode.standardChess),
         meId: repo.me!.id,
-        onOpen: (p) => opened.add(p.displayName),
+        onOpen: (_) {},
         now: DateTime(2026, 10, 5),
       );
-      // Flutter web maps Enter to ButtonActivateIntent, not ActivateIntent;
-      // tests otherwise run with the non-web map, so swap it in app-wide (a
-      // nested Shortcuts would fall back to the app's Enter mapping).
-      await tester.pumpWidget(
-        MaterialApp(
-          shortcuts: {
-            ...WidgetsApp.defaultShortcuts,
-            const SingleActivator(LogicalKeyboardKey.enter):
-                const ButtonActivateIntent(),
-          },
-          home: DesignScope(
-            spec: roastPawns,
-            child: Scaffold(
-              body: SingleChildScrollView(child: PawnsLadder(data: data)),
-            ),
-          ),
-        ),
-      );
+      await tester.pumpWidget(inDesign(CounterLadder(data: data)));
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pumpAndSettle();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(opened, ['Ana']);
+      final mine = find.text('ANA (YOU)');
+      expect(mine, findsOneWidget);
+      expect(tester.widget<Text>(mine).style!.color, counterDark.background);
+      final line = find
+          .ancestor(of: mine, matching: find.byType(Container))
+          .first;
+      expect(tester.widget<Container>(line).color, counterDark.ink);
+      expect(
+        tester.widget<Text>(find.text('BOGDAN')).style!.color,
+        counterDark.ink,
+      );
     });
 
-    testWidgets('a profile opens from a pawn via the keyboard in the app', (
+    testWidgets('chess follows the system light or dark setting', (
       tester,
     ) async {
       _phone(tester, width: 400);
       final repo = await anaAndBogdan();
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
       await tester.pumpWidget(
         AwakeApp(repository: repo, initialLocation: '/ladder/standard'),
       );
       await tester.pumpAndSettle();
+      final board = find.byType(CounterLadder);
+      expect(tester.element(board).design, same(counterDark));
 
-      final pawns = find.descendant(
-        of: find.byType(PawnsLadder),
-        matching: find.byType(FocusableActionDetector),
-      );
-      expect(pawns, findsNWidgets(2));
-      bool onFirstPawn() {
-        final focus = FocusManager.instance.primaryFocus?.context;
-        return focus != null &&
-            find
-                .descendant(
-                  of: pawns.first,
-                  matching: find.byElementPredicate((e) => e == focus),
-                )
-                .evaluate()
-                .isNotEmpty;
-      }
-
-      // Tab until focus is inside a pawn, however many header controls
-      // precede it.
-      for (var i = 0; i < 20 && !onFirstPawn(); i++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-      }
-      expect(onFirstPawn(), isTrue, reason: 'Tab never reached a pawn');
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
       await tester.pumpAndSettle();
-      // The first pawn is Ana, who is signed in: her own profile opened.
-      expect(find.text('Rating over time'), findsOneWidget);
-      expect(find.text('Your profile'), findsOneWidget);
+      expect(tester.element(board).design, same(counterLight));
+
+      // Backgammon keeps its own look either way.
+      await tester.tap(switchGame);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Backgammon'));
+      await tester.pumpAndSettle();
+      expect(tester.element(switchGame).design, same(baize));
     });
 
     testWidgets('arrow keys, Home and End move the chart\'s active point', (

@@ -265,7 +265,7 @@ class _Profile extends StatelessWidget {
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 12),
-          child: Text('Rating over time', style: section),
+          child: Text(d.caps('Rating over time'), style: section),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -287,7 +287,10 @@ class _Profile extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 4),
-          child: Text('Recent ${game.resultNounPlural}', style: section),
+          child: Text(
+            d.caps('Recent ${game.resultNounPlural}'),
+            style: section,
+          ),
         ),
         if (record.tiles.isEmpty)
           Padding(

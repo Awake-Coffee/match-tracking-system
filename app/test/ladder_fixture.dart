@@ -1,6 +1,7 @@
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
 import 'package:awake_ladder/domain/models.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const anaEmail = 'ana@example.com';
@@ -9,6 +10,13 @@ const bogdanEmail = 'bogdan@example.com';
 /// The header's game picker. Its tooltip names the game in full on phones,
 /// where the header shows only the short name, so match on the prefix.
 final switchGame = find.byTooltip(RegExp(r'^Switch game'));
+
+/// A mode's name on the ladders overview. Chess sets it in capitals, like
+/// every line on its board; the other games as written.
+Finder modeLine(String label) => find.byWidgetPredicate(
+  (w) => w is Text && (w.data == label || w.data == label.toUpperCase()),
+  description: 'mode line "$label"',
+);
 
 /// A demo ladder that behaves like a backend shared with other devices:
 /// changes can land there without this client hearing of them, and the
