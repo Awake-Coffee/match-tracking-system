@@ -168,7 +168,8 @@ class _BackgammonRecordFormState extends State<BackgammonRecordForm>
             missing: [
               if (opponent == null) 'an opponent',
               if (outcome == null) 'a result',
-              if (loserPoints == null) 'the loser\'s points',
+              // The points row only appears once a result is picked.
+              if (outcome != null && loserPoints == null) 'the loser\'s points',
             ],
             onPressed:
                 opponent == null || myScore == null || opponentScore == null

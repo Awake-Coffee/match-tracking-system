@@ -838,10 +838,21 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
-    expect(
-      find.text('Pick an opponent, a result and the loser\'s points'),
-      findsOneWidget,
+    expect(find.text('Pick an opponent and a result'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      AwakeApp(
+        repository: repo,
+        initialLocation: '/backgammon/record?opponent=demo-2',
+      ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I won'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(send);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick the loser\'s points'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(
