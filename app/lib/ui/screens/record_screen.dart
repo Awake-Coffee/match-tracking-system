@@ -25,11 +25,20 @@ class RecordScreen extends StatelessWidget {
     return LoadView(
       load: (repo) async {
         final meId = repo.me?.id;
+        // Chess fetches the member's games once, for both the opponent and
+        // the clock chips.
+        final chessGames = game == Game.chess && meId != null
+            ? _ownChessGames(repo, meId)
+            : Future.value(const <ChessMatch>[]);
         final recent = meId == null
             ? Future.value(const <String>[])
-            : game.recentOpponentsOf(repo, meId);
+            : game.recentOpponentsOf(repo, meId, chessGames: chessGames);
         final players = game.ladderOf(repo);
-        return (players: await players, recentIds: await recent);
+        return (
+          players: await players,
+          recentIds: await recent,
+          chessGames: await chessGames,
+        );
       },
       builder: (context, data, _) {
         final players = data.players;
@@ -61,6 +70,7 @@ class RecordScreen extends StatelessWidget {
                   players: players,
                   initialOpponentId: initialOpponentId,
                   recentOpponentIds: recentIds,
+                  ownGames: data.chessGames,
                 ),
                 Game.backgammon => BackgammonRecordForm(
                   me: me,
@@ -82,18 +92,35 @@ class RecordScreen extends StatelessWidget {
   }
 }
 
+/// The member's own chess games. Only the record form's shortcuts use them,
+/// so a failed load reads as no history rather than blocking the form.
+Future<List<ChessMatch>> _ownChessGames(
+  LadderRepository repo,
+  String meId,
+) async {
+  try {
+    return await repo.matches(playerId: meId);
+  } catch (_) {
+    return const [];
+  }
+}
+
 class _ChessRecordForm extends StatefulWidget {
   const _ChessRecordForm({
     required this.me,
     required this.players,
     this.initialOpponentId,
     this.recentOpponentIds = const [],
+    this.ownGames = const [],
   });
 
   final Player me;
   final List<Player> players;
   final String? initialOpponentId;
   final List<String> recentOpponentIds;
+
+  /// The member's own games, newest first, for the clock chips.
+  final List<ChessMatch> ownGames;
 
   @override
   State<_ChessRecordForm> createState() => _ChessRecordFormState();
@@ -109,47 +136,32 @@ class _ChessRecordFormState extends State<_ChessRecordForm>
   int? _customExtraSeconds;
   bool _rated = true;
 
-  /// The one-tap clocks: the member's recent ones, or the defaults.
-  List<ClockSetting> _recent = defaultClocks;
+  /// The one-tap clocks: the member's recent ones, padded with the defaults.
+  late List<ClockSetting> _recent = recentClocks(matches: widget.ownGames);
   bool _showAllClocks = false;
 
   /// Bumped when a chip sets the clock, so the full list re-reads it.
   int _clockEpoch = 0;
-  bool _clocksRequested = false;
 
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_clocksRequested) return;
-    _clocksRequested = true;
-    _loadClocks(context.repo);
+  void initState() {
+    super.initState();
+    _loadLastClock();
   }
 
-  /// Preselects the member's last clock as soon as local storage has it, then
-  /// builds their recent chips from it and their own games once those load.
-  Future<void> _loadClocks(LadderRepository repo) async {
+  /// Preselects the member's last clock, and puts it first among the chips,
+  /// as soon as local storage has it.
+  Future<void> _loadLastClock() async {
     final last = await ClockMemory.last(widget.me.id);
-    if (!mounted) return;
-    if (last != null) {
-      setState(() {
-        _recent = recentClocks(last: last, matches: const []);
-        // A choice made while this loaded wins.
-        if (_timeControl == null) _choose(last);
-      });
-    }
-    var mine = const <ChessMatch>[];
-    try {
-      mine = await repo.matches(playerId: widget.me.id);
-    } catch (_) {
-      // The chips are a shortcut; the full list still works.
-    }
-    if (!mounted) return;
-    // The current choice leads, so a chip tapped while the games loaded keeps
-    // its place instead of vanishing.
-    setState(() => _recent = recentClocks(last: _clock ?? last, matches: mine));
+    if (!mounted || last == null) return;
+    setState(() {
+      // A choice made while this loaded wins, and keeps its chip.
+      _recent = recentClocks(last: _clock ?? last, matches: widget.ownGames);
+      if (_timeControl == null) _choose(last);
+    });
   }
 
   void _choose(ClockSetting clock) {

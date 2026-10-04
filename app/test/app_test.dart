@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:awake_ladder/app.dart';
 import 'package:awake_ladder/data/demo_repository.dart';
 import 'package:awake_ladder/data/ladder_repository.dart';
@@ -718,35 +716,23 @@ void main() {
       expect(find.byType(DropdownMenu<TimeControl>), findsNothing);
     });
 
-    testWidgets('the stored clock is chosen before the games load', (
+    testWidgets('the stored clock leads the clocks of past games', (
       tester,
     ) async {
-      final repo = _SlowGames();
+      final repo = _CountedGames();
       await anaAndBogdan(into: repo);
       SharedPreferences.setMockInitialValues({
         'last_clock.${repo.me!.id}': '21,7,4',
       });
-      // The record screen's own opponent lookup goes first, unheld.
-      repo.unheld = 1;
-      final games = repo.hold = Completer();
       await open(tester, repo);
 
       expect(
         tester.widget<ChoiceChip>(chip('Fischer 7 min + 4 s')).selected,
         isTrue,
       );
-      expect(chip('Sudden death 5 min'), findsNothing);
-
-      // A default chip tapped while the games load keeps its place.
-      await tapVisible(tester, chip('Fischer 15 min + 10 s'));
-      games.complete();
-      await tester.pumpAndSettle();
-
       expect(chip('Sudden death 5 min'), findsOneWidget);
-      expect(
-        tester.widget<ChoiceChip>(chip('Fischer 15 min + 10 s')).selected,
-        isTrue,
-      );
+      // One fetch of Ana's games feeds both the opponent and the clock chips.
+      expect(repo.ownGamesFetches, 1);
     });
   });
 
@@ -805,9 +791,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    /// Ana plus five others; she reports SWU matches against Bea, Cal, Dan, Eve
-    /// and Fay, then Cal again, all still pending.
-    Future<DemoLadderRepository> regulars() async {
+    /// Ana plus five others; unless [report] is false, she reports SWU matches
+    /// against Bea, Cal, Dan, Eve and Fay, then Cal again, all still pending.
+    Future<DemoLadderRepository> regulars({bool report = true}) async {
       final repo = DemoLadderRepository();
       await repo.signUp(email: anaEmail, password: 'x', displayName: 'Ana');
       await repo.signOut();
@@ -822,7 +808,7 @@ void main() {
         await repo.signOut();
       }
       await repo.signIn(email: anaEmail, password: 'x');
-      for (final i in [0, 1, 2, 3, 4, 1]) {
+      for (final i in report ? [0, 1, 2, 3, 4, 1] : const <int>[]) {
         await repo.requestSwuMatch(
           opponentId: ids[i],
           myGames: 2,
@@ -886,6 +872,56 @@ void main() {
           .toList();
       // Reported Bea, Cal, Dan, Eve, Fay, then Cal again: Bea falls off.
       expect(names, ['Cal', 'Fay', 'Eve', 'Dan']);
+    });
+
+    testWidgets('confirmed and pending results merge by time; declined do not '
+        'count', (tester) async {
+      final repo = await regulars(report: false);
+      final ids = {for (final p in await repo.ladder()) p.displayName: p.id};
+      Future<void> report(String name) => repo.requestSwuMatch(
+        opponentId: ids[name]!,
+        myGames: 2,
+        opponentGames: 0,
+      );
+      Future<void> answer(String name, {required bool accept}) async {
+        await repo.signIn(email: '$name@example.com', password: 'x');
+        final request = (await repo.swuMatchRequests()).single;
+        await repo.respondToSwuMatchRequest(request.id, accept: accept);
+        await repo.signIn(email: anaEmail, password: 'x');
+      }
+
+      await report('Cal'); // pending
+      await report('Bea');
+      await answer('Bea', accept: true); // confirmed, newer than Cal's
+      await report('Eve'); // pending, newest that counts
+      await report('Dan');
+      await answer('Dan', accept: false); // declined
+      await open(tester, repo, '/swu/record');
+
+      final names = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((c) => (c.label as Text).data)
+          .toList();
+      expect(names, ['Eve', 'Bea', 'Cal']);
+    });
+
+    testWidgets('tapping the chosen chip again restores its name', (
+      tester,
+    ) async {
+      await open(tester, await anaAndBogdan(), '/record');
+      await tester.tap(chip('Bogdan'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(of: picker, matching: find.byType(TextField)),
+        'Bo',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(chip('Bogdan'));
+      await tester.pumpAndSettle();
+
+      expect(fieldText(tester), 'Bogdan');
+      expect(tester.widget<ChoiceChip>(chip('Bogdan')).selected, isTrue);
     });
 
     testWidgets('a member with no history sees no extras', (tester) async {
@@ -1846,19 +1882,13 @@ void main() {
 }
 
 /// A demo ladder whose game history waits on [hold], like a slow connection.
-class _SlowGames extends DemoLadderRepository {
-  Completer<void>? hold;
-
-  /// How many requests for games are answered at once before [hold] applies.
-  int unheld = 0;
+class _CountedGames extends DemoLadderRepository {
+  /// How many times a member's own chess games were fetched.
+  int ownGamesFetches = 0;
 
   @override
-  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) async {
-    if (unheld > 0) {
-      unheld--;
-    } else {
-      await hold?.future;
-    }
+  Future<List<ChessMatch>> matches({String? playerId, int limit = 50}) {
+    if (playerId != null) ownGamesFetches++;
     return super.matches(playerId: playerId, limit: limit);
   }
 }

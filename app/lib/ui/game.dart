@@ -103,15 +103,17 @@ enum Game {
 
   /// The members [meId] has played or has a pending result with in this game,
   /// most recent first, each once. A shortcut for the record form, so a failed
-  /// load reads as no history rather than blocking it.
+  /// load reads as no history rather than blocking it. In chess, [chessGames]
+  /// are the member's own games when the caller already fetches them.
   Future<List<String>> recentOpponentsOf(
     LadderRepository repo,
-    String meId,
-  ) async {
+    String meId, {
+    Future<List<ChessMatch>>? chessGames,
+  }) async {
     try {
       return distinctNewestFirst(switch (this) {
         chess => [
-          for (final m in await repo.matches(playerId: meId))
+          for (final m in await (chessGames ?? repo.matches(playerId: meId)))
             (id: m.opponentId(meId), at: m.playedAt),
           for (final r in await repo.matchRequests())
             if (r.involves(meId) && r.status == RequestStatus.pending)

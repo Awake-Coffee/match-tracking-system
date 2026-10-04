@@ -88,10 +88,11 @@ class OpponentPicker extends StatefulWidget {
 
 class _OpponentPickerState extends State<OpponentPicker> {
   /// Bumped when a chip picks the opponent, so the menu re-reads the choice.
+  /// Also on a tap of the chip already chosen, so text typed since gives way
+  /// to the name that will be sent.
   int _epoch = 0;
 
   void _pickRecent(String id) {
-    if (id == widget.selectedId) return;
     setState(() => _epoch++);
     widget.onSelected(id);
   }
