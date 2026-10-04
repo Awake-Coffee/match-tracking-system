@@ -10,7 +10,11 @@ screen moves between them.
 - **App**: Flutter web (`app/`). Chess uses the "Roast pawns" design,
   backgammon "Baize", Star Wars: Unlimited "Holotable".
 - **Backend**: Supabase auth + Postgres (`supabase/migrations/`). Ratings are
-  computed in database functions, so clients can't tamper with them.
+  computed in database functions, so clients can't tamper with them. All
+  games share one schema keyed by a `match_type` enum: `ratings` (one row
+  per member per game), `match_requests`, `matches`, and the
+  `request_match` / `respond_to_match` RPCs.
+  Full spec: [`specs/005-match-types/spec.md`](specs/005-match-types/spec.md).
 - **Chess rating**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
   first 30 games, then 20, 10 for good once 2400 is reached). Everyone
   starts at 1000.
@@ -43,20 +47,41 @@ make dev    # debug build with hot reload
 make test   # Flutter tests + SQL tests (needs Postgres binaries on PATH)
 ```
 
-Sign-up confirmation emails link back to the host the member signed up on.
-Supabase only allows hosts listed under Authentication → URL Configuration:
-set the Site URL to `https://awake-chess-ladder.vercel.app` and add
-`https://awake-chess-ladder.vercel.app/**` and `http://localhost:8080/**`
-to the Redirect URLs.
+Sign-up confirmation emails link back to the host the member signed up on,
+as long as Supabase allows it: the Site URL and Redirect URLs live in
+`supabase/auth.json` and are deployed with the migrations (see below).
 
 ## Database changes
 
 Add a new file in `supabase/migrations/`, cover it in a
-`supabase/tests/*_test.sql` file, run `make test`, then apply it with:
 
-```
-npx supabase db push
-```
+`supabase/tests/*_test.sql` file and run `make test`. Merging to `main`
+applies it to production.
+
+## CI/CD
+
+All of it lives in `.github/workflows/ci.yml`:
+
+- **Every PR and push to `main`**: Flutter analyze and tests, the SQL tests,
+  and on PRs a dry run listing the migrations that would be applied to
+  production. Vercel deploys a preview of every PR branch.
+- **Pushes to `main`** (or run by hand), once the tests pass: builds the app
+  and uploads it to Vercel without serving it, runs `supabase db push`, sets
+  the auth Site URL and Redirect URLs from `supabase/auth.json`, then promotes
+  the new app. The live app never runs against a schema it doesn't know, so
+  Vercel's own deploys of `main` are off (`vercel.json`).
+
+The deploy needs these repository settings (Settings → Secrets and
+variables → Actions):
+
+| Name | Kind | Value |
+| --- | --- | --- |
+| `SUPABASE_DB_URL` | secret | Session pooler connection string (Supabase → Connect), with the database password filled in |
+| `SUPABASE_ACCESS_TOKEN` | secret | Personal access token from supabase.com/dashboard/account/tokens |
+| `SUPABASE_PROJECT_REF` | variable | The `<project-ref>` in `https://<project-ref>.supabase.co` |
+| `VERCEL_TOKEN` | secret | Token from vercel.com/account/tokens, scoped to the team |
+| `VERCEL_ORG_ID` | variable | Team ID (`team_…`) |
+| `VERCEL_PROJECT_ID` | variable | Project ID (`prj_…`) |
 
 ## Build
 
@@ -66,7 +91,8 @@ cd app && flutter build web --release --dart-define-from-file=../.env
 
 The static site lands in `app/build/web/`.
 
-Vercel builds every push with `scripts/vercel-build.sh` (see `vercel.json`),
+Vercel previews and the production deploy both build with
+`scripts/vercel-build.sh` (see `vercel.json`),
 which installs Flutter and passes the project's `SUPABASE_URL` and
 `SUPABASE_PUBLISHABLE_KEY` environment variables to `flutter build`.
 Production builds fail if either is missing.
