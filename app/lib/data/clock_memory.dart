@@ -2,12 +2,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/models.dart';
 
-/// The time controls offered as one-tap choices to a member with no history.
+/// The club's usual time controls, always offered as one-tap choices.
 const defaultClocks = [
-  ClockSetting(TimeControl.fischer5plus3),
-  ClockSetting(TimeControl.fischer10plus10),
-  ClockSetting(TimeControl.fischer15plus10),
   ClockSetting(TimeControl.sudden5),
+  ClockSetting(TimeControl.suddenCustom, customBaseMinutes: 10),
+  ClockSetting(TimeControl.sudden25),
+  ClockSetting(TimeControl.fischer5plus3),
+  ClockSetting(
+    TimeControl.fischerCustom,
+    customBaseMinutes: 10,
+    customExtraSeconds: 3,
+  ),
 ];
 
 /// The member's last used clock, in the browser (or device) they recorded on,
@@ -53,16 +58,14 @@ abstract final class ClockMemory {
   }
 }
 
-/// The member's most recent distinct clocks, newest first: [last] (which may
-/// not have been confirmed yet), then those of their own chess [results]
-/// (newest first). Padded with [defaultClocks] so a short history still
-/// offers [max] one-tap choices.
-List<ClockSetting> recentClocks({
+/// The one-tap clocks: [defaultClocks], then the member's last used clock
+/// when it isn't one of them. That's [last] (stored on this device, maybe
+/// not confirmed yet), else the clock of their newest chess result in
+/// [results] (newest first), so another device's clock still shows.
+List<ClockSetting> clockChips({
   ClockSetting? last,
   required Iterable<GameResult> results,
-  int max = 4,
 }) => <ClockSetting>{
-  ?last,
-  for (final r in results) ?r.clock,
   ...defaultClocks,
-}.take(max).toList();
+  ?(last ?? results.map((r) => r.clock).nonNulls.firstOrNull),
+}.toList();

@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 import '../../data/clock_memory.dart';
 import '../../domain/models.dart';
 
-/// The DGT 2500 time control a chess game was played on: the member's
-/// recent clocks as one-tap chips (their last one preselected), every preset
-/// in a menu, and the time the players set for a custom preset. Reports the
-/// chosen preset, and the setting once it's complete (null until then).
+/// The DGT 2500 time control a chess game was played on: the usual clocks
+/// and the member's last one as one-tap chips (that one preselected), every
+/// preset in a menu, and the time the players set for a custom preset.
+/// Reports the chosen preset, and the setting once it's complete (null until
+/// then).
 class ClockPicker extends StatefulWidget {
   const ClockPicker({
     super.key,
@@ -31,8 +32,7 @@ class _ClockPickerState extends State<ClockPicker> {
   int? _customBaseMinutes;
   int? _customExtraSeconds;
 
-  /// The one-tap clocks: the member's recent ones, padded with the defaults.
-  late List<ClockSetting> _recent = recentClocks(results: widget.ownGames);
+  late List<ClockSetting> _chips = clockChips(results: widget.ownGames);
   bool _showAllClocks = false;
 
   /// Bumped when a chip sets the clock, so the full list re-reads it.
@@ -44,14 +44,14 @@ class _ClockPickerState extends State<ClockPicker> {
     _loadLastClock();
   }
 
-  /// Preselects the member's last clock, and puts it first among the chips,
+  /// Preselects the member's last clock, and gives it a chip,
   /// as soon as local storage has it.
   Future<void> _loadLastClock() async {
     final last = await ClockMemory.last(widget.meId);
     if (!mounted || last == null) return;
     _update(() {
       // A choice made while this loaded wins, and keeps its chip.
-      _recent = recentClocks(last: _clock ?? last, results: widget.ownGames);
+      _chips = clockChips(last: _clock ?? last, results: widget.ownGames);
       if (_timeControl == null) _choose(last);
     });
   }
@@ -95,7 +95,7 @@ class _ClockPickerState extends State<ClockPicker> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final c in _recent)
+            for (final c in _chips)
               ChoiceChip(
                 label: Text(c.label),
                 selected: c == clock,
@@ -112,7 +112,7 @@ class _ClockPickerState extends State<ClockPicker> {
         // clock that will be sent (or the preset its custom time belongs to)
         // is always on screen.
         if (_showAllClocks ||
-            (_timeControl != null && !_recent.contains(clock))) ...[
+            (_timeControl != null && !_chips.contains(clock))) ...[
           const SizedBox(height: 12),
           DropdownMenu<TimeControl>(
             key: ValueKey(_clockEpoch),

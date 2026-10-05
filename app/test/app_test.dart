@@ -682,8 +682,6 @@ void main() {
 
       expect(find.text('Pick a time control'), findsOneWidget);
       expect(tester.widget<FilledButton>(send).onPressed, isNull);
-      // Ana has played sudden death 5 min; the Fischer 5 + 3 game against her
-      // is Bogdan's report and is still unconfirmed.
       await tapVisible(tester, chip('Sudden death 5 min'));
 
       expect(find.textContaining('Pick a'), findsNothing);
@@ -703,15 +701,19 @@ void main() {
       );
       await open(tester, repo);
 
-      for (final label in [
-        'Fischer 5 min + 3 s',
-        'Fischer 10 min + 10 s',
-        'Fischer 15 min + 10 s',
-        'Sudden death 5 min',
-        'More…',
-      ]) {
-        expect(chip(label), findsOneWidget, reason: label);
-      }
+      expect(
+        tester
+            .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+            .map((c) => (c.label as Text).data),
+        [
+          'Sudden death 5 min',
+          'Sudden death 10 min',
+          'Sudden death 25 min',
+          'Fischer 5 min + 3 s',
+          'Fischer 10 min + 3 s',
+          'More…',
+        ],
+      );
     });
 
     testWidgets('the last clock is preselected on the next visit', (
@@ -762,22 +764,25 @@ void main() {
       expect(tester.widget<FilledButton>(send).onPressed, isNotNull);
     });
 
-    testWidgets('a clock recorded on another device shows as a chip', (
+    testWidgets('a clock recorded on another device gets its own chip', (
       tester,
     ) async {
-      // No stored preference: the chip comes from the member's own games.
-      await open(tester, await anaAndBogdan());
-      expect(chip('Sudden death 5 min'), findsOneWidget);
-      expect(
-        tester.widget<ChoiceChip>(chip('Sudden death 5 min')).selected,
-        isFalse,
+      // No stored preference: the last clock comes from Ana's newest game.
+      final repo = await anaAndBogdan();
+      final anaId = repo.me!.id;
+      final rated = await repo.reportChess(
+        opponentId: (await repo.ladderIn(GameMode.standardChess))
+            .firstWhere((p) => p.id != anaId)
+            .id,
+        myColor: PieceColor.white,
+        myOutcome: Outcome.win,
+        clock: const ClockSetting(TimeControl.fischer25plus10),
       );
-    });
+      await repo.signIn(email: bogdanEmail, password: 'x');
+      await repo.respondToRequest(rated.id, accept: true);
+      await repo.signIn(email: anaEmail, password: 'x');
+      await open(tester, repo);
 
-    testWidgets('a short history is padded with the defaults', (tester) async {
-      // Ana has played one clock; three defaults fill the row to four. The
-      // opponent chip for Bogdan sits above them.
-      await open(tester, await anaAndBogdan());
       final labels = tester
           .widgetList<ChoiceChip>(find.byType(ChoiceChip))
           .map((c) => (c.label as Text).data)
@@ -785,11 +790,17 @@ void main() {
       expect(labels, [
         'Bogdan',
         'Sudden death 5 min',
+        'Sudden death 10 min',
+        'Sudden death 25 min',
         'Fischer 5 min + 3 s',
-        'Fischer 10 min + 10 s',
-        'Fischer 15 min + 10 s',
+        'Fischer 10 min + 3 s',
+        'Fischer 25 min + 10 s',
         'More…',
       ]);
+      expect(
+        tester.widget<ChoiceChip>(chip('Fischer 25 min + 10 s')).selected,
+        isFalse,
+      );
     });
 
     testWidgets('a clock without a chip keeps the full list open', (
@@ -817,7 +828,7 @@ void main() {
       expect(find.byType(DropdownMenu<TimeControl>), findsNothing);
     });
 
-    testWidgets('the stored clock leads the clocks of past games', (
+    testWidgets('the stored clock beats the clocks of past games', (
       tester,
     ) async {
       final repo = _CountedGames();
@@ -832,6 +843,7 @@ void main() {
         isTrue,
       );
       expect(chip('Sudden death 5 min'), findsOneWidget);
+      expect(chip('Fischer 25 min + 10 s'), findsNothing);
       // One fetch of Ana's games feeds both the opponent and the clock chips.
       expect(repo.ownGamesFetches, 1);
     });
