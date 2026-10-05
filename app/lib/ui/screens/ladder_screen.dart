@@ -45,7 +45,7 @@ class LadderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Without game modes there is one ladder per game: the tab opens it.
-    if (!context.features.gameModes) {
+    if (!context.features.showsModesOf(game.type)) {
       return ModeLadderScreen(mode: game.type.defaultMode);
     }
     final meId = context.repo.me?.id;
@@ -313,7 +313,7 @@ class ModeLadderScreen extends StatelessWidget {
           children: [
             PendingResultList(results: pending),
             // The way back to every mode's ladder, when there are modes.
-            if (context.features.gameModes)
+            if (context.features.showsModesOf(mode.type))
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 12, 20, 0),
                 child: Row(

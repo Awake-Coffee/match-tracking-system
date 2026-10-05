@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import 'domain/models.dart';
+
 /// Features built but not yet shown to members. A build switches one on
 /// with `--dart-define`, e.g. `--dart-define=GAME_MODES=true`. They hide
 /// the UI only: data and routes stay as they are.
@@ -16,10 +18,14 @@ class Features {
   /// tests change it (test/flutter_test_config.dart).
   static Features defaults = fromEnvironment;
 
-  /// Variants beyond each game's standard mode, each with its own ladder.
-  /// Off: the Ladder tab opens the standard ladder, titled "Ladder", and no
-  /// screen offers or names a mode.
+  /// Chess variants beyond standard chess, each with its own ladder.
+  /// Off: chess's Ladder tab opens the standard ladder, titled "Ladder", and
+  /// no chess screen offers or names a mode. Backgammon and Star Wars:
+  /// Unlimited show their modes either way.
   final bool gameModes;
+
+  /// Whether screens of [type] offer and name its modes.
+  bool showsModesOf(MatchType type) => gameModes || type != MatchType.chess;
 }
 
 /// Provides the build's [Features] to the screens below it.

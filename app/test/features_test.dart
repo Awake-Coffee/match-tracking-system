@@ -41,7 +41,7 @@ Future<void> _open(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  group('with game modes hidden', () {
+  group('with chess modes hidden', () {
     testWidgets('the Ladder tab is the standard ladder, called Ladder', (
       tester,
     ) async {
@@ -62,19 +62,21 @@ void main() {
       expect(find.text('LADDER'), findsOneWidget);
     });
 
-    testWidgets('backgammon and SWU open straight onto their ladders', (
-      tester,
-    ) async {
+    testWidgets('backgammon and SWU keep their modes', (tester) async {
       _phone(tester);
       final repo = await anaAndBogdanWithSwu();
       await _open(tester, repo, at: '/backgammon');
-      expect(find.byType(BaizeLadder), findsOneWidget);
-      expect(find.text('Ladders'), findsNothing);
-      expect(find.byTooltip('All ladders'), findsNothing);
+      expect(find.text('Ladders'), findsOneWidget);
+      expect(find.byType(BaizeLadder), findsNothing);
+
+      await _open(tester, repo, at: '/backgammon/record');
+      expect(find.byType(DropdownMenu<GameMode>), findsOneWidget);
 
       await _open(tester, repo, at: '/swu');
+      expect(find.text('Ladders'), findsOneWidget);
+      await _open(tester, repo, at: '/swu/ladder/premier');
       expect(find.byType(RouteLadder), findsOneWidget);
-      expect(find.text('Ladders'), findsNothing);
+      expect(find.byTooltip('All ladders'), findsOneWidget);
     });
 
     testWidgets('recording and profiles offer no mode', (tester) async {
@@ -138,8 +140,15 @@ void main() {
     });
   });
 
-  test('a build shows game modes only when told to', () {
+  test('a build shows chess modes only when told to', () {
     expect(const Features().gameModes, isFalse);
+    expect(const Features().showsModesOf(MatchType.chess), isFalse);
+    expect(const Features().showsModesOf(MatchType.backgammon), isTrue);
+    expect(const Features().showsModesOf(MatchType.swu), isTrue);
+    expect(
+      const Features(gameModes: true).showsModesOf(MatchType.chess),
+      isTrue,
+    );
     expect(
       Features.fromEnvironment.gameModes,
       const bool.fromEnvironment('GAME_MODES'),

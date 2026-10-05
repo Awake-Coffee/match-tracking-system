@@ -116,12 +116,17 @@ class _AppShellState extends State<AppShell> {
     if (_revision == repo.revision) return;
     _revision = repo.revision;
     final me = repo.me;
-    final gameModes = context.features.gameModes;
+    final features = context.features;
     final standings = me == null
         ? Future.value(const <Game, _Standing>{})
         : [
             for (final game in Game.values)
-              _standingIn(game, repo, me, gameModes: gameModes),
+              _standingIn(
+                game,
+                repo,
+                me,
+                gameModes: features.showsModesOf(game.type),
+              ),
           ].wait.then((s) => Map.fromIterables(Game.values, s));
     _standings = standings.then((s) => _lastStandings = s);
   }
@@ -456,7 +461,7 @@ class _GameCard extends StatelessWidget {
                           text: switch (standing.rank) {
                             final rank? =>
                               ' · ${ordinal(rank)} of ${standing.ladderSize}'
-                                  '${context.features.gameModes && game.modes.length > 1 ? ' in ${standing.mode.label}' : ''}',
+                                  '${context.features.showsModesOf(game.type) && game.modes.length > 1 ? ' in ${standing.mode.label}' : ''}',
                             null => ' · not ranked yet',
                           },
                         ),

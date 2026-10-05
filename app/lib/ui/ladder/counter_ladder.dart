@@ -29,7 +29,11 @@ class CounterLadder extends StatelessWidget {
           // The board is titled with its mode, like a menu's section; with
           // modes hidden it is simply the ladder.
           Text(
-            d.caps(context.features.gameModes ? data.mode.label : 'Ladder'),
+            d.caps(
+              context.features.showsModesOf(data.mode.type)
+                  ? data.mode.label
+                  : 'Ladder',
+            ),
             style: d.display(44, height: 1),
           ),
           const SizedBox(height: 10),

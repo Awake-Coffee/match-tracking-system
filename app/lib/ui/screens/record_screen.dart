@@ -66,7 +66,7 @@ class _RecordScreenState extends State<RecordScreen> {
             members.any((p) => p.id == widget.initialOpponentId && p.id != meId)
             ? widget.initialOpponentId
             : null;
-        final modes = context.features.gameModes;
+        final modes = context.features.showsModesOf(game.type);
         final mode = modes ? _mode : game.type.defaultMode;
         // Duel forms keep what was filled in when the mode changes between
         // duels.

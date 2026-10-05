@@ -98,7 +98,8 @@ String joinParts(List<String> parts, String separator) =>
 /// mode, so it is never taken for one. Empty when it goes unsaid.
 String modeLabelFor(BuildContext context, GameMode? mode) {
   if (mode == null) return '';
-  if (context.features.gameModes || mode != mode.type.defaultMode) {
+  if (context.features.showsModesOf(mode.type) ||
+      mode != mode.type.defaultMode) {
     return mode.label;
   }
   return '';

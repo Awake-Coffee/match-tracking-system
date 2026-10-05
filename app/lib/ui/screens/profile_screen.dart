@@ -40,7 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
-    final modes = context.features.gameModes;
+    final modes = context.features.showsModesOf(game.type);
     return LoadView<_ModeRecord>(
       reloadKey: _picked,
       load: (repo) async {
@@ -205,7 +205,7 @@ class _Profile extends StatelessWidget {
             ],
           ),
         ),
-        if (context.features.gameModes)
+        if (context.features.showsModesOf(game.type))
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
             child: DropdownMenu<GameMode>(
