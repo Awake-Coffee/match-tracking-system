@@ -41,7 +41,7 @@ Future<void> _open(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  group('with chess modes hidden', () {
+  group('with chess and backgammon modes hidden', () {
     testWidgets('the Ladder tab is the standard ladder, called Ladder', (
       tester,
     ) async {
@@ -62,16 +62,21 @@ void main() {
       expect(find.text('LADDER'), findsOneWidget);
     });
 
-    testWidgets('backgammon and SWU keep their modes', (tester) async {
+    testWidgets('backgammon opens straight onto its ladder', (tester) async {
       _phone(tester);
       final repo = await anaAndBogdanWithSwu();
       await _open(tester, repo, at: '/backgammon');
-      expect(find.text('Ladders'), findsOneWidget);
-      expect(find.byType(BaizeLadder), findsNothing);
+      expect(find.byType(BaizeLadder), findsOneWidget);
+      expect(find.text('Ladders'), findsNothing);
+      expect(find.byTooltip('All ladders'), findsNothing);
 
       await _open(tester, repo, at: '/backgammon/record');
-      expect(find.byType(DropdownMenu<GameMode>), findsOneWidget);
+      expect(find.byType(DropdownMenu<GameMode>), findsNothing);
+    });
 
+    testWidgets('SWU keeps its modes', (tester) async {
+      _phone(tester);
+      final repo = await anaAndBogdanWithSwu();
       await _open(tester, repo, at: '/swu');
       expect(find.text('Ladders'), findsOneWidget);
       await _open(tester, repo, at: '/swu/ladder/premier');
@@ -140,13 +145,17 @@ void main() {
     });
   });
 
-  test('a build shows chess modes only when told to', () {
+  test('a build shows chess and backgammon modes only when told to', () {
     expect(const Features().gameModes, isFalse);
     expect(const Features().showsModesOf(MatchType.chess), isFalse);
-    expect(const Features().showsModesOf(MatchType.backgammon), isTrue);
+    expect(const Features().showsModesOf(MatchType.backgammon), isFalse);
     expect(const Features().showsModesOf(MatchType.swu), isTrue);
     expect(
       const Features(gameModes: true).showsModesOf(MatchType.chess),
+      isTrue,
+    );
+    expect(
+      const Features(gameModes: true).showsModesOf(MatchType.backgammon),
       isTrue,
     );
     expect(

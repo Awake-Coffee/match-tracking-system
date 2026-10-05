@@ -18,14 +18,14 @@ class Features {
   /// tests change it (test/flutter_test_config.dart).
   static Features defaults = fromEnvironment;
 
-  /// Chess variants beyond standard chess, each with its own ladder.
-  /// Off: chess's Ladder tab opens the standard ladder, titled "Ladder", and
-  /// no chess screen offers or names a mode. Backgammon and Star Wars:
-  /// Unlimited show their modes either way.
+  /// Chess and backgammon variants beyond each game's standard mode, each
+  /// with its own ladder. Off: their Ladder tab opens the standard ladder,
+  /// titled "Ladder", and none of their screens offers or names a mode.
+  /// Star Wars: Unlimited shows its modes either way.
   final bool gameModes;
 
   /// Whether screens of [type] offer and name its modes.
-  bool showsModesOf(MatchType type) => gameModes || type != MatchType.chess;
+  bool showsModesOf(MatchType type) => gameModes || type == MatchType.swu;
 }
 
 /// Provides the build's [Features] to the screens below it.
