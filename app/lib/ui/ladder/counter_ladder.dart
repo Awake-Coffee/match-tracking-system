@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../design/design_scope.dart';
 import '../../features.dart';
 import '../../domain/models.dart';
+import '../widgets/avatar.dart';
 import '../widgets/surface.dart';
 import 'ladder_view.dart';
 
@@ -120,6 +121,10 @@ class _Line extends StatelessWidget {
                 style: d.number(15, color: quiet, displayFace: true),
               ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Avatar(face: player.face, size: 36),
           ),
           Expanded(
             child: LeaderRow(

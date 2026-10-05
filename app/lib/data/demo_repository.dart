@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../domain/models.dart';
 import 'ladder_repository.dart';
 
@@ -412,6 +414,26 @@ class DemoLadderRepository extends LadderRepository {
     );
     if (taken) throw const LadderException('That name is taken. Try another.');
     _players[me.id] = me.copyWith(displayName: name);
+    _changed();
+  }
+
+  /// Kept in the page as a data URL: there's no storage to upload to.
+  @override
+  Future<void> updateAvatar(
+    Uint8List image, {
+    required String contentType,
+  }) async {
+    final me = _requireMe();
+    _players[me.id] = me.withAvatar(
+      Uri.dataFromBytes(image, mimeType: contentType).toString(),
+    );
+    _changed();
+  }
+
+  @override
+  Future<void> removeAvatar() async {
+    final me = _requireMe();
+    _players[me.id] = me.withAvatar(null);
     _changed();
   }
 }

@@ -119,6 +119,13 @@ abstract class LadderRepository extends ChangeNotifier {
   Future<void> dismissRequest(int requestId);
 
   Future<void> updateDisplayName(String displayName);
+
+  /// Sets the signed-in member's profile photo: [image] is a JPEG, PNG or
+  /// WebP of [contentType], already shrunk for upload.
+  Future<void> updateAvatar(Uint8List image, {required String contentType});
+
+  /// Takes the signed-in member's profile photo down.
+  Future<void> removeAvatar();
 }
 
 /// [players] in ladder order for [mode]: rating, then more results played,

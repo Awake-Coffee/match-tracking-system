@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../design/design_scope.dart';
 import '../../design/designs.dart';
 import '../../domain/models.dart';
+import '../widgets/avatar.dart';
 import 'ladder_view.dart';
 
 /// Baize: every player who has played is a board point, ivory and oxblood
@@ -138,6 +139,8 @@ class _PointRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          Avatar(face: player.face, size: 36),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

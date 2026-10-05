@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../design/design_scope.dart';
 import '../../design/designs.dart';
 import '../../domain/models.dart';
+import '../widgets/avatar.dart';
 import 'ladder_view.dart';
 
 /// Holotable: the ladder is a route where the distance between two players
@@ -277,6 +278,8 @@ class _Stop extends StatelessWidget {
               ),
             ),
           ),
+          Avatar(face: player.face, size: 36),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

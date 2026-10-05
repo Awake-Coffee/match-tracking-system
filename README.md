@@ -23,6 +23,10 @@ Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
   and the `request_match` / `respond_to_match` RPCs.
   Full specs: [`specs/005-match-types/spec.md`](specs/005-match-types/spec.md),
   [`specs/006-game-modes/spec.md`](specs/006-game-modes/spec.md).
+- **Profile photos**: members add one from Settings. It is shrunk in the
+  browser and kept in the public `avatars` storage bucket under the member's
+  id; `profiles.avatar_updated_at` says whether there is one. Members
+  without a photo show their initial.
 - **Chess rating**: FIDE rules (expected-score table, 400-point rule, K = 40 for the
   first 30 games, then 20, 10 for good once 2400 is reached). Everyone
   starts at 1000.

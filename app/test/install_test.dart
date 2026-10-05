@@ -143,11 +143,8 @@ void main() {
 
     expect(find.text(_offer), findsNothing);
     final install = find.widgetWithText(OutlinedButton, 'Install the app');
-    await tester.scrollUntilVisible(
-      install,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(install);
+    await tester.pumpAndSettle();
     await tester.tap(install);
     await tester.pumpAndSettle();
     expect(installer.installs, 1);

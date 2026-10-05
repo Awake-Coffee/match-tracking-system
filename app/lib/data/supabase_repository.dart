@@ -11,6 +11,9 @@ import 'query_cache.dart';
 /// A profile with its rating in every mode.
 const _profileWithRatings = '*, ratings(*)';
 
+/// The storage bucket holding each member's photo under their id.
+const _avatarBucket = 'avatars';
+
 /// A confirmed result with its players. Each keeps a copy of the player's
 /// name, so the result outlives a deleted account.
 const _resultColumns = '*, match_players(*)';
@@ -132,7 +135,7 @@ class SupabaseLadderRepository extends LadderRepository {
         .select(_profileWithRatings)
         .eq('id', user.id)
         .maybeSingle();
-    _me = row == null ? null : Player.fromRow(row);
+    _me = row == null ? null : _playerFrom(row);
     // A new account isn't in the cached members yet, and requests are
     // visible per member.
     _players = null;
@@ -173,7 +176,7 @@ class SupabaseLadderRepository extends LadderRepository {
     if (_players case final cached?) return cached;
     final fetch = _guard(() async {
       final rows = await _client.from('profiles').select(_profileWithRatings);
-      return rows.map(Player.fromRow).toList();
+      return rows.map(_playerFrom).toList();
     });
     // A failure isn't kept, so the next load retries.
     fetch.then(
@@ -185,12 +188,27 @@ class SupabaseLadderRepository extends LadderRepository {
     return _players = fetch;
   }
 
+  /// A profile row as a [Player], with the URL of their photo when they
+  /// have one. The change time in the URL makes browsers drop a replaced
+  /// photo they cached.
+  Player _playerFrom(Map<String, dynamic> row) {
+    final player = Player.fromRow(row);
+    final changedAt = row['avatar_updated_at'] as String?;
+    if (changedAt == null) return player;
+    final url = _client.storage.from(_avatarBucket).getPublicUrl(player.id);
+    return player.withAvatar(
+      Uri.parse(url).replace(queryParameters: {'v': changedAt}).toString(),
+    );
+  }
+
   Future<T> _guard<T>(Future<T> Function() run) async {
     try {
       return await run();
     } on AuthException catch (e) {
       throw LadderException(e.message);
     } on PostgrestException catch (e) {
+      throw LadderException(e.message);
+    } on StorageException catch (e) {
       throw LadderException(e.message);
     }
   }
@@ -288,6 +306,11 @@ class SupabaseLadderRepository extends LadderRepository {
 
   @override
   Future<void> deleteAccount() => _guard(() async {
+    // Storage refuses deletes from SQL, so the photo can't go with the
+    // account; it would stay public under the member's id.
+    if (_me?.avatarUrl != null) {
+      await _client.storage.from(_avatarBucket).remove([_me!.id]);
+    }
     await _client.rpc<void>('delete_my_account');
     // The user no longer exists, so the logout call is answered 403/404;
     // gotrue ignores that for the local scope, which only clears this
@@ -418,25 +441,53 @@ class SupabaseLadderRepository extends LadderRepository {
 
   @override
   Future<void> updateDisplayName(String displayName) => _guard(() async {
-    final me = _me;
-    if (me == null) throw const LadderException('Sign in to continue.');
     try {
-      // Returning the row makes an update that RLS silently skipped fail
-      // instead of pretending to save.
-      final row = await _client
-          .from('profiles')
-          .update({'display_name': displayName.trim()})
-          .eq('id', me.id)
-          .select(_profileWithRatings)
-          .single();
-      _me = Player.fromRow(row);
+      await _updateMe({'display_name': displayName.trim()});
     } on PostgrestException catch (e) {
       throw LadderException(
         e.code == '23505' ? 'That name is taken. Try another.' : e.message,
       );
     }
-    _dataChanged();
   });
+
+  @override
+  Future<void> updateAvatar(Uint8List image, {required String contentType}) =>
+      _guard(() async {
+        await _client.storage
+            .from(_avatarBucket)
+            .uploadBinary(
+              _requireMe().id,
+              image,
+              fileOptions: FileOptions(contentType: contentType, upsert: true),
+            );
+        await _updateMe({
+          'avatar_updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      });
+
+  @override
+  Future<void> removeAvatar() => _guard(() async {
+    await _client.storage.from(_avatarBucket).remove([_requireMe().id]);
+    await _updateMe({'avatar_updated_at': null});
+  });
+
+  Player _requireMe() =>
+      _me ?? (throw const LadderException('Sign in to continue.'));
+
+  /// Saves [changes] to the signed-in member's profile, then has every
+  /// screen show it.
+  Future<void> _updateMe(Map<String, dynamic> changes) async {
+    // Returning the row makes an update that RLS silently skipped fail
+    // instead of pretending to save.
+    final row = await _client
+        .from('profiles')
+        .update(changes)
+        .eq('id', _requireMe().id)
+        .select(_profileWithRatings)
+        .single();
+    _me = _playerFrom(row);
+    _dataChanged();
+  }
 
   @override
   void dispose() {

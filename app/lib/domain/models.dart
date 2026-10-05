@@ -92,6 +92,7 @@ class Player {
     required this.id,
     required this.displayName,
     this.standings = const {},
+    this.avatarUrl,
   });
 
   /// A profile selected with its `ratings(*)`.
@@ -107,6 +108,9 @@ class Player {
 
   final String id;
   final String displayName;
+
+  /// The member's profile photo, or null when they haven't set one.
+  final String? avatarUrl;
 
   /// The modes the member has a rating in. Use [standingIn].
   final Map<GameMode, Standing> standings;
@@ -127,7 +131,16 @@ class Player {
         id: id,
         displayName: displayName ?? this.displayName,
         standings: standings ?? this.standings,
+        avatarUrl: avatarUrl,
       );
+
+  /// The same member with [avatarUrl] as their photo; null removes it.
+  Player withAvatar(String? avatarUrl) => Player(
+    id: id,
+    displayName: displayName,
+    standings: standings,
+    avatarUrl: avatarUrl,
+  );
 }
 
 /// The mode of a row with `match_type` and `mode` columns.

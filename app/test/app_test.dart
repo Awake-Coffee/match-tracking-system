@@ -1378,7 +1378,7 @@ void main() {
     expect(repo.passwordChanges, [anaEmail]);
     expect(find.text('Password updated.'), findsOneWidget);
     // Stays in Settings, signed in, with the fields emptied.
-    expect(find.text('SETTINGS', skipOffstage: false), findsWidgets);
+    expect(change, findsOneWidget);
     expect(repo.isSignedIn, isTrue);
     expect(tester.widget<TextFormField>(newPassword).controller!.text, '');
     expect(tester.widget<TextFormField>(confirm).controller!.text, '');
@@ -2029,6 +2029,8 @@ void main() {
       -200,
       scrollable: _list,
     );
+    await tester.ensureVisible(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     expect(find.text('Save name'), findsOneWidget);

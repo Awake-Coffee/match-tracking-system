@@ -26,7 +26,7 @@ begin
   assert not exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'profiles'
-      and column_name not in ('id', 'display_name', 'created_at', 'updated_at')
+      and column_name not in ('id', 'display_name', 'avatar_updated_at', 'created_at', 'updated_at')
   ), 'profiles keep only the member''s own fields';
   assert not exists (
     select 1 from information_schema.tables

@@ -8,6 +8,7 @@ import '../../features.dart';
 import '../game.dart';
 import '../navigation.dart';
 import '../ladder/ladder_view.dart';
+import '../widgets/avatar.dart';
 import '../widgets/load_view.dart';
 import '../widgets/match_tile.dart';
 import '../widgets/rating_chart.dart';
@@ -59,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             playerId: widget.playerId,
             limit: 500,
           ),
-          memberIds: {for (final p in members) p.id},
+          members: {for (final p in members) p.id: p},
           // How far the next rung up is, from the ladder the ladder screen
           // ranks by.
           chase: widget.isMe
@@ -86,22 +87,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 /// A player's standing and results in one mode, ready to show.
 class _ModeRecord {
   /// [results] newest first; only rated ones are on the rating line.
-  /// [memberIds] are the members who still have a profile to link to.
+  /// [members] are the ones who still have a profile, by id.
   _ModeRecord({
     required this.player,
     required this.mode,
     required List<GameResult> results,
-    required Set<String> memberIds,
+    required Map<String, Player> members,
     this.chase,
   }) : standing = player.standingIn(mode),
        _ratedOldestFirst = results.reversed.where((r) => r.rated).toList(),
        tiles = [
          for (final r in results.take(20))
-           ResultTile(
-             result: r,
-             memberIds: memberIds,
-             perspectiveId: player.id,
-           ),
+           ResultTile(result: r, members: members, perspectiveId: player.id),
        ];
 
   final Player player;
@@ -180,6 +177,10 @@ class _Profile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Avatar(face: p.face, size: 76),
+              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

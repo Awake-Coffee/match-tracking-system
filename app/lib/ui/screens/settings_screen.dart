@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../app_scope.dart';
 import '../install/install_banner.dart';
 import '../install/installer.dart';
+import '../widgets/avatar.dart';
 import '../widgets/password_field.dart';
 import '../widgets/surface.dart';
 
@@ -106,6 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Settings',
           subtitle: email == null ? null : 'Signed in as $email',
         ),
+        const _PhotoSection(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Form(
@@ -205,6 +208,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The member's profile photo, with buttons to pick a new one or take it
+/// down.
+class _PhotoSection extends StatefulWidget {
+  const _PhotoSection();
+
+  @override
+  State<_PhotoSection> createState() => _PhotoSectionState();
+}
+
+class _PhotoSectionState extends State<_PhotoSection> {
+  bool _saving = false;
+
+  /// Runs [save] with the buttons disabled and says how it went.
+  Future<void> _run(Future<void> Function() save, String done) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      await save();
+      messenger.showSnackBar(SnackBar(content: Text(done)));
+    } on LadderException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _change() async {
+    final repo = context.repo;
+    // The browser shrinks it before upload: photos only ever show small.
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    final image = await picked.readAsBytes();
+    await _run(
+      () => repo.updateAvatar(
+        image,
+        contentType: picked.mimeType ?? 'image/jpeg',
+      ),
+      'Photo saved.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = context.repo;
+    final me = repo.me;
+    if (me == null) return const SizedBox.shrink();
+    final d = context.design;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Profile photo', style: d.display(22)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Avatar(face: me.face, size: 56),
+              const SizedBox(width: 16),
+              Flexible(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: _saving ? null : _change,
+                      child: Text(
+                        me.avatarUrl == null ? 'Add photo' : 'Change photo',
+                      ),
+                    ),
+                    if (me.avatarUrl != null)
+                      OutlinedButton(
+                        onPressed: _saving
+                            ? null
+                            : () => _run(repo.removeAvatar, 'Photo removed.'),
+                        child: const Text('Remove'),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

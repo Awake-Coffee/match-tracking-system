@@ -78,14 +78,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final depth = _depth;
     try {
       final members = await repo.members();
-      final memberIds = {for (final p in members) p.id};
+      final membersById = {for (final p in members) p.id: p};
       final tiles = [
         for (final r in await repo.results(
           widget.game.type,
           playerId: playerId,
           limit: depth + 1,
         ))
-          ResultTile(result: r, memberIds: memberIds),
+          ResultTile(result: r, members: membersById),
       ];
       return (
         playerId: playerId,

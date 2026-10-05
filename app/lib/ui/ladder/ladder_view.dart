@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../game.dart';
+import '../widgets/avatar.dart';
 
 /// Data every ladder style receives.
 class LadderData {
@@ -107,6 +108,8 @@ class UnplayedGroup extends StatelessWidget {
               ),
               child: Row(
                 children: [
+                  Avatar(face: p.face, size: 28),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       p.id == data.meId

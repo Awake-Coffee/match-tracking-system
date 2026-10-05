@@ -6,6 +6,7 @@ import '../../domain/models.dart';
 import '../../features.dart';
 import '../game.dart';
 import '../ladder/ladder_view.dart' show ordinal;
+import 'avatar.dart';
 import 'surface.dart';
 
 String relativeDate(DateTime when, {DateTime? now}) {
@@ -58,8 +59,8 @@ String relativeAge(DateTime when, {DateTime? now}) {
 
 /// [id]'s profile in [mode], or null once that member deleted their account:
 /// their results stay in the history, but there is no profile to open.
-String? _profilePath(GameMode mode, String id, Set<String> memberIds) =>
-    memberIds.contains(id)
+String? _profilePath(GameMode mode, String id, Map<String, Player> members) =>
+    members.containsKey(id)
     ? Game.of(mode.type).path('players/$id?mode=${mode.key}')
     : null;
 
@@ -129,14 +130,15 @@ class ResultTile extends StatelessWidget {
   const ResultTile({
     super.key,
     required this.result,
-    required this.memberIds,
+    required this.members,
     this.perspectiveId,
   });
 
   final GameResult result;
 
-  /// Members who still have a profile; anyone else's name links nowhere.
-  final Set<String> memberIds;
+  /// Members who still have a profile, by id; anyone else's name links
+  /// nowhere and shows their initial.
+  final Map<String, Player> members;
   final String? perspectiveId;
 
   @override
@@ -152,7 +154,7 @@ class ResultTile extends StatelessWidget {
       name: true,
       path: me != null && duel
           ? null
-          : _profilePath(r.mode, s.playerId, memberIds),
+          : _profilePath(r.mode, s.playerId, members),
     );
     final detail = joinParts([
       joinParts([resultDetail(r, me), relativeDate(r.playedAt)], ', '),
@@ -211,10 +213,22 @@ class ResultTile extends StatelessWidget {
       shown = [ordered[0].first, ordered[1].first];
     }
 
+    // Who it was against from a player's view, the main players otherwise.
+    final faces = [
+      for (final s in me != null ? r.opponentsOf(me) : shown)
+        (name: s.name, url: members[s.playerId]?.avatarUrl),
+    ];
     return _ResultRow(
-      leading: r.mode.type == MatchType.chess && duel
-          ? _PieceDot(color: me != null ? r.colorOf(me) : PieceColor.white)
-          : null,
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AvatarStack(faces: faces),
+          if (r.mode.type == MatchType.chess && duel) ...[
+            const SizedBox(width: 10),
+            _PieceDot(color: me != null ? r.colorOf(me) : PieceColor.white),
+          ],
+        ],
+      ),
       modeLabel: modeLabelFor(context, r.mode),
       headline: headline,
       detail: detail,
@@ -222,7 +236,7 @@ class ResultTile extends StatelessWidget {
       deltas: [for (final s in shown.take(2)) s.ratingDelta],
       ratingAfter: me == null ? null : r.ratingAfterFor(me),
       path: me != null && duel
-          ? _profilePath(r.mode, r.opponentsOf(me).single.playerId, memberIds)
+          ? _profilePath(r.mode, r.opponentsOf(me).single.playerId, members)
           : null,
     );
   }

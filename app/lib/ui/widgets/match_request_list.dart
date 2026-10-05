@@ -5,6 +5,7 @@ import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../game.dart';
 import '../ladder/ladder_view.dart' show ordinal;
+import 'avatar.dart';
 import 'match_tile.dart';
 import 'surface.dart';
 
@@ -86,6 +87,7 @@ class PendingResult {
     this.respondedAt,
     this.impact,
     this.roster = const [],
+    this.faces = const [],
     required this.respond,
     required this.dismiss,
   });
@@ -170,6 +172,11 @@ class PendingResult {
                   isMe: s.playerId == meId,
                 ),
             ],
+      faces: [
+        for (final s in r.seats)
+          if (s.playerId != meId)
+            (name: s.name, url: _playerById(players, s.playerId)?.avatarUrl),
+      ],
       respond: ({required accept}) async {
         final result = await repo.respondToRequest(r.id, accept: accept);
         if (result != null) {
@@ -219,6 +226,9 @@ class PendingResult {
   /// Every player and whether they've confirmed, for results with more than
   /// two; empty for a duel.
   final List<RosterLine> roster;
+
+  /// The other players, shown at the head of the card.
+  final List<Face> faces;
 
   /// Accepts or drops the result; returns the message to show, if any.
   final Future<String?> Function({required bool accept}) respond;
@@ -368,6 +378,43 @@ class _PendingResultCardState extends State<_PendingResultCard> {
     );
   }
 
+  /// What the member can do with the result: answer, withdraw or dismiss.
+  Widget _actions(PendingResult r) => Wrap(
+    alignment: WrapAlignment.end,
+    spacing: 8,
+    runSpacing: 8,
+    children: r.declined
+        ? [
+            FilledButton(
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                      await r.dismiss();
+                      return null;
+                    }),
+              child: const Text('Dismiss'),
+            ),
+          ]
+        : r.incoming
+        ? [
+            OutlinedButton(
+              onPressed: _busy ? null : () => _respond(accept: false),
+              child: const Text('Decline'),
+            ),
+            FilledButton(
+              onPressed: _busy ? null : () => _respond(accept: true),
+              child: const Text('Confirm'),
+            ),
+          ]
+        : [
+            if (r.reported)
+              TextButton(
+                onPressed: _busy ? null : () => _respond(accept: false),
+                child: const Text('Withdraw'),
+              ),
+          ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final d = context.design;
@@ -401,40 +448,17 @@ class _PendingResultCardState extends State<_PendingResultCard> {
             line,
           ],
           const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: r.declined
-                ? [
-                    FilledButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _run(() async {
-                              await r.dismiss();
-                              return null;
-                            }),
-                      child: const Text('Dismiss'),
-                    ),
-                  ]
-                : r.incoming
-                ? [
-                    OutlinedButton(
-                      onPressed: _busy ? null : () => _respond(accept: false),
-                      child: const Text('Decline'),
-                    ),
-                    FilledButton(
-                      onPressed: _busy ? null : () => _respond(accept: true),
-                      child: const Text('Confirm'),
-                    ),
-                  ]
-                : [
-                    if (r.reported)
-                      TextButton(
-                        onPressed: _busy ? null : () => _respond(accept: false),
-                        child: const Text('Withdraw'),
-                      ),
-                  ],
+          // The players sit beside the buttons, where the card has room,
+          // so the headline keeps the full width.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (r.faces.isNotEmpty) ...[
+                AvatarStack(faces: r.faces, ring: d.surface),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: _actions(r)),
+            ],
           ),
         ],
       ),
