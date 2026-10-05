@@ -54,6 +54,12 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 Without `.env` the app runs in demo mode with an in-memory ladder.
 
+Game modes (Chess960, bughouse, chouette, ...) are built but hidden from
+members for now: the Ladder tab opens each game's standard ladder, and no
+screen offers a mode. Add `GAME_MODES=true` to `.env` (or to the Vercel
+project's environment) to show them. The flags live in
+`app/lib/features.dart`; they hide UI only, so data and routes are unchanged.
+
 ```
 make run    # release build on http://localhost:8080 (fast first load)
 make dev    # debug build with hot reload

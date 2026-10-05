@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
+import '../../features.dart';
 import '../game.dart';
 import '../ladder/ladder_view.dart' show ordinal;
 import 'surface.dart';
@@ -91,6 +92,17 @@ String resultDetail(GameReport r, String? meId) => switch (r.mode) {
 /// [parts] that aren't empty, joined with [separator].
 String joinParts(List<String> parts, String separator) =>
     parts.where((p) => p.isNotEmpty).join(separator);
+
+/// [mode]'s name where a result should say it: always when the build shows
+/// game modes, and otherwise only for a result outside the game's standard
+/// mode, so it is never taken for one. Empty when it goes unsaid.
+String modeLabelFor(BuildContext context, GameMode? mode) {
+  if (mode == null) return '';
+  if (context.features.gameModes || mode != mode.type.defaultMode) {
+    return mode.label;
+  }
+  return '';
+}
 
 /// One part of a result sentence: plain text, or a bold name that opens
 /// [path] when set.
@@ -202,7 +214,7 @@ class ResultTile extends StatelessWidget {
       leading: r.mode.type == MatchType.chess && duel
           ? _PieceDot(color: me != null ? r.colorOf(me) : PieceColor.white)
           : null,
-      modeLabel: r.mode.label,
+      modeLabel: modeLabelFor(context, r.mode),
       headline: headline,
       detail: detail,
       rated: r.rated,
@@ -233,6 +245,8 @@ class _ResultRow extends StatelessWidget {
   });
 
   final Widget? leading;
+
+  /// Empty when the result's mode goes unsaid; see [modeLabelFor].
   final String modeLabel;
   final List<_Part> headline;
   final String detail;
@@ -297,8 +311,10 @@ class _ResultRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ModeChip(modeLabel),
-                  const SizedBox(height: 4),
+                  if (modeLabel.isNotEmpty) ...[
+                    ModeChip(modeLabel),
+                    const SizedBox(height: 4),
+                  ],
                   Text.rich(
                     TextSpan(
                       children: [

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'data/ladder_repository.dart';
 import 'design/design_scope.dart';
 import 'design/design_spec.dart';
+import 'features.dart';
 import 'domain/models.dart';
 import 'ui/app_scope.dart';
 import 'ui/game.dart';
@@ -25,6 +26,7 @@ class AwakeApp extends StatefulWidget {
     required this.repository,
     this.initialLocation = '/',
     this.installer,
+    this.features,
   });
 
   final LadderRepository repository;
@@ -32,6 +34,9 @@ class AwakeApp extends StatefulWidget {
 
   /// Puts the app on the home screen; the browser's own when null.
   final Installer? installer;
+
+  /// What this build shows; [Features.defaults] when null.
+  final Features? features;
 
   @override
   State<AwakeApp> createState() => _AwakeAppState();
@@ -258,16 +263,21 @@ class _AwakeAppState extends State<AwakeApp> {
       repository: _repo,
       child: InstallScope(
         installer: _installer,
-        child: MaterialApp.router(
-          title: 'Awake Ladder',
-          debugShowCheckedModeBanner: false,
-          // Signed-out pages and dialogs wear chess, light or dark with the
-          // system.
-          theme: _themeOf(Game.chess.designFor(Brightness.light)),
-          darkTheme: _themeOf(Game.chess.designFor(Brightness.dark)),
-          routerConfig: _router,
-          builder: (context, child) =>
-              DesignScope(spec: _designOf(Game.chess, context), child: child!),
+        child: FeatureScope(
+          features: widget.features ?? Features.defaults,
+          child: MaterialApp.router(
+            title: 'Awake Ladder',
+            debugShowCheckedModeBanner: false,
+            // Signed-out pages and dialogs wear chess, light or dark with the
+            // system.
+            theme: _themeOf(Game.chess.designFor(Brightness.light)),
+            darkTheme: _themeOf(Game.chess.designFor(Brightness.dark)),
+            routerConfig: _router,
+            builder: (context, child) => DesignScope(
+              spec: _designOf(Game.chess, context),
+              child: child!,
+            ),
+          ),
         ),
       ),
     );

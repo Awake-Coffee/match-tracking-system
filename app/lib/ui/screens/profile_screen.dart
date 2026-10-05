@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
+import '../../features.dart';
 import '../game.dart';
 import '../navigation.dart';
 import '../ladder/ladder_view.dart';
@@ -39,12 +40,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
+    final modes = context.features.gameModes;
     return LoadView<_ModeRecord>(
       reloadKey: _picked,
       load: (repo) async {
         final player = await repo.player(widget.playerId);
-        final mode =
-            _picked ?? widget.initialMode ?? player.mostPlayedIn(game.type);
+        final mode = modes
+            ? _picked ?? widget.initialMode ?? player.mostPlayedIn(game.type)
+            : game.type.defaultMode;
         // Opponents who deleted their account stay in the results unlinked.
         final members = await repo.members();
         return _ModeRecord(
@@ -202,25 +205,26 @@ class _Profile extends StatelessWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          child: DropdownMenu<GameMode>(
-            initialSelection: record.mode,
-            expandedInsets: EdgeInsets.zero,
-            label: const Text('Mode'),
-            onSelected: (m) {
-              if (m != null && m != record.mode) onMode(m);
-            },
-            dropdownMenuEntries: [
-              for (final m in game.modes)
-                DropdownMenuEntry(
-                  value: m,
-                  label: m.label,
-                  trailingIcon: Text('${p.standingIn(m).rating}'),
-                ),
-            ],
+        if (context.features.gameModes)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: DropdownMenu<GameMode>(
+              initialSelection: record.mode,
+              expandedInsets: EdgeInsets.zero,
+              label: const Text('Mode'),
+              onSelected: (m) {
+                if (m != null && m != record.mode) onMode(m);
+              },
+              dropdownMenuEntries: [
+                for (final m in game.modes)
+                  DropdownMenuEntry(
+                    value: m,
+                    label: m.label,
+                    trailingIcon: Text('${p.standingIn(m).rating}'),
+                  ),
+              ],
+            ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: SpecSurface(

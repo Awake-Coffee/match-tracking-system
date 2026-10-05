@@ -76,6 +76,7 @@ class PendingResult {
   const PendingResult({
     required this.headline,
     required this.detail,
+    this.mode,
     required this.reporterName,
     required this.rated,
     required this.incoming,
@@ -130,10 +131,10 @@ class PendingResult {
           ? '$decliner declined your $noun'
           : 'Waiting for ${joinNames(othersWaiting)} to confirm',
       detail: joinParts([
-        r.mode.label,
         joinParts([_setting(r, meId), if (!incoming) mine], ', '),
         r.clock?.label ?? '',
       ], ' · '),
+      mode: r.mode,
       reporterName: r.reporterName,
       rated: r.rated,
       incoming: incoming,
@@ -184,6 +185,10 @@ class PendingResult {
 
   final String headline;
   final String detail;
+
+  /// The mode it was played in, named ahead of [detail] where the build
+  /// shows modes, or the mode isn't the game's standard one.
+  final GameMode? mode;
 
   /// Who reported it, for the decline confirmation.
   final String reporterName;
@@ -374,7 +379,11 @@ class _PendingResultCardState extends State<_PendingResultCard> {
           Text(r.headline, style: d.strong(16)),
           const SizedBox(height: 2),
           Text(
-            r.rated ? r.detail : '${r.detail} · Unrated',
+            joinParts([
+              modeLabelFor(context, r.mode),
+              r.detail,
+              if (!r.rated) 'Unrated',
+            ], ' · '),
             style: d.body(13, color: d.muted),
           ),
           const SizedBox(height: 2),
