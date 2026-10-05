@@ -54,6 +54,13 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 Without `.env` the app runs in demo mode with an in-memory ladder.
 
+Chess's game modes (Chess960, bughouse, ...) are built but hidden from
+members for now: chess's Ladder tab opens the standard ladder, and no chess
+screen offers a mode. Backgammon and Star Wars: Unlimited show their modes.
+Add `GAME_MODES=true` to `.env` (or to the Vercel project's environment) to
+show chess's too. The flags live in
+`app/lib/features.dart`; they hide UI only, so data and routes are unchanged.
+
 ```
 make run    # release build on http://localhost:8080 (fast first load)
 make dev    # debug build with hot reload

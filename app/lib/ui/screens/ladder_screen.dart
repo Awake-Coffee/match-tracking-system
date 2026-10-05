@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
+import '../../features.dart';
 import '../app_scope.dart';
 import '../game.dart';
 import '../ladder/baize_ladder.dart';
@@ -43,6 +44,10 @@ class LadderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Without game modes there is one ladder per game: the tab opens it.
+    if (!context.features.showsModesOf(game.type)) {
+      return ModeLadderScreen(mode: game.type.defaultMode);
+    }
     final meId = context.repo.me?.id;
     return LoadView(
       load: (repo) => _membersAndPending(repo, game),
@@ -307,28 +312,30 @@ class ModeLadderScreen extends StatelessWidget {
         return ListView(
           children: [
             PendingResultList(results: pending),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 12, 20, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: 'All ladders',
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go(game.path()),
-                  ),
-                  // A board titles itself with the mode, so a design with
-                  // leaders only says where the arrow goes.
-                  Expanded(
-                    child: d.leaders
-                        ? Text(
-                            d.caps('All ladders'),
-                            style: d.display(15, color: d.muted),
-                          )
-                        : Text(mode.label, style: d.display(22)),
-                  ),
-                ],
+            // The way back to every mode's ladder, when there are modes.
+            if (context.features.showsModesOf(mode.type))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 20, 0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'All ladders',
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => context.go(game.path()),
+                    ),
+                    // A board titles itself with the mode, so a design with
+                    // leaders only says where the arrow goes.
+                    Expanded(
+                      child: d.leaders
+                          ? Text(
+                              d.caps('All ladders'),
+                              style: d.display(15, color: d.muted),
+                            )
+                          : Text(mode.label, style: d.display(22)),
+                    ),
+                  ],
+                ),
               ),
-            ),
             switch (game) {
               Game.chess => CounterLadder(data: ladder),
               Game.backgammon => BaizeLadder(data: ladder),

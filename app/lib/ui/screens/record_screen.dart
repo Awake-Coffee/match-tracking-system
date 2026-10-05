@@ -4,6 +4,7 @@ import '../../data/clock_memory.dart';
 import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
+import '../../features.dart';
 import '../app_scope.dart';
 import '../game.dart';
 import '../widgets/clock_picker.dart';
@@ -65,7 +66,8 @@ class _RecordScreenState extends State<RecordScreen> {
             members.any((p) => p.id == widget.initialOpponentId && p.id != meId)
             ? widget.initialOpponentId
             : null;
-        final mode = _mode;
+        final modes = context.features.showsModesOf(game.type);
+        final mode = modes ? _mode : game.type.defaultMode;
         // Duel forms keep what was filled in when the mode changes between
         // duels.
         final formKey = ValueKey(mode.format);
@@ -86,12 +88,13 @@ class _RecordScreenState extends State<RecordScreen> {
                 message: 'You need an opponent. Ask someone to make a profile first.',
               )
             else ...[
-              _ModePicker(
-                game: game,
-                me: me,
-                mode: mode,
-                onChanged: (m) => setState(() => _mode = m),
-              ),
+              if (modes)
+                _ModePicker(
+                  game: game,
+                  me: me,
+                  mode: mode,
+                  onChanged: (m) => setState(() => _mode = m),
+                ),
               switch ((mode.type, mode.format)) {
                 (MatchType.chess, ResultFormat.duel) => _ChessRecordForm(
                   key: formKey,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../design/design_scope.dart';
+import '../../features.dart';
 import '../../domain/models.dart';
 import '../widgets/surface.dart';
 import 'ladder_view.dart';
@@ -25,8 +26,16 @@ class CounterLadder extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // The board is titled with its mode, like a menu's section.
-          Text(d.caps(data.mode.label), style: d.display(44, height: 1)),
+          // The board is titled with its mode, like a menu's section; with
+          // modes hidden it is simply the ladder.
+          Text(
+            d.caps(
+              context.features.showsModesOf(data.mode.type)
+                  ? data.mode.label
+                  : 'Ladder',
+            ),
+            style: d.display(44, height: 1),
+          ),
           const SizedBox(height: 10),
           Text(
             data.summary ?? 'Every player at Awake starts at 1000.',

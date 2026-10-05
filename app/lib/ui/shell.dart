@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../data/ladder_repository.dart';
 import '../design/design_scope.dart';
 import '../design/design_spec.dart';
+import '../features.dart';
 import '../domain/models.dart';
 import 'app_scope.dart';
 import 'game.dart';
@@ -70,14 +71,18 @@ typedef _Standing = ({
 Future<_Standing> _standingIn(
   Game game,
   LadderRepository repo,
-  Player me,
-) async {
+  Player me, {
+  required bool gameModes,
+}) async {
   final (members, awaitingMe) = await (
     repo.members(),
     game.awaitingCountOf(repo, me.id),
   ).wait;
   final fresh = members.where((p) => p.id == me.id).firstOrNull ?? me;
-  final mode = fresh.mostPlayedIn(game.type);
+  // With modes hidden, the game's one ladder is its standard mode's.
+  final mode = gameModes
+      ? fresh.mostPlayedIn(game.type)
+      : game.type.defaultMode;
   // Only members who have played are ranked, so "of N" counts them alone.
   final ranked = rankedIn(ladderOf(members, mode), mode);
   final i = ranked.indexWhere((p) => p.id == me.id);
@@ -111,10 +116,18 @@ class _AppShellState extends State<AppShell> {
     if (_revision == repo.revision) return;
     _revision = repo.revision;
     final me = repo.me;
+    final features = context.features;
     final standings = me == null
         ? Future.value(const <Game, _Standing>{})
-        : [for (final game in Game.values) _standingIn(game, repo, me)].wait
-              .then((s) => Map.fromIterables(Game.values, s));
+        : [
+            for (final game in Game.values)
+              _standingIn(
+                game,
+                repo,
+                me,
+                gameModes: features.showsModesOf(game.type),
+              ),
+          ].wait.then((s) => Map.fromIterables(Game.values, s));
     _standings = standings.then((s) => _lastStandings = s);
   }
 
@@ -448,7 +461,7 @@ class _GameCard extends StatelessWidget {
                           text: switch (standing.rank) {
                             final rank? =>
                               ' · ${ordinal(rank)} of ${standing.ladderSize}'
-                                  '${game.modes.length > 1 ? ' in ${standing.mode.label}' : ''}',
+                                  '${context.features.showsModesOf(game.type) && game.modes.length > 1 ? ' in ${standing.mode.label}' : ''}',
                             null => ' · not ranked yet',
                           },
                         ),

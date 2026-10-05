@@ -42,6 +42,9 @@ if [[ $supabase_url != https://* ]] || [ -z "$supabase_key" ]; then
 fi
 
 cd "$root/app"
+# Features still hidden from members (lib/features.dart): set GAME_MODES=true
+# in the Vercel project to show chess's game modes.
 flutter build web --release \
   --dart-define=SUPABASE_URL="$supabase_url" \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY="$supabase_key"
+  --dart-define=SUPABASE_PUBLISHABLE_KEY="$supabase_key" \
+  --dart-define=GAME_MODES="${GAME_MODES:-false}"
