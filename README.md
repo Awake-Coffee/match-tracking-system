@@ -2,8 +2,8 @@
 
 Internal chess, backgammon and Star Wars: Unlimited ladders for Awake
 Coffee. Members sign in, report games they played (chess on the café's DGT
-2500 clocks, backgammon as matches to N points, SWU as best-of-three
-matches), and ratings move once the other players confirm the result. Each
+2500 clocks, backgammon as matches to N points, SWU as best-of-one or
+best-of-three matches), and ratings move once the other players confirm the result. Each
 game has its own look; a switch at the top of every screen moves between
 them. Each game is played in several modes (Chess960, Bughouse, Nackgammon,
 Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
@@ -30,14 +30,18 @@ Chouette, Twin Suns, ...), and every mode has its own rating and ladder.
 - **Backgammon rating**: FIBS formula, which weighs match length and moves
   newcomers faster. Everyone starts at 1500.
   Full spec: [`specs/002-backgammon-ladder/spec.md`](specs/002-backgammon-ladder/spec.md).
-- **Star Wars: Unlimited rating**: the chess FIDE rules on the match result
-  (win, draw or loss; the game score is shown but not weighted). Everyone
-  starts at 1000.
-  Full spec: [`specs/003-star-wars-unlimited/spec.md`](specs/003-star-wars-unlimited/spec.md).
+- **Star Wars: Unlimited points**: everyone starts at 0 and never drops
+  below it. Premier, Eternal and Limited: a best of one is +1 for a win, -1
+  for a loss; a best of three +3 / -1; a draw 0. Trilogy: +3 / -1. Twin
+  Suns (3 or 4 players): first out -1, out during the final round 0,
+  survived it +1, most HP at its end +2.
+  Full spec: [`specs/007-swu-points/spec.md`](specs/007-swu-points/spec.md)
+  (first version: [`specs/003-star-wars-unlimited/spec.md`](specs/003-star-wars-unlimited/spec.md)).
 - **Game modes**: every mode is its own ladder. Bughouse (2 v 2), Chouette
-  (a box against a team) and Twin Suns (2 to 4 players, scored by finishing
-  order) count once every other player confirms; each player's change is
-  the average of the game's two-player change against every opponent.
+  (a box against a team) and Twin Suns (3 or 4 players, scored by how each
+  finished) count once every other player confirms. In chess and backgammon
+  each player's change is the average of the game's two-player change
+  against every opponent.
   Full spec: [`specs/006-game-modes/spec.md`](specs/006-game-modes/spec.md).
 - **Unrated games**: switch "Rated" off when recording a friendly. It is
   confirmed and kept in history but moves no rating or record.

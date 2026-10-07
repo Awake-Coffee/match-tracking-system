@@ -6,15 +6,22 @@ import '../../domain/models.dart';
 import '../game.dart';
 import '../widgets/record_form.dart';
 
-/// Games won by each side, from the member's side, offered for a result.
-const _scoresFor = {
+/// Games won by each side in a best of three, from the member's side,
+/// offered for a result.
+const _bestOfThreeScores = {
   Outcome.win: [(2, 0), (2, 1), (1, 0)],
   Outcome.draw: [(1, 1)],
   Outcome.loss: [(0, 2), (1, 2), (0, 1)],
 };
 
-/// Opponent, result and game score of a best-of-three Star Wars: Unlimited
-/// match.
+/// A best of one can only end 1-0, so the result is the score.
+const _bestOfOneScores = {
+  Outcome.win: [(1, 0)],
+  Outcome.loss: [(0, 1)],
+};
+
+/// Opponent, best of one or three, result and game score of a Star Wars:
+/// Unlimited match. Trilogy is always a best of three.
 class SwuRecordForm extends StatefulWidget {
   const SwuRecordForm({
     super.key,
@@ -40,6 +47,7 @@ class SwuRecordForm extends StatefulWidget {
 class _SwuRecordFormState extends State<SwuRecordForm>
     with SendsForConfirmation {
   late String? _opponentId = widget.initialOpponentId;
+  late int? _bestOf = widget.mode == GameMode.trilogy ? 3 : null;
   Outcome? _outcome;
   (int, int)? _score;
   bool _rated = true;
@@ -47,20 +55,30 @@ class _SwuRecordFormState extends State<SwuRecordForm>
   Player? get _opponent =>
       widget.players.where((p) => p.id == _opponentId).firstOrNull;
 
+  Map<Outcome, List<(int, int)>> get _scoresFor =>
+      _bestOf == 1 ? _bestOfOneScores : _bestOfThreeScores;
+
   void _setOutcome(Outcome? outcome) => setState(() {
     _outcome = outcome;
     final scores = _scoresFor[outcome];
-    // A draw can only be 1-1, so there's nothing left to pick.
+    // A draw or a best of one has one score, so there's nothing left to pick.
     _score = scores?.length == 1 ? scores!.single : null;
   });
+
+  void _setBestOf(int? bestOf) {
+    setState(() => _bestOf = bestOf);
+    // A best of one can't be drawn; otherwise keep the result.
+    _setOutcome(bestOf == 1 && _outcome == Outcome.draw ? null : _outcome);
+  }
 
   @override
   Widget build(BuildContext context) {
     final d = context.design;
     final opponent = _opponent;
+    final bestOf = _bestOf;
     final outcome = _outcome;
     final score = _score;
-    final seats = opponent != null && score != null
+    final seats = opponent != null && bestOf != null && score != null
         ? <SeatReport>[
             (playerId: widget.me.id, side: 1, score: score.$1),
             (playerId: opponent.id, side: 2, score: score.$2),
@@ -86,21 +104,43 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                 recentIds: widget.recentOpponentIds,
                 onSelected: (id) => setState(() => _opponentId = id),
               ),
+              if (widget.mode != GameMode.trilogy) ...[
+                const SizedBox(height: 24),
+                Text('Match', style: label),
+                const SizedBox(height: 8),
+                SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  emptySelectionAllowed: true,
+                  segments: const [
+                    ButtonSegment(value: 1, label: Text('Best of one')),
+                    ButtonSegment(value: 3, label: Text('Best of three')),
+                  ],
+                  selected: {?bestOf},
+                  onSelectionChanged: (s) => _setBestOf(s.firstOrNull),
+                ),
+              ],
               const SizedBox(height: 24),
               Text('Result', style: label),
               const SizedBox(height: 8),
               SegmentedButton<Outcome>(
                 showSelectedIcon: false,
                 emptySelectionAllowed: true,
-                segments: const [
-                  ButtonSegment(value: Outcome.win, label: Text('I won')),
-                  ButtonSegment(value: Outcome.draw, label: Text('Draw')),
-                  ButtonSegment(value: Outcome.loss, label: Text('I lost')),
+                segments: [
+                  const ButtonSegment(value: Outcome.win, label: Text('I won')),
+                  if (bestOf != 1)
+                    const ButtonSegment(
+                      value: Outcome.draw,
+                      label: Text('Draw'),
+                    ),
+                  const ButtonSegment(
+                    value: Outcome.loss,
+                    label: Text('I lost'),
+                  ),
                 ],
                 selected: {?outcome},
                 onSelectionChanged: (s) => _setOutcome(s.firstOrNull),
               ),
-              if (_scoresFor[outcome] case final scores?) ...[
+              if (_scoresFor[outcome] case final scores? when bestOf != 1) ...[
                 const SizedBox(height: 24),
                 Text('Games, yours first', style: label),
                 const SizedBox(height: 8),
@@ -145,8 +185,8 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                     RatingPreview(
                       rated: _rated,
                       emptyHint:
-                          'Pick an opponent, the result and the games to see '
-                          'how ratings change.',
+                          'Pick an opponent, the match, the result and the '
+                          'games to see how points change.',
                       rows: seats == null
                           ? null
                           : previewRows(
@@ -154,6 +194,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                               widget.me.id,
                               widget.players,
                               seats,
+                              bestOf: bestOf,
                             ),
                     ),
                     SendForConfirmationButton(
@@ -161,6 +202,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                       saving: saving,
                       missing: [
                         if (opponent == null) 'an opponent',
+                        if (bestOf == null) 'best of one or three',
                         if (outcome == null) 'a result',
                         if (outcome != null && score == null) 'the games',
                       ],
@@ -175,6 +217,7 @@ class _SwuRecordFormState extends State<SwuRecordForm>
                                   mode: widget.mode,
                                   seats: seats,
                                   rated: _rated,
+                                  bestOf: bestOf,
                                 ),
                               ),
                             ),

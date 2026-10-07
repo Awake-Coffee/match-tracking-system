@@ -36,7 +36,7 @@ void main() {
 
   test('preview moves each player by their own experience', () {
     expect(
-      ratingChanges(MatchType.backgammon, [
+      ratingChanges(GameMode.standardBackgammon, [
         (playerId: 'me', side: 1, score: 5, standing: _p(1500)),
         (
           playerId: 'them',
@@ -52,7 +52,7 @@ void main() {
   // Same numbers as supabase/tests/game_modes_test.sql.
   test('a chouette box plays each team member', () {
     expect(
-      ratingChanges(MatchType.backgammon, [
+      ratingChanges(GameMode.standardBackgammon, [
         (playerId: 'box', side: 1, score: 3, standing: _p(1500)),
         for (final id in ['a', 'b', 'c'])
           (playerId: id, side: 2, score: 5, standing: _p(1500)),

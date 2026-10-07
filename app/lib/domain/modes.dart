@@ -33,7 +33,8 @@ enum ResultFormat {
   /// Side 1 is the box, alone; side 2 is a team of 2 to 5 sharing a result.
   boxVsTeam,
 
-  /// 2 to 4 sides of one player; a score is the players outlasted.
+  /// 3 or 4 sides of one player; a score is how they finished
+  /// ([TwinSunsFinish]).
   freeForAll;
 
   bool get multiplayer => this != duel;
@@ -130,26 +131,26 @@ enum GameMode {
     MatchType.swu,
     'premier',
     'Premier',
-    '1v1, best of three, current sets',
+    '1v1, best of one or three, current sets',
   ),
   eternal(
     MatchType.swu,
     'eternal',
     'Eternal',
-    '1v1, best of three, every set legal',
+    '1v1, best of one or three, every set legal',
   ),
   trilogy(MatchType.swu, 'trilogy', 'Trilogy', 'Three decks, each played once'),
   limited(
     MatchType.swu,
     'limited',
     'Limited',
-    'Sealed or draft, best of three',
+    'Sealed or draft, best of one or three',
   ),
   twinSuns(
     MatchType.swu,
     'twin_suns',
     'Twin Suns',
-    '2–4 player free-for-all, two leaders each',
+    '3–4 player free-for-all, two leaders each',
     ResultFormat.freeForAll,
   );
 

@@ -209,13 +209,14 @@ List<({String name, int before, int delta})> previewRows(
   GameMode mode,
   String meId,
   List<Player> players,
-  List<SeatReport> seats,
-) {
+  List<SeatReport> seats, {
+  int? bestOf,
+}) {
   final byId = {for (final p in players) p.id: p};
   final standings = {
     for (final s in seats) s.playerId: byId[s.playerId]!.standingIn(mode),
   };
-  final deltas = ratingChanges(mode.type, [
+  final deltas = ratingChanges(mode, bestOf: bestOf, [
     for (final s in seats)
       (
         playerId: s.playerId,

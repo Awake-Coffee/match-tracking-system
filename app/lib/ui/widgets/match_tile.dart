@@ -5,7 +5,6 @@ import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../../features.dart';
 import '../game.dart';
-import '../ladder/ladder_view.dart' show ordinal;
 import 'surface.dart';
 
 String relativeDate(DateTime when, {DateTime? now}) {
@@ -75,8 +74,8 @@ String seatName(GameReport r, Seat s) =>
     : s.name;
 
 /// How a result went beyond who won, from [meId]'s side when set: the
-/// colours in a chess duel, the score in backgammon and SWU, the number of
-/// players in a free-for-all. Empty for bughouse. Without date or clock.
+/// colours in a chess duel, the score in backgammon and SWU (and SWU's best
+/// of), the number of players in a free-for-all. Empty for bughouse. Without date or clock.
 String resultDetail(GameReport r, String? meId) => switch (r.mode) {
   GameMode(format: ResultFormat.freeForAll) => '${r.seats.length} players',
   GameMode(type: MatchType.chess, format: ResultFormat.duel) =>
@@ -86,7 +85,8 @@ String resultDetail(GameReport r, String? meId) => switch (r.mode) {
   GameMode(type: MatchType.chess) => '',
   GameMode(type: MatchType.backgammon) =>
     '${r.scoreFor(meId)} in a match to ${r.matchLength}',
-  GameMode(type: MatchType.swu) => '${r.scoreFor(meId)} in games',
+  GameMode(type: MatchType.swu) =>
+    '${r.scoreFor(meId)} in games, best of ${r.bestOf == 1 ? 'one' : 'three'}',
 };
 
 /// [parts] that aren't empty, joined with [separator].
@@ -162,19 +162,22 @@ class ResultTile extends StatelessWidget {
     final List<_Part> headline;
     final List<RatedSeat> shown;
     if (r.mode.format == ResultFormat.freeForAll) {
-      final byPlace = <int, List<RatedSeat>>{};
-      for (final s in r.seats) {
-        (byPlace[r.placeOf(s.playerId)] ??= []).add(s);
-      }
-      final places = byPlace.keys.toList()..sort();
+      final byFinish = <TwinSunsFinish, List<RatedSeat>>{
+        for (final f in TwinSunsFinish.values)
+          f: [
+            for (final s in r.seats)
+              if (r.finishOf(s.playerId) == f) s,
+          ],
+      }..removeWhere((_, seats) => seats.isEmpty);
       headline = [
-        for (final (i, place) in places.indexed) ...[
+        for (final (i, MapEntry(key: finish, value: seats))
+            in byFinish.entries.indexed) ...[
           if (i > 0) _text(' · '),
-          ..._names(byPlace[place]!.map(name)),
-          _text(' ${ordinal(place)}'),
+          ..._names(seats.map(name)),
+          _text(' ${finish.label.toLowerCase()}'),
         ],
       ];
-      shown = [for (final place in places) ...byPlace[place]!];
+      shown = [for (final seats in byFinish.values) ...seats];
     } else if (me != null) {
       final verb = switch (r.outcomeFor(me)) {
         Outcome.win => 'Won',

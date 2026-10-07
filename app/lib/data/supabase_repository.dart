@@ -372,6 +372,7 @@ class SupabaseLadderRepository extends LadderRepository {
         'p_dgt_option': clock?.preset.dgtOption,
         'p_custom_base_minutes': clock?.customBaseMinutes,
         'p_custom_extra_seconds': clock?.customExtraSeconds,
+        'p_best_of': report.bestOf,
       },
     );
     final request = ResultRequest.fromRow(

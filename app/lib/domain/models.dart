@@ -6,6 +6,7 @@ import 'modes.dart';
 import 'swu.dart';
 
 export 'modes.dart';
+export 'swu.dart' show TwinSunsFinish;
 
 enum PieceColor { white, black }
 
@@ -256,8 +257,8 @@ class ClockSetting {
 typedef SeatReport = ({String playerId, int side, num score});
 
 /// One player of a result: who, on which side, and what that side scored
-/// (chess 1, 0 or ½; backgammon points; SWU games won; Twin Suns players
-/// outlasted).
+/// (chess 1, 0 or ½; backgammon points; SWU games won; Twin Suns a
+/// [TwinSunsFinish] score).
 class Seat {
   const Seat({
     required this.playerId,
@@ -360,6 +361,7 @@ abstract class GameReport<S extends Seat> {
     required List<S> seats,
     this.rated = true,
     this.clock,
+    this.bestOf,
   }) : seats = _bySide(seats);
 
   final GameMode mode;
@@ -372,6 +374,13 @@ abstract class GameReport<S extends Seat> {
 
   /// Chess only; null for games recorded before time controls were tracked.
   final ClockSetting? clock;
+
+  /// 1 or 3 for an SWU duel; null otherwise.
+  final int? bestOf;
+
+  /// How [playerId] finished a game of Twin Suns.
+  TwinSunsFinish finishOf(String playerId) =>
+      TwinSunsFinish.of(seatOf(playerId)!.score);
 
   S? seatOf(String playerId) =>
       seats.where((s) => s.playerId == playerId).firstOrNull;
@@ -455,6 +464,7 @@ class GameResult extends GameReport<RatedSeat> {
     required super.seats,
     super.rated,
     super.clock,
+    super.bestOf,
     required this.recordedBy,
     required this.playedAt,
   });
@@ -470,6 +480,7 @@ class GameResult extends GameReport<RatedSeat> {
     ],
     rated: row['rated'] as bool,
     clock: ClockSetting.fromRow(row),
+    bestOf: row['best_of'] as int?,
     recordedBy: row['recorded_by'] as String,
     playedAt: DateTime.parse(row['played_at'] as String).toLocal(),
   );
@@ -489,6 +500,7 @@ class GameResult extends GameReport<RatedSeat> {
     seats: [for (final s in seats) s.named(nameOf(s.playerId) ?? s.name)],
     rated: rated,
     clock: clock,
+    bestOf: bestOf,
     recordedBy: recordedBy,
     playedAt: playedAt,
   );
@@ -507,6 +519,7 @@ class ResultRequest extends GameReport<RequestSeat> {
     required super.seats,
     super.rated,
     super.clock,
+    super.bestOf,
     required this.requestedBy,
     required this.createdAt,
     this.status = RequestStatus.pending,
@@ -526,6 +539,7 @@ class ResultRequest extends GameReport<RequestSeat> {
     ],
     rated: row['rated'] as bool,
     clock: ClockSetting.fromRow(row),
+    bestOf: row['best_of'] as int?,
     requestedBy: row['requested_by'] as String,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
     status: RequestStatus.values.byName(row['status'] as String),
@@ -572,6 +586,7 @@ class ResultRequest extends GameReport<RequestSeat> {
     seats: seats ?? this.seats,
     rated: rated,
     clock: clock,
+    bestOf: bestOf,
     requestedBy: requestedBy,
     createdAt: createdAt,
     status: status ?? this.status,
@@ -593,19 +608,22 @@ class ResultRequest extends GameReport<RequestSeat> {
 }
 
 /// What a member reports: the mode, every player's seat (theirs included),
-/// whether it's rated, and for chess the clock.
+/// whether it's rated, for chess the clock, and for an SWU duel whether it
+/// was a best of one or three.
 class ResultReport {
   const ResultReport({
     required this.mode,
     required this.seats,
     this.rated = true,
     this.clock,
+    this.bestOf,
   });
 
   final GameMode mode;
   final List<SeatReport> seats;
   final bool rated;
   final ClockSetting? clock;
+  final int? bestOf;
 }
 
 /// Whether a result between two sides scoring [a] and [b] can end a game of
@@ -621,9 +639,18 @@ bool isValidScore(MatchType type, num a, num b) => switch (type) {
     a == a.truncate() && b == b.truncate() && isSwuScore(a.toInt(), b.toInt()),
 };
 
-/// Why [seats] can't end a game of [mode], or null when they can. Mirrors
-/// `public.invalid_result_reason`.
-String? invalidResultReason(GameMode mode, List<SeatReport> seats) {
+/// Whether [mode] is an SWU duel, which is a best of one or three.
+bool hasBestOf(GameMode mode) =>
+    mode.type == MatchType.swu && mode.format == ResultFormat.duel;
+
+/// Why [seats] can't end a game of [mode], or null when they can. [bestOf]
+/// is 1 or 3 for an SWU duel (always 3 in Trilogy) and null otherwise.
+/// Mirrors `public.invalid_result_reason`.
+String? invalidResultReason(
+  GameMode mode,
+  List<SeatReport> seats, {
+  int? bestOf,
+}) {
   if ({for (final s in seats) s.playerId}.length != seats.length) {
     return 'Each player can only play once';
   }
@@ -651,21 +678,43 @@ String? invalidResultReason(GameMode mode, List<SeatReport> seats) {
     ResultFormat.boxVsTeam =>
       sideCount == 2 && sizes[0] == 1 && sizes[1] >= 2 && sizes[1] <= 5,
     ResultFormat.freeForAll =>
-      sideCount >= 2 && sideCount <= 4 && sizes.every((n) => n == 1),
+      sideCount >= 3 && sideCount <= 4 && sizes.every((n) => n == 1),
   };
   if (!fits) {
     return switch (mode.format) {
       ResultFormat.duel => 'Pick one opponent',
       ResultFormat.teams => 'Each team has two players',
       ResultFormat.boxVsTeam => 'One box against a team of 2 to 5',
-      ResultFormat.freeForAll => 'Two to four players',
+      ResultFormat.freeForAll => 'Three or four players',
     };
   }
+  if (hasBestOf(mode)) {
+    if (mode == GameMode.trilogy && bestOf != 3) {
+      return 'Trilogy is a best of three';
+    }
+    if (bestOf != 1 && bestOf != 3) {
+      return 'Say whether it was a best of one or three';
+    }
+  } else if (bestOf != null) {
+    return 'Only Star Wars: Unlimited duels are a best of one or three';
+  }
   if (mode.format == ResultFormat.freeForAll) {
-    final outlasted = sideScores.every(
-      (mine) => mine == sideScores.where((o) => o < mine).length,
-    );
-    return outlasted ? null : 'Give each player their finishing place';
+    final finishes = [for (final f in TwinSunsFinish.values) f.score];
+    final fits =
+        sideScores.every(finishes.contains) &&
+        sideScores.where((s) => s == TwinSunsFinish.winner.score).length ==
+            1 &&
+        sideScores.where((s) => s == TwinSunsFinish.firstOut.score).length ==
+            1;
+    return fits
+        ? null
+        : 'One winner, one player out first, and how everyone else finished';
+  }
+  if (bestOf == 1) {
+    final (a, b) = (sideScores[0], sideScores[1]);
+    return (a == 1 && b == 0) || (a == 0 && b == 1)
+        ? null
+        : 'A best of one ends 1-0';
   }
   if (!isValidScore(mode.type, sideScores[0], sideScores[1])) {
     return switch (mode.type) {
@@ -680,7 +729,8 @@ String? invalidResultReason(GameMode mode, List<SeatReport> seats) {
 
 /// Points a player gains against one opponent with their game's rules: FIBS
 /// for backgammon (the match length is the winner's score), FIDE on the
-/// result for chess and SWU. Mirrors `public.rating_change`.
+/// result otherwise. SWU doesn't use it ([swuPoints]). Mirrors
+/// `public.rating_change`.
 int ratingChange(
   MatchType type,
   Standing me,
@@ -697,17 +747,33 @@ int ratingChange(
   _ => fideRatingChange(me, opponent, Outcome.of(myScore, opponentScore).score),
 };
 
-/// Each player's rating change if a result between [seats] (with their
-/// standings in its mode) were confirmed: the average of [ratingChange]
-/// against every player on another side, which for two players is exactly
-/// [ratingChange]. Mirrors `public.respond_to_match`; the server is the
-/// source of truth and this is only used to preview a result.
+/// Each player's rating change if a result of [mode] between [seats] (with
+/// their standings in it) were confirmed. In SWU it is [swuPoints] against
+/// the best player on another side, kept from taking a rating below 0;
+/// otherwise the average of [ratingChange] against every player on another
+/// side, which for two players is exactly [ratingChange]. Mirrors
+/// `public.respond_to_match`; the server is the source of truth and this is
+/// only used to preview a result.
 Map<String, int> ratingChanges(
-  MatchType type,
-  List<({String playerId, int side, num score, Standing standing})> seats,
-) => {
+  GameMode mode,
+  List<({String playerId, int side, num score, Standing standing})> seats, {
+  int? bestOf,
+}) => {
   for (final me in seats)
     me.playerId: () {
+      if (mode.type == MatchType.swu) {
+        final best = [
+          for (final them in seats)
+            if (them.side != me.side) them.score,
+        ].reduce(math.max);
+        final rating = me.standing.rating;
+        return math.max(
+              0,
+              rating + swuPoints(mode.format, bestOf, me.score, best),
+            ) -
+            rating;
+      }
+      final type = mode.type;
       final changes = [
         for (final them in seats)
           if (them.side != me.side)

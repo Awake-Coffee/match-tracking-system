@@ -129,7 +129,7 @@ class DemoLadderRepository extends LadderRepository {
     final players = [for (final s in request.seats) _players[s.playerId]!];
     final standings = {for (final p in players) p.id: p.standingIn(mode)};
     final deltas = request.rated
-        ? ratingChanges(mode.type, [
+        ? ratingChanges(mode, bestOf: request.bestOf, [
             for (final s in request.seats)
               (
                 playerId: s.playerId,
@@ -171,6 +171,7 @@ class DemoLadderRepository extends LadderRepository {
       ],
       rated: request.rated,
       clock: request.clock,
+      bestOf: request.bestOf,
       recordedBy: request.requestedBy,
       playedAt: DateTime.now(),
     );
@@ -298,7 +299,11 @@ class DemoLadderRepository extends LadderRepository {
   Future<ResultRequest> reportResult(ResultReport report) async {
     final me = _requireMe();
     final mode = report.mode;
-    final reason = invalidResultReason(mode, report.seats);
+    final reason = invalidResultReason(
+      mode,
+      report.seats,
+      bestOf: report.bestOf,
+    );
     if (reason != null) throw LadderException('$reason.');
     if (!report.seats.any((s) => s.playerId == me.id)) {
       throw const LadderException('Record a result you played in.');
@@ -332,6 +337,7 @@ class DemoLadderRepository extends LadderRepository {
       ],
       rated: report.rated,
       clock: clock,
+      bestOf: report.bestOf,
       requestedBy: me.id,
       createdAt: DateTime.now(),
     );

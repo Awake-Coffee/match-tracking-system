@@ -1,4 +1,4 @@
--- Behavioural tests for Star Wars: Unlimited ratings. Each block raises on
+-- Behavioural tests for Star Wars: Unlimited points. Each block raises on
 -- failure. Rolled back so other tests see an empty database.
 \set ON_ERROR_STOP on
 begin;
@@ -12,6 +12,13 @@ begin
     and not public.is_valid_score('swu', 3, 0) and not public.is_valid_score('swu', -1, 2)
     and not public.is_valid_score('swu', 0.5, 0.5) and not public.is_valid_score('swu', null, 1),
     'impossible scores rejected';
+  assert public.swu_points('duel', 1::smallint, 1, 0) = 1 and public.swu_points('duel', 1::smallint, 0, 1) = -1
+    and public.swu_points('duel', 3::smallint, 2, 1) = 3 and public.swu_points('duel', 3::smallint, 0, 2) = -1
+    and public.swu_points('duel', 3::smallint, 1, 1) = 0, 'best of one 1/-1, best of three 3/-1, draw 0';
+  assert public.swu_points('free_for_all', null, 0, 3) = -1 and public.swu_points('free_for_all', null, 1, 3) = 0
+    and public.swu_points('free_for_all', null, 2, 3) = 1 and public.swu_points('free_for_all', null, 3, 2) = 2,
+    'twin suns: first out -1, out in the final round 0, survived 1, winner 2';
+  assert public.starting_rating('swu') = 0, 'everyone starts at 0';
 end $$;
 
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -20,17 +27,20 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000000c2', 'cy@swu.example',  '{"display_name":"Swu Cy"}');
 
 -- A member's standing in a game.
-create function pg_temp.standing(p_name text, p_type public.match_type) returns public.ratings
+create function pg_temp.standing(
+  p_name text, p_type public.match_type, p_mode text default 'premier'
+) returns public.ratings
 language sql as $$
   select r from public.ratings r join public.profiles p on p.id = r.player_id
-  where p.display_name = p_name and r.match_type = p_type;
+  where p.display_name = p_name and r.match_type = p_type
+    and (r.match_type <> 'swu' or r.mode = p_mode);
 $$;
 
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
 
--- Ana reports a 2-1 win: nothing moves until Bo confirms.
+-- Ana reports a 2-1 win in a best of three: nothing moves until Bo confirms.
 select test.request_duel('swu', '00000000-0000-0000-0000-0000000000b2', 2, 1);
 
 do $$
@@ -38,7 +48,7 @@ declare
   req test.match_requests := (select r from test.match_requests r order by id desc limit 1);
 begin
   assert req.match_type = 'swu' and req.player1_id = auth.uid()
-    and req.player1_score = 2 and req.player2_score = 1,
+    and req.player1_score = 2 and req.player2_score = 1 and req.best_of = 3,
     'score stored from the reporter''s side';
   assert (select count(*) from test.matches where match_type = 'swu') = 0,
     'no match before confirmation';
@@ -71,19 +81,20 @@ declare
   bo public.ratings := pg_temp.standing('Swu Bo', 'swu');
   m test.matches := (select m from test.matches m order by id desc limit 1);
 begin
-  assert ana.rating = 1020 and bo.rating = 980, 'FIDE deltas with K = 40';
-  assert ana.peak_rating = 1020 and bo.peak_rating = 1000, 'peaks tracked';
+  assert ana.rating = 3 and bo.rating = 0, 'a best of three win is 3; a loss can''t go below 0';
+  assert ana.peak_rating = 3 and bo.peak_rating = 0, 'peaks tracked';
   assert ana.wins = 1 and bo.losses = 1 and ana.played = 1, 'record counted';
   assert pg_temp.standing('Swu Ana', 'chess') is null
     and pg_temp.standing('Swu Ana', 'backgammon') is null, 'chess and backgammon untouched';
   assert m.match_type = 'swu' and m.player1_id = ana.player_id and m.recorded_by = ana.player_id
-    and m.player1_rating_before = 1000 and m.player1_rating_delta = 20
-    and m.player2_rating_delta = -20 and m.player1_score = 2, 'match row is auditable';
+    and m.player1_rating_before = 0 and m.player1_rating_delta = 3
+    and m.player2_rating_delta = 0 and m.player1_score = 2 and m.best_of = 3,
+    'match row is auditable: the delta is what was applied';
   assert (select count(*) from test.match_requests) = 0, 'request consumed';
 end $$;
 
--- Bo reports a 1-1 draw against the higher-rated Ana, then a declined and a
--- withdrawn one.
+-- Bo reports a 1-1 draw, then a declined and a withdrawn one, then wins a
+-- best of one.
 select test.request_duel('swu', '00000000-0000-0000-0000-0000000000a2', 1, 1);
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
 select public.respond_to_match((select max(id) from test.match_requests), true);
@@ -99,24 +110,50 @@ declare
   ana public.ratings := pg_temp.standing('Swu Ana', 'swu');
   bo public.ratings := pg_temp.standing('Swu Bo', 'swu');
 begin
-  assert ana.rating = 1018 and bo.rating = 982, 'a draw moves the favourite down';
+  assert ana.rating = 3 and bo.rating = 0, 'a draw is worth nothing';
   assert ana.draws = 1 and bo.draws = 1 and bo.played = 2, 'draw counted';
   assert (select count(*) from test.matches where match_type = 'swu') = 2,
     'only confirmed matches are rated';
   assert (select count(*) from test.match_requests where status = 'pending') = 0, 'withdrawn and declined requests stop waiting';
   -- Ana declined Bo's report, so only Bo still reads it.
   assert (select count(*) from test.match_requests) = 0, 'the one who declined no longer sees the request';
-  -- Every SWU rating is 1000 plus its match deltas (principle II).
+end $$;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', false);
+select test.request_duel('swu', '00000000-0000-0000-0000-0000000000a2', 1, 0, p_best_of => 1::smallint);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
+select public.respond_to_match((select max(id) from test.match_requests), true);
+
+do $$
+begin
+  assert (pg_temp.standing('Swu Ana', 'swu')).rating = 2
+    and (pg_temp.standing('Swu Bo', 'swu')).rating = 1, 'a best of one is 1 for the win, -1 for the loss';
+  assert (select best_of from test.matches order by id desc limit 1) = 1, 'the best of is kept';
+end $$;
+
+-- Trilogy is its own ladder, always a best of three.
+select public.request_match('swu', 'trilogy', jsonb_build_array(
+  jsonb_build_object('player_id', '00000000-0000-0000-0000-0000000000a2', 'side', 1, 'score', 1),
+  jsonb_build_object('player_id', '00000000-0000-0000-0000-0000000000c2', 'side', 2, 'score', 2)),
+  p_best_of => 3::smallint);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c2', false);
+select public.respond_to_match((select max(id) from test.match_requests), true);
+
+do $$
+begin
+  assert (pg_temp.standing('Swu Cy', 'swu', 'trilogy')).rating = 3
+    and (pg_temp.standing('Swu Ana', 'swu', 'trilogy')).rating = 0, 'trilogy is 3 for the win';
+  assert (pg_temp.standing('Swu Ana', 'swu')).rating = 2, 'premier untouched';
+  -- Every SWU rating is 0 plus its result deltas, per mode (principle II).
   assert not exists (
     select 1 from public.ratings r
-    where r.match_type = 'swu' and r.rating <> 1000 + coalesce((
-      select sum(case when x.player1_id = r.player_id
-        then x.player1_rating_delta else x.player2_rating_delta end)
-      from test.matches x
-      where x.match_type = 'swu' and r.player_id in (x.player1_id, x.player2_id)
+    where r.match_type = 'swu' and r.rating <> coalesce((
+      select sum(p.rating_delta) from public.match_players p join public.matches m on m.id = p.match_id
+      where m.match_type = 'swu' and m.mode = r.mode and p.player_id = r.player_id
     ), 0)
   ), 'ratings replay from history';
 end $$;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
 
 -- Rejections.
 do $$
@@ -141,6 +178,42 @@ begin
   begin
     perform test.request_duel('swu', bo, 3, 0);
     raise exception 'three wins should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform test.request_duel('swu', bo, 2, 0, p_best_of => 1::smallint);
+    raise exception 'a best of one 2-0 should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform test.request_duel('swu', bo, 1, 1, p_best_of => 1::smallint);
+    raise exception 'a best of one draw should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform test.request_duel('swu', bo, 2, 0, p_best_of => 2::smallint);
+    raise exception 'a best of two should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.request_match('swu', 'premier', jsonb_build_array(
+      jsonb_build_object('player_id', auth.uid(), 'side', 1, 'score', 2),
+      jsonb_build_object('player_id', bo, 'side', 2, 'score', 0)));
+    raise exception 'a duel without its best of should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.request_match('swu', 'trilogy', jsonb_build_array(
+      jsonb_build_object('player_id', auth.uid(), 'side', 1, 'score', 1),
+      jsonb_build_object('player_id', bo, 'side', 2, 'score', 0)), p_best_of => 1::smallint);
+    raise exception 'a trilogy best of one should fail';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.request_match('backgammon', 'standard', jsonb_build_array(
+      jsonb_build_object('player_id', auth.uid(), 'side', 1, 'score', 5),
+      jsonb_build_object('player_id', bo, 'side', 2, 'score', 2)), p_best_of => 3::smallint);
+    raise exception 'backgammon with a best of should fail';
   exception when sqlstate '22023' then null;
   end;
   begin

@@ -64,15 +64,17 @@ void main() {
   });
 
   // Same flow and numbers as supabase/tests/game_modes_test.sql.
-  test('twin suns counts once everyone confirms, by place', () async {
+  test('twin suns counts once everyone confirms, by finish', () async {
     final (repo, ids) = await _fourMembers();
+    // Dan is out first, Cal is knocked out in the final round, Bea survives
+    // it and Ana ends it with the most HP.
     final request = await repo.reportResult(
       ResultReport(
         mode: GameMode.twinSuns,
         seats: _seats(ids, [
           ('Ana', 1, 3),
           ('Bea', 2, 2),
-          ('Cal', 3, 0),
+          ('Cal', 3, 1),
           ('Dan', 4, 0),
         ]),
       ),
@@ -97,12 +99,15 @@ void main() {
 
     expect(
       {for (final s in rated!.seats) s.name: s.ratingDelta},
-      {'Ana': 20, 'Bea': 7, 'Cal': -13, 'Dan': -13},
+      {'Ana': 2, 'Bea': 1, 'Cal': 0, 'Dan': 0},
+      reason: 'Dan\'s -1 stops at 0',
     );
-    expect(
-      [for (final s in rated.seats) rated.placeOf(s.playerId)],
-      [1, 2, 3, 3],
-    );
+    expect([for (final s in rated.seats) rated.finishOf(s.playerId)], [
+      TwinSunsFinish.winner,
+      TwinSunsFinish.survived,
+      TwinSunsFinish.outInFinalRound,
+      TwinSunsFinish.firstOut,
+    ]);
     final ladder = await repo.ladderIn(GameMode.twinSuns);
     expect(
       [for (final p in ladder) p.displayName],
@@ -176,9 +181,9 @@ void main() {
   test('results that don\'t fit their mode are refused', () async {
     final (repo, ids) = await _fourMembers();
     for (final (mode, players) in [
-      // Two players can't both have outlasted only one.
-      (GameMode.twinSuns, [('Ana', 1, 2), ('Bea', 2, 1), ('Cal', 3, 1)]),
-      (GameMode.twinSuns, [('Bea', 1, 1), ('Cal', 2, 0)]),
+      // Nobody was out first.
+      (GameMode.twinSuns, [('Ana', 1, 3), ('Bea', 2, 2), ('Cal', 3, 1)]),
+      (GameMode.twinSuns, [('Bea', 1, 3), ('Cal', 2, 0)]),
       (GameMode.bughouse, [('Ana', 1, 1), ('Bea', 2, 0)]),
       (
         GameMode.bughouse,
@@ -247,8 +252,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('twin suns is recorded in finishing order and confirmed by '
-        'everyone', (tester) async {
+    testWidgets('twin suns is recorded by how everyone finished and '
+        'confirmed by everyone', (tester) async {
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -262,13 +267,28 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('2–4 player free-for-all, two leaders each'),
+        find.text('3–4 player free-for-all, two leaders each'),
         findsOneWidget,
       );
       await addPlayer(tester, 'Bea');
+      expect(find.text('How everyone finished'), findsNothing);
       await addPlayer(tester, 'Cal');
-      expect(find.text('Finishing order · drag to reorder'), findsOneWidget);
-      expect(find.text('Winner'), findsOneWidget);
+      expect(find.text('How everyone finished'), findsOneWidget);
+
+      // Rows: you, Bea, Cal.
+      Finder chip(String label, int row) =>
+          find.widgetWithText(ChoiceChip, label).at(row);
+      await tapVisible(tester, chip('Winner · +2', 0));
+      await tapVisible(tester, chip('Winner · +2', 1));
+      expect(
+        tester.widget<ChoiceChip>(chip('Winner · +2', 0)).selected,
+        isFalse,
+        reason: 'one winner',
+      );
+      await tapVisible(tester, chip('Winner · +2', 0));
+      await tapVisible(tester, chip('Survived · +1', 1));
+      await tapVisible(tester, chip('First out · −1', 2));
+      expect(find.text('+2'), findsOneWidget);
 
       await tapVisible(
         tester,
@@ -276,15 +296,17 @@ void main() {
       );
       expect(find.textContaining('Sent to Bea & Cal'), findsOneWidget);
       expect(find.text('Waiting for Bea & Cal to confirm'), findsOneWidget);
-      expect(
-        find.text('Twin Suns · 3 players, you came 1st of 3'),
-        findsOneWidget,
-      );
+      expect(find.text('Twin Suns · 3 players, you won'), findsOneWidget);
+      expect(find.text('Survived'), findsOneWidget);
+      expect(find.text('First out'), findsOneWidget);
       expect(find.text('reported'), findsOneWidget);
       expect(find.text('waiting'), findsNWidgets(2));
 
       await openAs(tester, repo, 'Bea', '/swu');
-      expect(find.text('Ana says you came 2nd of 3'), findsOneWidget);
+      expect(
+        find.text('Ana says you survived the final round'),
+        findsOneWidget,
+      );
       expect(find.text('waiting on you'), findsOneWidget);
       await tapVisible(tester, find.widgetWithText(FilledButton, 'Confirm'));
       expect(find.text('Confirmed. Waiting for Cal.'), findsOneWidget);

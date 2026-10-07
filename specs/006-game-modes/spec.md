@@ -36,7 +36,7 @@ game modes for each and add them"
 | Backgammon | Standard, Nackgammon, Hypergammon, Acey-deucey, Tavli, Long Nardy | duel |
 | Backgammon | Chouette | box (1) v team (2 to 5) |
 | SWU | Premier, Eternal, Trilogy, Limited | duel |
-| SWU | Twin Suns | free-for-all (2 to 4) |
+| SWU | Twin Suns | free-for-all (3 or 4 since [007](../007-swu-points/spec.md)) |
 
 Scores keep each game's rules: chess 1, 0 or ½; backgammon points to N (the
 winner's score is the match length); SWU games won in a best of three.

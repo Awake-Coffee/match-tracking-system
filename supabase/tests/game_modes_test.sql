@@ -40,16 +40,28 @@ begin
     = 'One box against a team of 2 to 5', 'one box';
   assert pg_temp.reason('backgammon', 'chouette', pg_temp.shape('[[1,3],[2,5]]'))
     = 'One box against a team of 2 to 5', 'a team of at least two';
-  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,2],[3,0],[4,0]]')) is null,
-    'twin suns, the last two out together';
-  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,1],[2,0]]')) is null, 'twin suns for two';
-  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,0],[2,0],[3,0]]')) is null,
-    'everyone out at once is a draw';
-  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,2],[2,1],[3,1]]'))
-    = 'Give each player their finishing place', 'two players can''t both outlast only one';
+  -- Twin Suns scores: 0 first out, 1 out in the final round, 2 survived, 3 winner.
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,2],[3,1],[4,0]]')) is null,
+    'twin suns for four';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,2],[3,2],[4,0]]')) is null,
+    'two survivors';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,0],[2,1],[3,3]]')) is null,
+    'twin suns for three, in any side order';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,0]]')) = 'Three or four players',
+    'not for two';
   assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,2],[3,1],[4,0],[5,0]]'))
-    = 'Two to four players', 'at most four';
-  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,1],[3,0]]')) = 'Number the sides from 1',
+    = 'Three or four players', 'at most four';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,3],[3,0]]'))
+    = 'One winner, one player out first, and how everyone else finished', 'one winner';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,2],[3,1]]'))
+    = 'One winner, one player out first, and how everyone else finished', 'someone was out first';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,0],[3,0]]'))
+    = 'One winner, one player out first, and how everyone else finished', 'only one was out first';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,4],[3,0]]'))
+    = 'One winner, one player out first, and how everyone else finished', 'no other finishes';
+  assert public.invalid_result_reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,1],[3,0]]')::jsonb, 3::smallint)
+    = 'Only Star Wars: Unlimited duels are a best of one or three', 'twin suns has no best of';
+  assert pg_temp.reason('swu', 'twin_suns', pg_temp.shape('[[1,3],[2,0],[4,1]]')) = 'Number the sides from 1',
     'no gaps between sides';
   assert pg_temp.reason('swu', 'premier', '[{"player_id":"x","side":1}]')
     = 'Each player needs a side and a score', 'a player without a score';
@@ -101,11 +113,12 @@ begin
   assert (select mode from public.matches order by id desc limit 1) = 'chess960', 'result keeps its mode';
 end $$;
 
--- Twin Suns for four: A wins, B second, C and D out together. Every other
--- player has to confirm before anything is rated.
+-- Twin Suns for four: D is out first, C is knocked out in the final round, B
+-- survives it and A ends it with the most HP. Every other player has to
+-- confirm before anything is rated.
 select pg_temp.as_member('A');
 select public.request_match('swu', 'twin_suns',
-  pg_temp.players('[["A",1,3],["B",2,2],["C",3,0],["D",4,0]]'));
+  pg_temp.players('[["A",1,3],["B",2,2],["C",3,1],["D",4,0]]'));
 
 do $$
 begin
@@ -148,17 +161,33 @@ declare
 begin
   assert m.mode = 'twin_suns' and m.recorded_by = '00000000-0000-0000-0000-0000000000e1',
     'rated once everyone confirmed';
-  -- Each change is the average against the other three: A beat all three
-  -- (+20 each); B lost to A, beat C and D (+6.67); C and D lost to A and B
-  -- and drew each other (-13.33).
+  -- Winner +2, survivor +1, out in the final round 0; D's -1 stops at 0.
   assert (select array_agg(format('%s %s %s', player_name, rating_before, rating_delta) order by side)
     from public.match_players where match_id = m.id)
-    = array['Mode A 1000 20', 'Mode B 1000 7', 'Mode C 1000 -13', 'Mode D 1000 -13'],
-    'averaged pairwise FIDE changes';
+    = array['Mode A 0 2', 'Mode B 0 1', 'Mode C 0 0', 'Mode D 0 0'],
+    'twin suns points, never below 0';
   assert (select array_agg(format('%s-%s-%s', wins, losses, draws) order by player_id)
     from public.ratings where match_type = 'swu' and mode = 'twin_suns')
     = array['1-0-0', '0-1-0', '0-1-0', '0-1-0'], 'only the winner wins';
   assert (select count(*) from public.match_requests) = 0, 'request consumed';
+end $$;
+
+-- A rematch: now A, with points to lose, is out first; D wins.
+select pg_temp.as_member('D');
+select public.request_match('swu', 'twin_suns',
+  pg_temp.players('[["A",1,0],["B",2,2],["C",3,1],["D",4,3]]'));
+select pg_temp.as_member('A');
+select public.respond_to_match((select max(id) from public.match_requests), true);
+select pg_temp.as_member('B');
+select public.respond_to_match((select max(id) from public.match_requests), true);
+select pg_temp.as_member('C');
+select public.respond_to_match((select max(id) from public.match_requests), true);
+
+do $$
+begin
+  assert (select array_agg(format('%s %s %s', player_name, rating_before, rating_delta) order by side)
+    from public.match_players where match_id = (select max(id) from public.matches))
+    = array['Mode A 2 -1', 'Mode B 1 1', 'Mode C 0 0', 'Mode D 0 2'], 'first out loses 1';
 end $$;
 
 -- Bughouse: A and B against C and D. B, a teammate, declines A's report.
@@ -234,12 +263,12 @@ select pg_temp.as_member('A');
 do $$
 begin
   begin
-    perform public.request_match('swu', 'twin_suns', pg_temp.players('[["B",1,1],["C",2,0]]'));
+    perform public.request_match('swu', 'twin_suns', pg_temp.players('[["B",1,3],["C",2,0],["D",3,1]]'));
     raise exception 'reporting a game without yourself should fail';
   exception when sqlstate '22023' then null;
   end;
   begin
-    perform public.request_match('swu', 'twin_suns', pg_temp.players('[["A",1,1],["A",2,0]]'));
+    perform public.request_match('swu', 'twin_suns', pg_temp.players('[["A",1,3],["A",2,0],["B",3,1]]'));
     raise exception 'playing twice should fail';
   exception when sqlstate '22023' then null;
   end;
@@ -252,7 +281,7 @@ begin
 end $$;
 
 -- A member leaving drops the open results they're in.
-select public.request_match('swu', 'twin_suns', pg_temp.players('[["A",1,2],["B",2,0],["E",3,0]]'));
+select public.request_match('swu', 'twin_suns', pg_temp.players('[["A",1,3],["B",2,0],["E",3,1]]'));
 reset role;
 delete from auth.users where id = '00000000-0000-0000-0000-0000000000e5';
 do $$

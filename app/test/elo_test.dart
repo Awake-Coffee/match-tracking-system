@@ -111,7 +111,7 @@ void main() {
   group('ratingChanges', () {
     test('everyone starts at 1000 and a first win is worth 20', () {
       expect(
-        ratingChanges(MatchType.chess, [
+        ratingChanges(GameMode.standardChess, [
           _seat('me', 1, 1),
           _seat('them', 2, 0),
         ]),
@@ -121,7 +121,7 @@ void main() {
 
     test('each player moves by their own K-factor', () {
       expect(
-        ratingChanges(MatchType.chess, [
+        ratingChanges(GameMode.standardChess, [
           _seat('me', 1, 1),
           _seat('them', 2, 0, played: 30),
         ]),
@@ -129,22 +129,10 @@ void main() {
       );
     });
 
-    // Same numbers as supabase/tests/game_modes_test.sql.
-    test('a free-for-all averages the change against every opponent', () {
-      expect(
-        ratingChanges(MatchType.swu, [
-          _seat('a', 1, 3),
-          _seat('b', 2, 2),
-          _seat('c', 3, 0),
-          _seat('d', 4, 0),
-        ]),
-        {'a': 20, 'b': 7, 'c': -13, 'd': -13},
-      );
-    });
 
     test('teammates are not each other\'s opponents', () {
       expect(
-        ratingChanges(MatchType.chess, [
+        ratingChanges(GameMode.bughouse, [
           _seat('a', 1, 1),
           _seat('b', 1, 1),
           _seat('c', 2, 0),

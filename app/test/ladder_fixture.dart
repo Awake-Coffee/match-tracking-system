@@ -96,15 +96,24 @@ extension Duels on LadderRepository {
     required int opponentGames,
     bool rated = true,
     GameMode mode = GameMode.premier,
-  }) => _reportDuel(mode, opponentId, myGames, opponentGames, rated);
+    int bestOf = 3,
+  }) => _reportDuel(
+    mode,
+    opponentId,
+    myGames,
+    opponentGames,
+    rated,
+    bestOf: bestOf,
+  );
 
   Future<ResultRequest> _reportDuel(
     GameMode mode,
     String opponentId,
     int myScore,
     int opponentScore,
-    bool rated,
-  ) => reportResult(
+    bool rated, {
+    int? bestOf,
+  }) => reportResult(
     ResultReport(
       mode: mode,
       seats: [
@@ -112,6 +121,7 @@ extension Duels on LadderRepository {
         (playerId: opponentId, side: 2, score: opponentScore),
       ],
       rated: rated,
+      bestOf: bestOf,
     ),
   );
 

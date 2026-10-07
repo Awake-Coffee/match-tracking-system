@@ -1,6 +1,7 @@
 -- Shorthands for the SQL tests, loaded after the migrations. Most tests are
 -- about duels: test.request_duel reports one from the caller's side in the
--- game's original mode (side 1 is white in chess, the reporter otherwise),
+-- game's original mode (side 1 is white in chess, the reporter otherwise;
+-- an SWU duel is a best of three unless p_best_of says otherwise),
 -- and the test.matches / test.match_requests views read a duel's two players
 -- as player1_* / player2_* columns. Views run as the caller, so row level
 -- security still applies.
@@ -16,7 +17,8 @@ create function test.request_duel(
   p_my_color text default null,
   p_dgt_option smallint default null,
   p_custom_base_minutes smallint default null,
-  p_custom_extra_seconds smallint default null
+  p_custom_extra_seconds smallint default null,
+  p_best_of smallint default null
 ) returns public.match_requests
 language sql
 as $$
@@ -28,7 +30,8 @@ as $$
         'side', case p_my_color when 'black' then 2 else 1 end, 'score', p_my_score),
       jsonb_build_object('player_id', p_opponent_id,
         'side', case p_my_color when 'black' then 1 else 2 end, 'score', p_opponent_score)),
-    p_rated, p_dgt_option, p_custom_base_minutes, p_custom_extra_seconds);
+    p_rated, p_dgt_option, p_custom_base_minutes, p_custom_extra_seconds,
+    case p_match_type when 'swu' then coalesce(p_best_of, 3::smallint) end);
 $$;
 
 create view test.matches with (security_invoker = true) as
