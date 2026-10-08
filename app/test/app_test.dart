@@ -887,7 +887,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
-    expect(find.text('Pick a result'), findsOneWidget);
+    expect(
+      find.text('Pick best of one or three and a result'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Best of three'));
     await tester.tap(find.text('I won'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(send);
@@ -1633,7 +1637,8 @@ void main() {
       // no rank number, and the two ranked members are 1st and 2nd.
       expect(cleo, findsOneWidget);
       expect(find.text('Not yet played'), findsOneWidget);
-      expect(find.text('3'), findsNothing);
+      // The route shows ratings instead, and Ana's is 3.
+      if (ladder != RouteLadder) expect(find.text('3'), findsNothing);
       // The route draws no rank numbers at all, so check what screen readers
       // hear, which every ladder labels the same way.
       expect(find.bySemanticsLabel(RegExp(r'^Cleo, rating')), findsOneWidget);
@@ -1762,7 +1767,7 @@ void main() {
           },
       };
       // Pinned, so a slip in the +1 rule or the ordering fails every ladder.
-      expect(lead, {Game.chess: 41, Game.backgammon: 45, Game.swu: 41});
+      expect(lead, {Game.chess: 41, Game.backgammon: 45, Game.swu: 4});
       for (final g in Game.values) {
         expect(await chaseOf(repo, g, bogdanId), '${lead[g]} to pass Ana');
       }
@@ -2084,18 +2089,18 @@ void main() {
     final route = find.byType(RouteLadder);
     expect(find.text('The route'), findsOneWidget);
     expect(find.text('Bogdan says you lost 0-2'), findsOneWidget);
-    // Ana won 2-1 from 1000 each: she's in space, Bogdan below the start.
+    // Ana won 2-1 from 0 each: she's in space with 3, Bogdan still on the
+    // start line on the ground.
     expect(
-      find.descendant(of: route, matching: find.text('1020')),
+      find.descendant(of: route, matching: find.text('3')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: route, matching: find.text('980')),
+      find.descendant(of: route, matching: find.text('0')),
       findsOneWidget,
     );
-    expect(find.text('Start 1000'), findsOneWidget);
+    expect(find.text('Start 0'), findsOneWidget);
     expect(find.text('Ground arena'), findsOneWidget);
-    expect(find.text('−40'), findsOneWidget);
   });
 
   testWidgets('a recorded SWU match waits for the opponent', (tester) async {
@@ -2111,13 +2116,24 @@ void main() {
 
     final send = find.widgetWithText(FilledButton, 'Send for confirmation');
     expect(find.text('2-1'), findsNothing);
+    await tester.tap(find.text('Best of three'));
     await tester.tap(find.text('I won'));
     await tester.pumpAndSettle();
     expect(tester.widget<FilledButton>(send).onPressed, isNull);
+    await tester.ensureVisible(find.text('2-1'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('2-1'));
     await tester.pumpAndSettle();
-    expect(find.text('1000 to '), findsNWidgets(2));
-    expect(find.text('+20'), findsOneWidget);
+    expect(find.text('0 to '), findsNWidgets(2));
+    expect(find.text('+3'), findsOneWidget);
+
+    // A best of one has no draw and only one score.
+    await tester.tap(find.text('Best of one'));
+    await tester.pumpAndSettle();
+    expect(find.text('Draw'), findsNothing);
+    expect(find.text('+1'), findsOneWidget);
+    await tester.tap(find.text('Best of three'));
+    await tester.pumpAndSettle();
 
     // A draw is always 1-1, so it's picked for you.
     await tester.tap(find.text('Draw'));
@@ -2151,7 +2167,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
     await tester.pumpAndSettle();
 
-    expect(repo.me!.swu.rating, lessThan(1020));
+    expect(repo.me!.swu.rating, 2, reason: '3 for the win, -1 for the loss');
     expect(repo.me!.swu.losses, 1);
     expect(
       find.textContaining(
@@ -2344,14 +2360,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Bogdan says you lost 0-2'), findsOneWidget);
       expect(
-        find.textContaining('Confirm and you go to 998 ('),
+        find.textContaining('Confirm and you go to 2 ('),
         findsOneWidget,
       );
-      expect(find.text('−22'), findsOneWidget);
+      expect(find.text('−1'), findsOneWidget);
       expect(find.text('Reported just now'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
       await tester.pumpAndSettle();
-      expect(repo.me!.swu.rating, 998);
+      expect(repo.me!.swu.rating, 2);
     });
 
     testWidgets('declining asks first and can be called off', (tester) async {

@@ -4,7 +4,6 @@ import '../../data/ladder_repository.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../game.dart';
-import '../ladder/ladder_view.dart' show ordinal;
 import 'match_tile.dart';
 import 'surface.dart';
 
@@ -28,7 +27,12 @@ typedef RosterLine = ({String label, String name, String status, bool isMe});
 /// 2nd of 4".
 String _myResult(ResultRequest r, String meId) {
   if (r.mode.format == ResultFormat.freeForAll) {
-    return 'you came ${ordinal(r.placeOf(meId))} of ${r.seats.length}';
+    return switch (r.finishOf(meId)) {
+      TwinSunsFinish.winner => 'you won',
+      TwinSunsFinish.survived => 'you survived the final round',
+      TwinSunsFinish.outInFinalRound => 'you were out in the final round',
+      TwinSunsFinish.firstOut => 'you were out first',
+    };
   }
   final outcome = switch (r.outcomeFor(meId)) {
     Outcome.win => 'you won',
@@ -48,7 +52,8 @@ String _setting(ResultRequest r, String meId) => switch (r.mode) {
     'You had ${r.colorOf(meId).name}',
   GameMode(format: ResultFormat.duel, type: MatchType.backgammon) =>
     'Match to ${r.matchLength}',
-  GameMode(format: ResultFormat.duel) => 'Best of three',
+  GameMode(format: ResultFormat.duel) =>
+    r.bestOf == 1 ? 'Best of one' : 'Best of three',
   GameMode(format: ResultFormat.freeForAll) => '${r.seats.length} players',
   GameMode(format: ResultFormat.boxVsTeam) => joinParts([
     r.seatOf(meId)!.side == 1
@@ -122,7 +127,7 @@ class PendingResult {
           ),
     ];
     final delta = r.rated && !declined && standings.length == r.seats.length
-        ? ratingChanges(r.mode.type, standings)[meId]
+        ? ratingChanges(r.mode, standings, bestOf: r.bestOf)[meId]
         : null;
     return PendingResult(
       headline: incoming
@@ -155,7 +160,7 @@ class PendingResult {
               for (final s in r.seats)
                 (
                   label: switch (r.mode.format) {
-                    ResultFormat.freeForAll => ordinal(r.placeOf(s.playerId)),
+                    ResultFormat.freeForAll => r.finishOf(s.playerId).label,
                     ResultFormat.boxVsTeam => s.side == 1 ? 'Box' : 'Team',
                     _ => 'Team ${s.side}',
                   },

@@ -16,9 +16,11 @@ begin
   assert (select (rating, peak_rating, played, wins, losses, draws, experience)
     from public.ratings where player_id = ana and match_type = 'backgammon')
     = (1510, 1522, 2, 1, 1, 0, 8), 'backgammon standing and experience kept';
+  -- SWU points (20261008000000) re-score SWU from its results: Cy's one rated
+  -- match, a loss from 0, stays at 0.
   assert (select (rating, peak_rating, played, wins, losses, draws, experience)
     from public.ratings where player_id = cy and match_type = 'swu')
-    = (1002, 1020, 3, 1, 1, 1, 0), 'SWU standing kept';
+    = (0, 0, 1, 0, 1, 0, 0), 'SWU standing re-scored';
   assert (select (rating, peak_rating, played)
     from public.ratings where player_id = bo and match_type = 'backgammon')
     = (1500, 1500, 0), 'untouched games keep their starting rating';
@@ -50,14 +52,15 @@ declare
     from test.matches order by id);
 begin
   assert cardinality(rows) = 7, 'every result carried over';
-  -- Chess: white is player 1. Backgammon and SWU: the reporter is.
+  -- Chess: white is player 1. Backgammon and SWU: the reporter is. SWU is
+  -- re-scored with points (20261008000000).
   assert rows[1] = 'chess t-f 0.0-1.0 t 1000/1000 -20/20 - -+- t 10', rows[1];
   assert rows[2] = 'backgammon t-f 5.0-3.0 t 1500/1500 22/-22 - -+- t 11', rows[2];
-  assert rows[3] = 'swu f-f 1.0-2.0 t 1000/1000 -20/20 - -+- t 12', rows[3];
+  assert rows[3] = 'swu f-f 1.0-2.0 t 0/0 0/3 - -+- t 12', rows[3];
   assert rows[4] = 'chess f-t 0.5-0.5 t 1020/980 -1/1 21 7+4 f 13', rows[4];
   assert rows[5] = 'backgammon t-f 1.0-3.0 t 1522/1478 -12/18 - -+- t 14', rows[5];
   assert rows[6] = 'chess t-f 1.0-0.0 f 981/1000 0/0 10 -+- f 15', rows[6];
-  assert rows[7] = 'swu f-f 1.0-1.0 f 1020/980 0/0 - -+- t 16', rows[7];
+  assert rows[7] = 'swu f-f 1.0-1.0 f 3/0 0/0 - -+- t 16', rows[7];
   assert (select player1_id from test.matches where id = 3) = cy, 'SWU reporter is player 1';
 end $$;
 

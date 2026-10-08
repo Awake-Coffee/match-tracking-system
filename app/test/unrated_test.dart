@@ -104,7 +104,7 @@ void main() {
     expect(match.deltaFor(ana.id), 0);
     expect(match.deltaFor(bogdan.id), 0);
     for (final p in await repo.ladderIn(GameMode.premier)) {
-      expect(p.swu.rating, 1000);
+      expect(p.swu.rating, 0);
       expect(p.swu.played, 0);
     }
   });

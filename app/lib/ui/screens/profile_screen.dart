@@ -140,7 +140,7 @@ class _ModeRecord {
     final id = player.id;
     final noun = Game.of(mode.type).resultNoun;
     final what = r.mode.format == ResultFormat.freeForAll
-        ? '${ordinal(r.placeOf(id))} of ${r.seats.length}'
+        ? '${r.finishOf(id).label} of ${r.seats.length}'
         : '${switch (r.outcomeFor(id)) {
                 Outcome.win => 'Beat',
                 Outcome.loss => 'Lost to',

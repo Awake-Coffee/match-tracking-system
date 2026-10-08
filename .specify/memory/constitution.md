@@ -39,8 +39,9 @@ modes listed in `game_modes`; every mode has its own ladder. The games
 share one `ratings` table (per member, game and mode), one pair of request
 and result tables with a row per player, and one pair of RPCs, told apart
 by a `match_type` and a `mode`. Each game keeps its own score rules, rating
-math and UI (SWU reuses the FIDE math); a result of more than two players
-averages the game's pairwise change against every opponent. No speculative
+math and UI: chess FIDE, backgammon FIBS, and SWU a points table that starts
+at 0 and never goes below it. In chess and backgammon a result of more than
+two players averages the game's pairwise change against every opponent. No speculative
 abstractions are built for games or modes that aren't played yet.
 
 ## Technology Constraints
@@ -68,4 +69,4 @@ This constitution overrides conflicting practice. Amendments are made by
 PR that updates this file, bumps the version and explains the migration
 path for existing data.
 
-**Version**: 1.5.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-05
+**Version**: 1.6.0 | **Ratified**: 2026-10-02 | **Last Amended**: 2026-10-07

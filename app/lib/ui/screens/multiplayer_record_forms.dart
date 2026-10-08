@@ -4,7 +4,6 @@ import '../../data/clock_memory.dart';
 import '../../design/design_scope.dart';
 import '../../domain/models.dart';
 import '../game.dart';
-import '../ladder/ladder_view.dart' show ordinal;
 import '../widgets/clock_picker.dart';
 import '../widgets/match_tile.dart' show joinNames;
 import '../widgets/record_form.dart';
@@ -458,8 +457,9 @@ class _ChouetteRecordFormState extends State<ChouetteRecordForm>
   }
 }
 
-/// A free-for-all (Twin Suns): who played, then everyone in finishing order,
-/// winner first. Players knocked out together are marked tied.
+/// A free-for-all (Twin Suns): who played, then how each of them finished.
+/// Once a player is knocked out the final round is played; the one with the
+/// most HP at its end wins.
 class FreeForAllRecordForm extends StatefulWidget {
   const FreeForAllRecordForm({
     super.key,
@@ -474,7 +474,8 @@ class FreeForAllRecordForm extends StatefulWidget {
   final List<Player> players;
   final List<String> recentOpponentIds;
 
-  /// Most players besides the member.
+  /// Fewest and most players besides the member.
+  static const minOthers = 2;
   static const maxOthers = 3;
 
   @override
@@ -483,39 +484,31 @@ class FreeForAllRecordForm extends StatefulWidget {
 
 class _FreeForAllRecordFormState extends State<FreeForAllRecordForm>
     with SendsForConfirmation {
-  /// Everyone, the member included, in finishing order.
-  late List<String> _order = [widget.me.id];
+  List<String> _others = const [];
 
-  /// Players knocked out together with the one above them.
-  Set<String> _tiedWithAbove = const {};
+  /// How each player, the member included, finished; unset until picked.
+  Map<String, TwinSunsFinish> _finishes = const {};
   bool _rated = true;
 
-  List<String> get _others => [
-    for (final id in _order)
-      if (id != widget.me.id) id,
-  ];
+  List<String> get _everyone => [widget.me.id, ..._others];
 
-  /// Each player's score: how many players finished below them.
-  List<SeatReport> get _seats {
-    final groups = <List<String>>[];
-    for (final id in _order) {
-      if (groups.isNotEmpty && _tiedWithAbove.contains(id)) {
-        groups.last.add(id);
-      } else {
-        groups.add([id]);
-      }
-    }
-    final total = _order.length;
-    return [
-      for (final group in groups)
-        for (final id in group)
-          (
-            playerId: id,
-            side: _order.indexOf(id) + 1,
-            score: total - _order.indexOf(group.first) - group.length,
-          ),
-    ];
-  }
+  /// [id]'s seat on [side] once their finish is picked.
+  SeatReport? _seatOf(String id, int side) => switch (_finishes[id]) {
+    final finish? => (playerId: id, side: side, score: finish.score),
+    null => null,
+  };
+
+  /// Gives [id] [finish]. There is one winner and one player out first, so
+  /// picking either for someone takes it from whoever had it.
+  void _setFinish(String id, TwinSunsFinish? finish) => setState(() {
+    final unique =
+        finish == TwinSunsFinish.winner || finish == TwinSunsFinish.firstOut;
+    _finishes = {
+      for (final MapEntry(key: other, value: f) in _finishes.entries)
+        if (other != id && !(unique && f == finish)) other: f,
+      id: ?finish,
+    };
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -524,19 +517,24 @@ class _FreeForAllRecordFormState extends State<FreeForAllRecordForm>
     final meId = widget.me.id;
     final label = d.strong(15);
     final byId = {for (final p in widget.players) p.id: p};
-    final ready = _order.length >= 2;
-    final seats = _seats;
-    final places = {
-      for (final s in seats)
-        s.playerId: 1 + seats.where((o) => o.score > s.score).length,
-    };
+    final enough = _others.length >= FreeForAllRecordForm.minOthers;
+    final everyone = _everyone;
+    final allFinished = everyone.every(_finishes.containsKey);
+    final seats = <SeatReport>[
+      for (final (i, id) in everyone.indexed)
+        ?_seatOf(id, i + 1),
+    ];
+    final reason = enough && allFinished
+        ? invalidResultReason(mode, seats)
+        : null;
+    final ready = enough && allFinished && reason == null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Players · 2 to 4', style: label),
+          Text('Other players · 2 or 3', style: label),
           const SizedBox(height: 8),
           PlayerGroupPicker(
             mode: mode,
@@ -546,63 +544,47 @@ class _FreeForAllRecordFormState extends State<FreeForAllRecordForm>
             pickedIds: _others,
             max: FreeForAllRecordForm.maxOthers,
             onChanged: (ids) => setState(() {
-              // New players join at the bottom; the order of the rest stays.
-              _order = [
-                for (final id in _order)
-                  if (id == meId || ids.contains(id)) id,
-                for (final id in ids)
-                  if (!_order.contains(id)) id,
-              ];
-              _tiedWithAbove = _tiedWithAbove.intersection(_order.toSet());
+              _others = ids;
+              _finishes = {
+                for (final MapEntry(key: id, value: f) in _finishes.entries)
+                  if (id == meId || ids.contains(id)) id: f,
+              };
             }),
           ),
-          if (ready) ...[
+          if (enough) ...[
             const SizedBox(height: 24),
-            Text('Finishing order · drag to reorder', style: label),
-            const SizedBox(height: 8),
-            ReorderableListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              onReorderItem: (from, to) => setState(() {
-                _order.insert(to, _order.removeAt(from));
-                // The winner can't be tied with anyone above.
-                _tiedWithAbove = _tiedWithAbove.difference({_order.first});
-              }),
-              children: [
-                for (final (i, id) in _order.indexed)
-                  ListTile(
-                    key: ValueKey(id),
-                    contentPadding: const EdgeInsets.only(left: 4, right: 40),
-                    leading: SizedBox(
-                      width: 40,
-                      child: Text(
-                        ordinal(places[id]!),
-                        style: d.body(
-                          15,
-                          color: d.accent,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      id == meId ? 'You' : byId[id]!.displayName,
-                      style: d.body(16, weight: FontWeight.w600),
-                    ),
-                    trailing: i == 0
-                        ? Text('Winner', style: d.body(13, color: d.accent))
-                        : FilterChip(
-                            label: const Text('Tied'),
-                            tooltip: 'Knocked out together with the one above',
-                            selected: _tiedWithAbove.contains(id),
-                            onSelected: (tied) => setState(
-                              () => _tiedWithAbove = tied
-                                  ? {..._tiedWithAbove, id}
-                                  : _tiedWithAbove.difference({id}),
-                            ),
-                          ),
-                  ),
-              ],
+            Text('How everyone finished', style: label),
+            const SizedBox(height: 4),
+            Text(
+              'Winner: most HP at the end of the final round.',
+              style: d.body(13, color: d.muted),
             ),
+            for (final id in everyone) ...[
+              const SizedBox(height: 16),
+              Text(
+                id == meId ? 'You' : byId[id]!.displayName,
+                style: d.body(16, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final finish in TwinSunsFinish.values)
+                    ChoiceChip(
+                      label: Text(
+                        '${finish.label} · ${switch (finish.points) {
+                          > 0 && final p => '+$p',
+                          < 0 && final p => '−${-p}',
+                          _ => '0',
+                        }}',
+                      ),
+                      selected: _finishes[id] == finish,
+                      onSelected: (on) => _setFinish(id, on ? finish : null),
+                    ),
+                ],
+              ),
+            ],
           ],
           const SizedBox(height: 24),
           RatedSwitch(
@@ -613,14 +595,18 @@ class _FreeForAllRecordFormState extends State<FreeForAllRecordForm>
           RatingPreview(
             rated: _rated,
             emptyHint:
-                'Add who played and put them in order to see how ratings '
+                'Add who played and how each finished to see how points '
                 'change.',
             rows: ready ? previewRows(mode, meId, widget.players, seats) : null,
           ),
           SendForConfirmationButton(
             error: error,
             saving: saving,
-            missing: [if (!ready) 'who played'],
+            missing: [
+              if (!enough) 'who played',
+              if (enough && !allFinished) 'how everyone finished',
+              if (reason != null) 'one winner and one player out first',
+            ],
             onPressed: !ready
                 ? null
                 : () => sendForConfirmation(

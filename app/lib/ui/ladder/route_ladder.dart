@@ -8,8 +8,9 @@ import '../../domain/models.dart';
 import 'ladder_view.dart';
 
 /// Holotable: the ladder is a route where the distance between two players
-/// is their rating gap. Players at or above the starting rating are in the
-/// space arena; the route crosses the start line into the ground arena.
+/// is their rating gap. Players above the starting rating are in the space
+/// arena; the route crosses the start line into the ground arena, where the
+/// players still on it are (no SWU result takes anyone below it).
 class RouteLadder extends StatelessWidget {
   const RouteLadder({super.key, required this.data});
 
@@ -28,8 +29,8 @@ class RouteLadder extends StatelessWidget {
     final ratings = [for (final p in players) rating(p), start];
     final spread = ratings.reduce(math.max) - ratings.reduce(math.min);
     final pixelsPerPoint = math.min(3.0, _routeBudget / math.max(1, spread));
-    final space = players.where((p) => rating(p) >= start).toList();
-    final ground = players.where((p) => rating(p) < start).toList();
+    final space = players.where((p) => rating(p) > start).toList();
+    final ground = players.where((p) => rating(p) <= start).toList();
     final lowestInSpace = space.isEmpty ? start : rating(space.last);
     final highestOnGround = ground.isEmpty ? start : rating(ground.first);
 

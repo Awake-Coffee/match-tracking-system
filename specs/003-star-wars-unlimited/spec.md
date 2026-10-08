@@ -2,7 +2,8 @@
 
 **Feature Branch**: `003-star-wars-unlimited`
 **Created**: 2026-10-04
-**Status**: Implemented
+**Status**: Implemented; rating replaced by points in
+[007-swu-points](../007-swu-points/spec.md)
 **Input**: "add star wars unlimited (the trading card game)"
 
 ## Clarifications
